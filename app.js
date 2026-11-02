@@ -84,7 +84,9 @@
         const text = document.createElement("span");
         const strong = document.createElement("strong"); strong.textContent = a.name;
         const small = document.createElement("small"); small.textContent = a.desc;
-        text.append(strong, small); link.append(badge, text); grid.append(link);
+        text.append(strong, small);
+        if (a.equiv) { const eq = document.createElement("small"); eq.className = "equiv"; eq.textContent = "Équivalent de " + a.equiv; text.append(eq); }
+        link.append(badge, text); grid.append(link);
       });
       section.append(h, grid); box.append(section);
     });
