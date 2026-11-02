@@ -64,16 +64,29 @@
 
   function renderApps() {
     const box = $("apps"); box.textContent = "";
+    const groups = [];
     (window.SCOUTHUB_APPS || []).forEach(a => {
-      const link = document.createElement("a");
-      link.className = "app-tile"; link.href = a.url; link.target = "_blank"; link.rel = "noopener";
-      const badge = document.createElement(a.icon ? "img" : "span");
-      badge.className = "app-badge";
-      if (a.icon) { badge.src = a.icon; badge.alt = ""; } else badge.textContent = a.name[0];
-      const text = document.createElement("span");
-      const strong = document.createElement("strong"); strong.textContent = a.name;
-      const small = document.createElement("small"); small.textContent = a.desc;
-      text.append(strong, small); link.append(badge, text); box.append(link);
+      const name = a.group || "Applications";
+      let sec = groups.find(x => x.name === name);
+      if (!sec) groups.push(sec = { name, items: [] });
+      sec.items.push(a);
+    });
+    groups.forEach(g => {
+      const section = document.createElement("section"); section.className = "app-group";
+      const h = document.createElement("h2"); h.textContent = g.name;
+      const grid = document.createElement("div"); grid.className = "grid-apps";
+      g.items.forEach(a => {
+        const link = document.createElement("a");
+        link.className = "app-tile"; link.href = a.url; link.target = "_blank"; link.rel = "noopener";
+        const badge = document.createElement(a.icon ? "img" : "span");
+        badge.className = "app-badge";
+        if (a.icon) { badge.src = a.icon; badge.alt = ""; } else badge.textContent = a.name[0];
+        const text = document.createElement("span");
+        const strong = document.createElement("strong"); strong.textContent = a.name;
+        const small = document.createElement("small"); small.textContent = a.desc;
+        text.append(strong, small); link.append(badge, text); grid.append(link);
+      });
+      section.append(h, grid); box.append(section);
     });
   }
 

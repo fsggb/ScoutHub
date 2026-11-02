@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title>IGN</title>
+  <rect width="96" height="96" rx="18" fill="#0055a4"/>
+  <path fill="#fff" d="M18 22h12v52H18zm20 0h12l16 30V22h12v52H66L50 44v30H38z"/>
+</svg>
