@@ -1,6 +1,7 @@
 // Adresse du déploiement Apps Script (backend/Code.gs), terminée par /exec.
 window.SCOUTHUB_API = "";
 // Applications proposées dans le portail : liens directs vers chaque application.
+(() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
   { group: "Bureautique", name: "Word", desc: "Documents et traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
@@ -19,3 +20,4 @@ window.SCOUTHUB_APPS = [
   { group: "Suites complètes", name: "ScoutOffice", desc: "Toute la bureautique et les outils Adobe", url: O + "ScoutOffice/", icon: "assets/fsggb.png" },
   { group: "Suites complètes", name: "ScoutCraft", desc: "La suite complète d’applications", url: O + "ScoutCraft/", icon: "assets/fsggb.png" }
 ];
+})();
