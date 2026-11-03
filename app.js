@@ -1,26 +1,10 @@
 (() => {
   "use strict";
-  const $ = id => document.getElementById(id);
-  const API = window.SCOUTHUB_API, TOKEN_KEY = "scouthub.token";
-  let token = null, user = null, mode = "login";
+  const { $, say, store } = Hub;
+  let mode = "login";
+  const RECENT_KEY = "scouthub.recent";
 
-  const say = (el, text, err = false) => { el.textContent = text; el.classList.toggle("error", err); };
-  const store = { get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); } catch {} } };
-
-  async function call(action, data = {}) {
-    if (!API) throw new Error("Le serveur ScoutHub n’est pas encore configuré.");
-    let res;
-    try {
-      res = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action, token, ...data }) });
-    } catch { throw new Error("Serveur injoignable."); }
-    let out; try { out = await res.json(); } catch { throw new Error("Réponse invalide du serveur."); }
-    if (!out.ok) { if (/Session expirée/.test(out.error)) logout(true); throw new Error(out.error || "Erreur."); }
-    return out;
-  }
-
-  // ---------- authentification ----------
+  // ---------- connexion / inscription ----------
   function setMode(m) {
     mode = m;
     $("tab-login").classList.toggle("active", m === "login");
@@ -41,97 +25,80 @@
     if (mode === "register" && password !== $("password2").value) return say($("auth-status"), "Les deux mots de passe sont différents.", true);
     $("auth-submit").disabled = true; say($("auth-status"), "Un instant…");
     try {
-      const out = await call(mode, { email, password });
-      token = out.token; store.set(token); user = out.user;
+      const out = await Hub.call(mode, { email, password });
+      store.set(out.token); Hub.user = out.user;
       $("password").value = $("password2").value = "";
       enter();
     } catch (e) { say($("auth-status"), e.message, true); }
     finally { $("auth-submit").disabled = false; }
   });
 
-  function logout(silent) {
-    if (token && !silent) call("logout").catch(() => {});
-    token = null; user = null; store.set(null);
-    $("app").hidden = true; $("topnav").hidden = true; $("auth").hidden = false;
-  }
-  $("btn-logout").onclick = () => logout(false);
-
-  function enter() {
-    $("auth").hidden = true; $("app").hidden = false; $("topnav").hidden = false;
-    $("who").textContent = user.email; $("btn-admin").hidden = user.role !== "admin";
-    renderApps(); goNext();
-  }
-
-  // Retour vers l’application qui a demandé la connexion (même origine uniquement).
+  // Retour vers l'application ou la page qui a demandé la connexion (adresses relatives du site uniquement).
   function goNext() {
     const next = new URLSearchParams(location.search).get("next");
-    if (next && /^\/[\w\-\/.?=&%]*$/.test(next) && !next.startsWith("//")) location.replace(next);
+    if (next && /^[\w\-\/.?=&%]+$/.test(next) && !next.startsWith("//") && !/^[a-z]+:/i.test(next)) { location.replace(next); return true; }
+    return false;
+  }
+
+  function showAuth() {
+    Hub.renderBar(null);
+    $("home").hidden = true; $("auth").hidden = false;
+    if (!window.SCOUTHUB_API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
+  }
+
+  // ---------- accueil ----------
+  const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
+  const remember = name => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([name, ...recent().filter(n => n !== name)].slice(0, 5))); } catch {} };
+
+  function appList() {
+    const apps = [...(window.SCOUTHUB_APPS || [])];
+    const mine = [{ group: "Mon espace", name: "Mon compte", desc: "Profil et mot de passe", url: "compte.html", icon: "assets/fsggb.png", local: true }];
+    if (Hub.user && Hub.user.role === "admin")
+      mine.push({ group: "Mon espace", name: "Administration", desc: "Comptes et utilisateurs", url: "admin.html", icon: "assets/fsggb.png", local: true });
+    apps.splice(1, 0, ...mine); // juste après ScoutCloud, dans « Mon espace »
+    return apps;
+  }
+
+  function tile(a) {
+    const link = document.createElement("a");
+    link.className = "app-tile"; link.href = a.url;
+    if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
+    link.addEventListener("click", () => remember(a.name));
+    const badge = document.createElement("img"); badge.className = "app-badge"; badge.src = a.icon; badge.alt = "";
+    const text = document.createElement("span");
+    const strong = Object.assign(document.createElement("strong"), { textContent: a.name });
+    const small = Object.assign(document.createElement("small"), { textContent: a.desc });
+    text.append(strong, small); link.append(badge, text);
+    return link;
   }
 
   function renderApps() {
-    const box = $("apps"); box.textContent = "";
+    const q = $("search").value.trim().toLowerCase(), box = $("apps"); box.textContent = "";
+    const all = appList(), shown = all.filter(a => !q || (a.name + " " + a.desc + " " + a.group).toLowerCase().includes(q));
     const groups = [];
-    (window.SCOUTHUB_APPS || []).forEach(a => {
-      const name = a.group || "Applications";
-      let sec = groups.find(x => x.name === name);
-      if (!sec) groups.push(sec = { name, items: [] });
-      sec.items.push(a);
-    });
+    shown.forEach(a => { let g = groups.find(x => x.name === a.group); if (!g) groups.push(g = { name: a.group, items: [] }); g.items.push(a); });
     groups.forEach(g => {
       const section = document.createElement("section"); section.className = "app-group";
-      const h = document.createElement("h2"); h.textContent = g.name;
       const grid = document.createElement("div"); grid.className = "grid-apps";
-      g.items.forEach(a => {
-        const link = document.createElement("a");
-        link.className = "app-tile"; link.href = a.url; link.target = "_blank"; link.rel = "noopener";
-        const badge = document.createElement(a.icon ? "img" : "span");
-        badge.className = "app-badge";
-        if (a.icon) { badge.src = a.icon; badge.alt = ""; } else badge.textContent = a.name[0];
-        const text = document.createElement("span");
-        const strong = document.createElement("strong"); strong.textContent = a.name;
-        const small = document.createElement("small"); small.textContent = a.desc;
-        text.append(strong, small);
-        if (a.equiv) { const eq = document.createElement("small"); eq.className = "equiv"; eq.textContent = "Équivalent de " + a.equiv; text.append(eq); }
-        link.append(badge, text); grid.append(link);
-      });
-      section.append(h, grid); box.append(section);
+      g.items.forEach(a => grid.append(tile(a)));
+      section.append(Object.assign(document.createElement("h2"), { textContent: g.name }), grid); box.append(section);
     });
+    $("none").hidden = shown.length > 0;
+    const rec = q ? [] : recent().map(n => all.find(a => a.name === n)).filter(Boolean);
+    $("recent").hidden = rec.length === 0;
+    $("recent-grid").textContent = ""; rec.forEach(a => $("recent-grid").append(tile(a)));
   }
+  $("search").addEventListener("input", renderApps);
 
-  // ---------- compte et administration ----------
-  document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
-  $("btn-account").onclick = () => { say($("pw-status"), ""); $("pw-form").reset(); $("dlg-account").showModal(); };
-  $("pw-form").addEventListener("submit", async ev => {
-    ev.preventDefault();
-    try { await call("changePassword", { oldPassword: $("pw-old").value, newPassword: $("pw-new").value });
-      say($("pw-status"), "Mot de passe modifié."); $("pw-form").reset(); } catch (e) { say($("pw-status"), e.message, true); }
-  });
-
-  async function loadUsers() {
-    const ul = $("ad-list"); ul.textContent = ""; say($("ad-status"), "Chargement…");
-    try {
-      const { users } = await call("adminList"); say($("ad-status"), `${users.length} compte(s).`);
-      users.forEach(u => {
-        const li = document.createElement("li"), name = document.createElement("span");
-        name.textContent = u.email + (u.role === "admin" ? " (administrateur)" : "");
-        const reset = document.createElement("button"); reset.type = "button"; reset.className = "ghost"; reset.textContent = "Nouveau mot de passe";
-        reset.onclick = async () => { const p = prompt(`Nouveau mot de passe pour ${u.email} (8 caractères minimum) :`); if (!p) return;
-          try { await call("adminReset", { email: u.email, newPassword: p }); say($("ad-status"), "Mot de passe réinitialisé."); } catch (e) { say($("ad-status"), e.message, true); } };
-        li.append(name, reset);
-        if (u.role !== "admin") {
-          const del = document.createElement("button"); del.type = "button"; del.className = "text-danger"; del.textContent = "Supprimer";
-          del.onclick = async () => { if (!confirm(`Supprimer le compte ${u.email} ?`)) return;
-            try { await call("adminDelete", { email: u.email }); loadUsers(); } catch (e) { say($("ad-status"), e.message, true); } };
-          li.append(del);
-        }
-        ul.append(li);
-      });
-    } catch (e) { say($("ad-status"), e.message, true); }
+  function enter() {
+    if (goNext()) return;
+    $("auth").hidden = true; $("home").hidden = false;
+    Hub.renderBar(Hub.user);
+    $("hello").textContent = "Bonjour, " + Hub.user.email.split("@")[0].replace(/[._-]+/g, " ");
+    renderApps();
   }
-  $("btn-admin").onclick = () => { $("dlg-admin").showModal(); loadUsers(); };
 
   // ---------- démarrage ----------
-  if (!API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
-  token = store.get();
-  if (token && API) call("me").then(o => { user = o.user; enter(); }).catch(() => logout(true));
+  if (store.get() && window.SCOUTHUB_API) Hub.call("me").then(o => { Hub.user = o.user; enter(); }).catch(() => { store.set(null); showAuth(); });
+  else showAuth();
 })();

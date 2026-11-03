@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administration · ScoutHub</title>
+  <link rel="icon" type="image/png" href="assets/fsggb.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <header class="topbar" id="bar"></header>
+  <main class="shell">
+    <div class="home-head">
+      <div><p class="label">Administration</p><h1>Comptes utilisateurs</h1></div>
+      <input id="filter" class="search" type="search" placeholder="Filtrer par adresse…" aria-label="Filtrer les comptes" autocomplete="off">
+    </div>
+    <div class="stats" id="stats" aria-live="polite"></div>
+    <section class="panel">
+      <p id="ad-status" class="status" role="status"></p>
+      <div class="table-wrap">
+        <table class="users">
+          <thead><tr><th>Adresse e-mail</th><th>Profil</th><th>Créé le</th><th class="right">Actions</th></tr></thead>
+          <tbody id="ad-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <dialog id="dlg-reset">
+      <form method="dialog" id="reset-form">
+        <h2>Nouveau mot de passe</h2>
+        <p class="muted" id="reset-who"></p>
+        <label for="reset-pw">Nouveau mot de passe (8 caractères minimum)</label>
+        <input id="reset-pw" type="text" autocomplete="off" minlength="8" required>
+        <p class="hint left">Communiquez-le à la personne : elle pourra le changer dans « Mon compte ».</p>
+        <p id="reset-status" class="status" role="status"></p>
+        <div class="dlg-actions"><button class="ghost" type="button" data-close>Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
+      </form>
+    </dialog>
+  </main>
+  <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

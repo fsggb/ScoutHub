@@ -3,24 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="ScoutHub : vos applications et vos fichiers FSGGB.">
+  <meta name="description" content="ScoutHub : vos applications FSGGB.">
   <title>ScoutHub</title>
   <link rel="icon" type="image/png" href="assets/fsggb.png">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="hub.css">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="./" aria-label="Accueil ScoutHub"><img class="brand-logo" src="assets/fsggb.png" alt="FSGGB" width="40" height="40"><strong>ScoutHub</strong></a>
-    <nav id="topnav" class="topnav" hidden>
-      <span id="who" class="who"></span>
-      <button id="btn-account" class="nav-btn" type="button">Mon compte</button>
-      <button id="btn-admin" class="nav-btn" type="button" hidden>Administration</button>
-      <button id="btn-logout" class="nav-btn" type="button">Déconnexion</button>
-    </nav>
-  </header>
+  <header class="topbar" id="bar"></header>
 
   <main class="shell">
-    <section id="auth" class="auth-card" aria-labelledby="auth-title">
+    <section id="auth" class="auth-card" aria-labelledby="auth-title" hidden>
       <img class="auth-logo" src="assets/fsggb.png" alt="" width="84" height="84">
       <p class="label">Espace de travail FSGGB</p>
       <h1 id="auth-title">Vos applications et vos fichiers, au même endroit.</h1>
@@ -43,31 +36,22 @@
       </form>
     </section>
 
-    <section id="app" hidden>
+    <section id="home" hidden>
+      <div class="home-head">
+        <div><p class="label">Bienvenue</p><h1 id="hello">Vos applications</h1></div>
+        <input id="search" class="search" type="search" placeholder="Rechercher une application…" aria-label="Rechercher une application" autocomplete="off">
+      </div>
+      <div id="recent" class="app-group" hidden>
+        <h2>Récemment ouvertes</h2>
+        <div class="grid-apps" id="recent-grid"></div>
+      </div>
       <div id="apps" aria-label="Applications"></div>
-
+      <p id="none" class="muted" hidden>Aucune application ne correspond à votre recherche.</p>
     </section>
-
-    <dialog id="dlg-account">
-      <form method="dialog" id="pw-form">
-        <h2>Changer mon mot de passe</h2>
-        <label for="pw-old">Mot de passe actuel</label><input id="pw-old" type="password" autocomplete="current-password" required>
-        <label for="pw-new">Nouveau mot de passe</label><input id="pw-new" type="password" autocomplete="new-password" minlength="8" required>
-        <p id="pw-status" class="status" role="status"></p>
-        <div class="dlg-actions"><button value="cancel" class="ghost" type="button" data-close>Fermer</button><button class="primary" type="submit">Enregistrer</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="dlg-admin" class="wide">
-      <h2>Administration</h2>
-      <p class="muted">Comptes inscrits. Vous pouvez réinitialiser un mot de passe ou supprimer un compte.</p>
-      <p id="ad-status" class="status" role="status"></p>
-      <ul id="ad-list" class="user-list"></ul>
-      <div class="dlg-actions"><button class="ghost" type="button" data-close>Fermer</button></div>
-    </dialog>
   </main>
   <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
   <script src="config.js"></script>
+  <script src="common.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
