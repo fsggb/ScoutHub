@@ -14,8 +14,10 @@
  */
 var ADMIN_EMAIL = 'jb.combet@fsggb.fr';
 // Empreinte du mot de passe initial de l'administrateur (changez-le après la première connexion).
-var ADMIN_SALT = 'ddaf5a2da6cd7406403e839109db4f24';
-var ADMIN_HASH = 'df307d32b33843d15a5a6a19bd6306e15625eb11fa2fb4bc6e43c8290c2e5492';
+var ADMIN_SALT = 'bbbe881e3ba73791ec4b1440211c592c';
+var ADMIN_HASH = 'd8620ec1d5b9b29559f1829b9cd29a705533090d784f01b303453054cb8a7bfe';
+// Change à chaque réinitialisation du mot de passe administrateur initial.
+var ADMIN_RESET_ID = '2026-11-03';
 var ROUNDS = 5000;
 var SESSION_DAYS = 30;
 var MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -157,10 +159,10 @@ function checkPassword_(pw) {
   if (typeof pw !== 'string' || pw.length < 8 || pw.length > 200) fail_('Le mot de passe doit contenir au moins 8 caractères.');
 }
 function getUser_(email) {
-  var raw = props_().getProperty('u:' + email);
-  if (raw) return JSON.parse(raw);
+  var raw = props_().getProperty('u:' + email), found = raw ? JSON.parse(raw) : null;
+  if (found && (email !== ADMIN_EMAIL || found.rid === ADMIN_RESET_ID)) return found;
   if (email === ADMIN_EMAIL) {
-    var admin = { salt: ADMIN_SALT, hash: ADMIN_HASH, role: 'admin', created: Date.now() };
+    var admin = { salt: ADMIN_SALT, hash: ADMIN_HASH, role: 'admin', created: Date.now(), rid: ADMIN_RESET_ID };
     props_().setProperty('u:' + email, JSON.stringify(admin));
     return admin;
   }
@@ -168,7 +170,7 @@ function getUser_(email) {
 }
 function saveUser_(email, cred, base) {
   props_().setProperty('u:' + email, JSON.stringify({
-    salt: cred.salt, hash: cred.hash, role: email === ADMIN_EMAIL ? 'admin' : (base.role || 'user'), created: base.created || Date.now()
+    salt: cred.salt, hash: cred.hash, role: email === ADMIN_EMAIL ? 'admin' : (base.role || 'user'), created: base.created || Date.now(), rid: ADMIN_RESET_ID
   }));
 }
 function publicUser_(email) {
