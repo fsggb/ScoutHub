@@ -2,7 +2,7 @@
   "use strict";
   const $ = id => document.getElementById(id);
   const API = window.SCOUTHUB_API, TOKEN_KEY = "scouthub.token";
-  let token = null, user = null, cwd = [], mode = "login";
+  let token = null, user = null, mode = "login";
 
   const say = (el, text, err = false) => { el.textContent = text; el.classList.toggle("error", err); };
   const store = { get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
@@ -51,7 +51,7 @@
 
   function logout(silent) {
     if (token && !silent) call("logout").catch(() => {});
-    token = null; user = null; store.set(null); cwd = [];
+    token = null; user = null; store.set(null);
     $("app").hidden = true; $("topnav").hidden = true; $("auth").hidden = false;
   }
   $("btn-logout").onclick = () => logout(false);
@@ -59,7 +59,13 @@
   function enter() {
     $("auth").hidden = true; $("app").hidden = false; $("topnav").hidden = false;
     $("who").textContent = user.email; $("btn-admin").hidden = user.role !== "admin";
-    renderApps(); listFiles();
+    renderApps(); goNext();
+  }
+
+  // Retour vers l’application qui a demandé la connexion (même origine uniquement).
+  function goNext() {
+    const next = new URLSearchParams(location.search).get("next");
+    if (next && /^\/[\w\-\/.?=&%]*$/.test(next) && !next.startsWith("//")) location.replace(next);
   }
 
   function renderApps() {
@@ -91,74 +97,6 @@
       section.append(h, grid); box.append(section);
     });
   }
-
-  // ---------- explorateur de fichiers ----------
-  const path = () => cwd.join("/");
-  const fmt = n => n < 1024 ? `${n} o` : n < 1048576 ? `${(n / 1024).toFixed(1)} Ko` : `${(n / 1048576).toFixed(1)} Mo`;
-  const b64 = bytes => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
-
-  function crumbs() {
-    const nav = $("crumbs"); nav.textContent = "";
-    const add = (label, depth) => {
-      const b = document.createElement("button"); b.type = "button"; b.textContent = label;
-      b.onclick = () => { cwd = cwd.slice(0, depth); listFiles(); }; nav.append(b);
-    };
-    add("Mes fichiers", 0);
-    cwd.forEach((p, i) => { nav.append(" / "); add(p, i + 1); });
-  }
-
-  async function listFiles() {
-    crumbs(); const list = $("f-list"); list.textContent = ""; say($("f-status"), "Chargement…");
-    try {
-      const { entries } = await call("list", { path: path() });
-      const shown = entries.filter(e => e.name !== ".gitkeep").sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name, "fr") : a.type === "dir" ? -1 : 1));
-      say($("f-status"), shown.length ? "" : "Ce dossier est vide. Importez un fichier ou créez-en un.");
-      shown.forEach(e => {
-        const li = document.createElement("li"), name = document.createElement("button");
-        name.type = "button"; name.className = "file-name " + (e.type === "dir" ? "dir" : "file");
-        name.textContent = (e.type === "dir" ? "📁 " : "📄 ") + e.name;
-        name.onclick = () => e.type === "dir" ? (cwd.push(e.name), listFiles()) : download(e.name);
-        const size = document.createElement("span"); size.className = "muted"; size.textContent = e.type === "dir" ? "" : fmt(e.size);
-        li.append(name, size);
-        if (e.type !== "dir") {
-          const del = document.createElement("button"); del.type = "button"; del.className = "text-danger"; del.textContent = "Supprimer";
-          del.onclick = async () => { if (!confirm(`Supprimer « ${e.name} » ?`)) return;
-            try { await call("remove", { path: [...cwd, e.name].join("/") }); listFiles(); } catch (x) { say($("f-status"), x.message, true); } };
-          li.append(del);
-        }
-        list.append(li);
-      });
-    } catch (e) { say($("f-status"), e.message, true); }
-  }
-  async function download(name) {
-    say($("f-status"), "Téléchargement…");
-    try {
-      const { base64 } = await call("get", { path: [...cwd, name].join("/") });
-      const bin = atob(base64), bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
-      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bytes])); a.download = name; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000); say($("f-status"), "");
-    } catch (e) { say($("f-status"), e.message, true); }
-  }
-  async function put(name, base64) { await call("put", { path: [...cwd, name].join("/"), base64 }); }
-
-  $("f-refresh").onclick = listFiles;
-  $("f-up").onclick = () => $("f-input").click();
-  $("f-input").onchange = async ev => {
-    for (const f of ev.target.files) {
-      if (f.size > 10 * 1048576) { say($("f-status"), `« ${f.name} » dépasse 10 Mo.`, true); continue; }
-      say($("f-status"), `Envoi de ${f.name}…`);
-      try { await put(f.name, b64(new Uint8Array(await f.arrayBuffer()))); } catch (e) { say($("f-status"), e.message, true); return; }
-    }
-    ev.target.value = ""; listFiles();
-  };
-  $("f-newfolder").onclick = async () => {
-    const n = (prompt("Nom du dossier :") || "").trim(); if (!n) return;
-    try { await put(`${n}/.gitkeep`, btoa("")); listFiles(); } catch (e) { say($("f-status"), e.message, true); }
-  };
-  $("f-newfile").onclick = async () => {
-    const n = (prompt("Nom du fichier (ex. notes.txt) :") || "").trim(); if (!n) return;
-    try { await put(n, btoa(" ")); listFiles(); } catch (e) { say($("f-status"), e.message, true); }
-  };
 
   // ---------- compte et administration ----------
   document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());

@@ -80,7 +80,7 @@
   </style>
   <div class="toast" id="toast" hidden></div>
   <div class="panel" id="panel" hidden></div>
-  <button class="fab" id="fab" type="button" title="Espace personnel ScoutHub"><span class="dot" id="dot"></span>ScoutHub</button>`;
+  <button class="fab" id="fab" type="button" title="Espace personnel ScoutCloud"><span class="dot" id="dot"></span>ScoutCloud</button>`;
   const $ = id => root.getElementById(id);
   const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
   const say = (msg, err) => { const s = $("panel").querySelector(".st"); if (s) { s.textContent = msg; s.classList.toggle("err", !!err); } };
@@ -88,10 +88,10 @@
   let last = null, dir = folder;
   async function renderPanel() {
     const p = $("panel"); p.textContent = "";
-    p.append(el("h2", { textContent: "Mon espace ScoutHub" }));
+    p.append(el("h2", { textContent: "Mon espace ScoutCloud" }));
     if (!getToken()) {
       p.append(el("p", { className: "sub", textContent: "Vous n’êtes pas connecté." }),
-        el("p", {}, "Ouvrez ", el("a", { href: HUB, target: "_blank", rel: "noopener", textContent: "ScoutHub" }), ", connectez-vous, puis revenez ici et rouvrez ce panneau."));
+        el("p", {}, "Ouvrez ", el("a", { href: HUB + "?next=" + encodeURIComponent(location.pathname + location.search), textContent: "ScoutHub" }), " pour vous connecter : vous reviendrez ici ensuite."));
       return;
     }
     let who = ""; try { who = (await api.user()).email; } catch (e) { p.append(el("p", { className: "st err", textContent: e.message })); return; }
@@ -99,10 +99,11 @@
     if (last) {
       const name = el("input", { value: last.name, "aria-label": "Nom du fichier" });
       const save = el("button", { className: "b p", type: "button", textContent: "Enregistrer le dernier export" });
-      save.onclick = async () => { try { say("Envoi…"); await api.put(`${dir}/${name.value.trim() || last.name}`, last.bytes); say("Enregistré dans votre espace."); fill(); } catch (e) { say(e.message, true); } };
+      save.onclick = async () => { try { say("Envoi…"); await api.put(`${dir}/${name.value.trim() || last.name}`, last.bytes); say("Enregistré dans ScoutCloud."); fill(); } catch (e) { say(e.message, true); } };
       p.append(el("label", { className: "mut", textContent: "Dernier export" }), name, save);
     } else p.append(el("p", { className: "mut", textContent: "Faites un export ou un téléchargement dans l’application : il sera proposé ici." }));
-    p.append(el("div", { className: "st", role: "status" }), el("ul", { id: "files" }));
+    p.append(el("div", { className: "st", role: "status" }), el("ul", { id: "files" }),
+      el("p", { className: "mut" }, el("a", { href: new URL("../ScoutCloud/?dossier=" + encodeURIComponent(dir), BASE).href, target: "_blank", rel: "noopener", textContent: "Ouvrir ScoutCloud ↗" })));
     const fill = async () => {
       const ul = p.querySelector("#files"); ul.textContent = "";
       try {
@@ -137,12 +138,12 @@
     const t = $("toast"); t.textContent = ""; t.hidden = false;
     t.append(el("div", { textContent: `« ${name} » prêt.` }));
     const row = el("div", { className: "row" });
-    const yes = el("button", { className: "b p", type: "button", textContent: "Enregistrer dans ScoutHub" });
+    const yes = el("button", { className: "b p", type: "button", textContent: "Enregistrer dans ScoutCloud" });
     yes.style.background = "#c6a24e"; yes.style.borderColor = "#c6a24e"; yes.style.color = "#000761";
     yes.onclick = async () => {
       t.hidden = true;
       if (!getToken()) { togglePanel(true); return; }
-      try { await api.put(`${dir}/${name}`, last.bytes); t.textContent = "Enregistré dans ScoutHub."; t.hidden = false; setTimeout(() => t.hidden = true, 2500); }
+      try { await api.put(`${dir}/${name}`, last.bytes); t.textContent = "Enregistré dans ScoutCloud."; t.hidden = false; setTimeout(() => t.hidden = true, 2500); }
       catch (e) { t.textContent = e.message; t.hidden = false; setTimeout(() => t.hidden = true, 4000); }
     };
     const no = el("button", { className: "b", type: "button", textContent: "Non merci" }); no.onclick = () => t.hidden = true;

@@ -1,6 +1,6 @@
 # ScoutHub
 
-Portail FSGGB : inscription libre, connexion par mot de passe, applications et explorateur de fichiers personnel (stocké dans un dépôt GitHub **privé**).
+Portail FSGGB : inscription libre, connexion par mot de passe, applications ; les fichiers personnels sont gérés par **ScoutCloud** (https://github.com/fsggb/ScoutCloud), stockés dans un dépôt GitHub **privé**.
 
 ## Architecture
 - `index.html`, `app.js`, `styles.css`, `config.js` : portail statique (GitHub Pages).
