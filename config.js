@@ -1,5 +1,5 @@
 // Adresse du déploiement Apps Script (backend/Code.gs), terminée par /exec.
-window.SCOUTHUB_API = "";
+window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlrF2CdMNFbkUhXvihwNoTMm67IH0wOk7QZZL_nIfMhWaQinR9j-oFQ/exec";
 // Applications proposées dans le portail : liens directs vers chaque application.
 (() => {
 const O = "https://fsggb.github.io/";
