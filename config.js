@@ -4,12 +4,13 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
+  { group: "Nos applications", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage : traverses, tenons, mise en plan cotée et montage pas à pas.", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg" },
+  { group: "Nos applications", featured: true, name: "Cartes IGN", desc: "Cartes IGN pour l’orientation et les raids : itinéraires, azimuts, profils d’altitude, GPX, impression.", url: O + "ScoutMap/", icon: "assets/fsggb.png" },
   { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers, stockés dans GitHub", url: O + "ScoutCloud/", icon: "assets/fsggb.png" },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: O + "ScoutOffice/Excel/", icon: "assets/icons/Excel.png" },
   { group: "Bureautique", name: "PowerPoint", desc: "Présentations et diaporamas", url: O + "ScoutOffice/PowerPoint/", icon: "assets/icons/PowerPoint.png" },
   { group: "Bureautique", name: "Acrobat", desc: "Lecture et édition de PDF", url: O + "ScoutOffice/PDF/", icon: "assets/icons/PDF.png" },
-  { group: "Bureautique", name: "TiddlyWiki", desc: "Carnet de notes et wiki personnel", url: O + "ScoutOffice/Notes/", icon: "assets/icons/TiddlyWiki.png" },
   { group: "Création", name: "Photoshop", desc: "Retouche et création d’images", url: O + "ScoutOffice/Photoshop/", icon: "assets/icons/Photoshop.png" },
   { group: "Création", name: "Illustrator", desc: "Illustration vectorielle", url: O + "ScoutOffice/Illustrator/", icon: "assets/icons/Illustrator.png" },
   { group: "Création", name: "InDesign", desc: "Mise en page de documents", url: O + "ScoutCraft/InDesign/", icon: "assets/icons/InDesign.png" },
@@ -22,7 +23,5 @@ window.SCOUTHUB_APPS = [
   { group: "Création", name: "Substance Painter", desc: "Peinture de textures 3D", url: O + "ScoutCraft/SubstancePainter/", icon: "assets/fsggb.png" },
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png" },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png" },
-  { group: "Conception et CAO", name: "CathIA", desc: "Conception 3D pour le froissartage", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg" },
-  { group: "Cartographie et terrain", name: "Cartes IGN", desc: "Itinéraires, azimuts, profils d’altitude, GPX", url: O + "ScoutMap/", icon: "assets/fsggb.png" }
-];
+    ];
 })();

@@ -51,20 +51,22 @@
   const remember = name => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([name, ...recent().filter(n => n !== name)].slice(0, 5))); } catch {} };
 
   function appList() {
-    const apps = [...(window.SCOUTHUB_APPS || [])];
+    const all = window.SCOUTHUB_APPS || [], featured = all.filter(a => a.featured), apps = all.filter(a => !a.featured);
     const mine = [{ group: "Mon espace", name: "Mon compte", desc: "Profil et mot de passe", url: "compte.html", icon: "assets/fsggb.png", local: true }];
     if (Hub.user && Hub.user.role === "admin")
       mine.push({ group: "Mon espace", name: "Administration", desc: "Comptes et utilisateurs", url: "admin.html", icon: "assets/fsggb.png", local: true });
     apps.splice(1, 0, ...mine); // juste après ScoutCloud, dans « Mon espace »
-    return apps;
+    return [...featured, ...apps];
   }
 
   function tile(a) {
     const link = document.createElement("a");
-    link.className = "app-tile"; link.href = a.url;
+    link.className = "app-tile" + (a.featured ? " featured" : ""); link.href = a.url;
     if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
     link.addEventListener("click", () => remember(a.name));
-    const badge = document.createElement("img"); badge.className = "app-badge"; badge.src = a.icon; badge.alt = "";
+    let badge;
+    if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${a.icon}")`; }
+    else { badge = document.createElement("img"); badge.className = "app-badge"; badge.src = a.icon; badge.alt = ""; }
     const text = document.createElement("span");
     const strong = Object.assign(document.createElement("strong"), { textContent: a.name });
     const small = Object.assign(document.createElement("small"), { textContent: a.desc });
