@@ -24,4 +24,22 @@ window.SCOUTHUB_APPS = [
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png" },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png" },
     ];
+// « Ouvrir avec » (ScoutCloud) : extension -> applications compatibles, la première étant celle par défaut.
+window.SCOUTHUB_OPEN_WITH = {
+  docx: ["Word"], doc: ["Word"], odt: ["Word"], rtf: ["Word"], txt: ["Word"], md: ["Word"],
+  xlsx: ["Excel"], xls: ["Excel"], ods: ["Excel"], csv: ["Excel"],
+  pptx: ["PowerPoint"], ppt: ["PowerPoint"], odp: ["PowerPoint"],
+  pdf: ["Acrobat"],
+  psd: ["Photoshop"], png: ["Photoshop", "Lightroom"], jpg: ["Photoshop", "Lightroom"], jpeg: ["Photoshop", "Lightroom"],
+  webp: ["Photoshop"], bmp: ["Photoshop"], gif: ["Photoshop"], tif: ["Photoshop"], tiff: ["Photoshop"],
+  svg: ["Illustrator", "CathIA"], ai: ["Illustrator"], eps: ["Illustrator"],
+  idml: ["InDesign"], indd: ["InDesign"],
+  mp4: ["Premiere Pro"], mov: ["Premiere Pro"], webm: ["Premiere Pro"], avi: ["Premiere Pro"],
+  wav: ["Pro Tools"], mp3: ["Pro Tools"], aif: ["Pro Tools"], aiff: ["Pro Tools"],
+  excalidraw: ["Excalidraw"],
+  dxf: ["AutoCAD"], dwg: ["AutoCAD"],
+  stl: ["SolidWorks"], step: ["SolidWorks"], stp: ["SolidWorks"], iges: ["SolidWorks"],
+  gpx: ["Cartes IGN"], kml: ["Cartes IGN"],
+  json: ["CathIA"], html: ["CathIA"], htm: ["CathIA"]
+};
 })();

@@ -24,12 +24,12 @@
 .ghost.small{padding:5px 10px;font-size:12px}.hint.left{text-align:left}
 @media(max-width:640px){.topnav .who{display:none}.facts div{grid-template-columns:1fr;gap:2px}}
 
-/* Applications mises en avant */
-.grid-apps:has(.featured){grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
-.app-tile.featured{padding:22px;gap:18px;border:2px solid var(--gold);border-top-width:5px;background:linear-gradient(180deg,#fffaf0,#fff);box-shadow:0 6px 20px rgba(0,7,97,.14)}
-.app-tile.featured:hover{box-shadow:0 12px 30px rgba(0,7,97,.22)}
-.app-tile.featured .app-badge{width:84px;height:84px;border-radius:16px}
-.app-tile.featured strong{font-size:20px;color:var(--navy)}
-.app-tile.featured small{font-size:13px;margin-top:4px;line-height:1.4}
-.app-badge.crop{background-color:#fff;background-repeat:no-repeat;background-position:46% 17%;background-size:171% auto;border:1px solid #e7e4dc}
+/* Applications mises en avant : contour léger, vignette moyenne */
+.grid-apps:has(.featured){grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.app-tile.featured{padding:16px 18px;gap:15px;border:1px solid #e6d9b8;background:#fffdf8}
+.app-tile.featured:hover{border-color:var(--gold);box-shadow:0 6px 18px rgba(0,7,97,.12)}
+.app-tile.featured .app-badge{width:60px;height:60px;border-radius:12px}
+.app-tile.featured strong{font-size:17px;color:var(--navy)}
+.app-tile.featured small{font-size:12.5px;margin-top:3px;line-height:1.4}
+.app-badge.crop{background-color:#fff;background-repeat:no-repeat;background-position:46% 0%;background-size:160% auto;border:1px solid #efe9d8}
 @media(max-width:640px){.grid-apps:has(.featured){grid-template-columns:1fr}}

@@ -87,7 +87,7 @@
     a{color:#000761}`;
 
   // mode : "save" | "open". Résout { where:"local", name } | { where:"cloud", path, name } | null.
-  function chooser({ mode, name = "", accept = "" }) {
+  function chooser({ mode, name = "", accept = "", pre = false }) {
     return new Promise(resolve => {
       const host = el("div"); const root = host.attachShadow({ mode: "open" });
       const done = v => { document.removeEventListener("keydown", onKey, true); host.remove(); resolve(v); };
@@ -121,9 +121,9 @@
 
         if (dest === "local") {
           if (mode === "save") {
-            pane.append(el("label", { textContent: "Nom du fichier", htmlFor: "nm" }), nameInput,
-              el("p", { className: "hint", textContent: "Le fichier est téléchargé par le navigateur, dans votre dossier de téléchargements." }));
-            go.textContent = "Enregistrer";
+            pane.append(el("label", { textContent: pre ? "Nom du fichier (vide : nom proposé par l’application)" : "Nom du fichier", htmlFor: "nm" }), nameInput,
+              el("p", { className: "hint", textContent: "Le sélecteur d’emplacement de votre ordinateur s’ouvre ensuite." }));
+            go.textContent = pre ? "Choisir" : "Choisir l’emplacement…";
             go.onclick = () => { lsSet(DEST_KEY, "local"); done({ where: "local", name: nameInput.value.trim() || name }); };
           } else {
             pane.append(el("p", { textContent: "Choisissez un fichier sur cet ordinateur." }));
@@ -137,7 +137,7 @@
           const crumb = (label, depth) => { const b = el("button", { type: "button", textContent: label }); b.onclick = () => { dir = dir.slice(0, depth); picked = null; load(); }; return b; };
           const drawCrumbs = () => { crumbs.textContent = ""; crumbs.append(crumb("Mes fichiers", 0)); dir.forEach((d, i) => crumbs.append(" / ", crumb(d, i + 1))); };
           pane.append(crumbs, list);
-          if (mode === "save") pane.append(el("label", { textContent: "Nom du fichier", htmlFor: "nm" }), nameInput);
+          if (mode === "save") pane.append(el("label", { textContent: pre ? "Nom du fichier (vide : nom proposé par l’application)" : "Nom du fichier", htmlFor: "nm" }), nameInput);
           pane.append(status);
           const mkdir = el("button", { className: "b", type: "button", textContent: "Nouveau dossier" });
           mkdir.onclick = async () => {
@@ -168,8 +168,8 @@
           if (mode === "save") {
             go.textContent = "Enregistrer";
             go.onclick = async () => {
-              const n = nameInput.value.trim() || name; if (!n || busy) return; busy = true; go.disabled = true; status.className = "hint"; status.textContent = "Enregistrement…";
-              lsSet(DEST_KEY, "cloud"); lsSet(DIR_KEY, dir.join("/")); done({ where: "cloud", path: [...dir, n].join("/"), name: n });
+              const n = nameInput.value.trim() || name; if ((!n && !pre) || busy) return; busy = true; go.disabled = true; status.className = "hint"; status.textContent = "Enregistrement…";
+              lsSet(DEST_KEY, "cloud"); lsSet(DIR_KEY, dir.join("/")); done({ where: "cloud", dir: dir.join("/"), name: n });
             };
             foot.append(mkdir, el("span", { className: "sp" }), cancel, go);
           } else {
@@ -197,20 +197,50 @@
   const origDispatch = EventTarget.prototype.dispatchEvent;
   const isDownload = a => a instanceof HTMLAnchorElement && a.hasAttribute("download") && !a.__scouthubSkip && /^(blob:|data:)/.test(a.href);
 
-  function localDownload(name, blob) {
+  const origSavePicker = typeof window.showSaveFilePicker === "function" ? window.showSaveFilePicker.bind(window) : null;
+
+  function anchorDownload(name, blob) {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.__scouthubSkip = true; a.style.display = "none";
     document.body.append(a); origAnchorClick.call(a); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
   }
+  // « Cet ordinateur » : sélecteur d'emplacement natif quand le navigateur l'offre, sinon téléchargement classique.
+  async function localSave(name, blob) {
+    if (origSavePicker) {
+      try {
+        const handle = await origSavePicker({ suggestedName: name });
+        const w = await handle.createWritable(); await w.write(blob); await w.close(); return;
+      } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    anchorDownload(name, blob);
+  }
+
+  // Choix anticipé : Ctrl+S ouvre la boîte AVANT que l'application ne produise son fichier. Le téléchargement
+  // qui suit est alors acheminé sans nouvelle question.
+  let pre = null; // { promise, choice, done, until }
+  const preUsable = () => pre && (!pre.done || Date.now() < pre.until);
+  document.addEventListener("keydown", e => {
+    if (!api.loggedIn() || e.altKey || !(e.ctrlKey || e.metaKey) || String(e.key).toLowerCase() !== "s" || preUsable()) return;
+    const st = pre = { done: false, choice: null, until: 0 };
+    st.promise = chooser({ mode: "save", name: "", pre: true }).then(c => { st.done = true; st.choice = c; st.until = Date.now() + (c ? 90000 : 4000); return c; });
+  }, true);
 
   async function handleDownload(a) {
     const name = a.getAttribute("download") || "fichier";
     let blob;
     try { blob = await (await fetch(a.href)).blob(); } catch { a.__scouthubSkip = true; origAnchorClick.call(a); return; }
-    const choice = await chooser({ mode: "save", name: name === "" ? "fichier" : name });
+    let choice;
+    if (preUsable()) {
+      const st = pre; choice = await st.promise;
+      if (!choice) return;            // choix anticipé annulé : on abandonne aussi l'enregistrement
+      pre = null;
+    } else choice = await chooser({ mode: "save", name });
     if (!choice) return;
-    if (choice.where === "local") return localDownload(choice.name || name, blob);
-    try { await api.put(choice.path, new Uint8Array(await blob.arrayBuffer())); notify(`« ${choice.name} » enregistré dans ScoutCloud.`); }
-    catch (e) { notify(e.message, true); }
+    const finalName = choice.name || name;
+    if (choice.where === "local") return localSave(finalName, blob);
+    try {
+      await api.put((choice.dir ? choice.dir + "/" : "") + finalName, new Uint8Array(await blob.arrayBuffer()));
+      notify(`« ${finalName} » enregistré dans ScoutCloud.`);
+    } catch (e) { notify(e.message, true); }
   }
 
   HTMLAnchorElement.prototype.click = function () {
@@ -250,4 +280,31 @@
   };
   // Les API « File System Access » contourneraient ces boîtes : on retombe sur <input> et <a download>.
   for (const k of ["showSaveFilePicker", "showOpenFilePicker"]) { try { Object.defineProperty(window, k, { value: undefined, configurable: true }); } catch {} }
+
+  // ---------- ouverture d'un fichier ScoutCloud dans l'application (?scoutcloud=chemin) ----------
+  (async function openRequested() {
+    const q = new URLSearchParams(location.search), path = q.get("scoutcloud");
+    if (!path) return;
+    try { q.delete("scoutcloud"); history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash); } catch {}
+    if (!api.loggedIn()) { notify("Connectez-vous à ScoutHub pour ouvrir ce fichier.", true); return; }
+    const name = path.split("/").pop(), ext = (name.split(".").pop() || "").toLowerCase();
+    let file;
+    try { notify("Ouverture de « " + name + " » depuis ScoutCloud…"); file = new File([await api.get(path)], name); }
+    catch (e) { notify(e.message, true); return; }
+    const accepts = i => { const acc = (i.accept || "").toLowerCase(); return !acc || acc.split(",").some(t => t.trim() === "." + ext || t.trim().endsWith("/*")); };
+    const give = i => { const dt = new DataTransfer(); dt.items.add(file); i.files = dt.files; i.dispatchEvent(new Event("input", { bubbles: true })); i.dispatchEvent(new Event("change", { bubbles: true })); };
+    const drop = target => {
+      const dt = new DataTransfer(); dt.items.add(file);
+      for (const type of ["dragenter", "dragover", "drop"]) target.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
+    };
+    const started = Date.now(); let canvasSeenAt = 0;
+    const timer = setInterval(() => {
+      const input = [...document.querySelectorAll('input[type="file"]')].find(accepts);
+      if (input) { clearInterval(timer); give(input); return; }
+      const canvas = document.querySelector("canvas");
+      if (canvas && !canvasSeenAt) canvasSeenAt = Date.now();
+      if (canvas && Date.now() - canvasSeenAt > 3500) { clearInterval(timer); drop(canvas); return; }  // applications egui/Excalidraw : dépôt de fichier
+      if (Date.now() - started > 30000) { clearInterval(timer); notify("L’application n’a pas pu ouvrir « " + name + " ». Utilisez Ouvrir > ScoutCloud.", true); }
+    }, 700);
+  })();
 })();
