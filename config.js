@@ -4,9 +4,7 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
-  { group: "Nos applications", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage : traverses, tenons, mise en plan cotée et montage pas à pas.", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg" },
-  { group: "Nos applications", featured: true, name: "Cartes IGN", desc: "Cartes IGN pour l’orientation et les raids : itinéraires, azimuts, profils d’altitude, GPX, impression.", url: O + "ScoutMap/", icon: "assets/fsggb.png" },
-  { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers, stockés dans GitHub", url: O + "ScoutCloud/", icon: "assets/fsggb.png" },
+  { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers (connexion requise)", url: O + "ScoutCloud/", icon: "assets/icons/ScoutCloud.svg", login: true },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: O + "ScoutOffice/Excel/", icon: "assets/icons/Excel.png" },
   { group: "Bureautique", name: "PowerPoint", desc: "Présentations et diaporamas", url: O + "ScoutOffice/PowerPoint/", icon: "assets/icons/PowerPoint.png" },
@@ -19,11 +17,13 @@ window.SCOUTHUB_APPS = [
   { group: "Création", name: "Excalidraw", desc: "Dessin libre et tableaux blancs", url: O + "ScoutOffice/Draw/", icon: "assets/icons/Excalidraw.svg" },
   { group: "Création", name: "Premiere Pro", desc: "Montage vidéo", url: O + "ScoutOffice/Premiere/", icon: "assets/icons/Premiere.png" },
   { group: "Création", name: "After Effects", desc: "Effets visuels et compositing", url: O + "ScoutCraft/AfterEffects/", icon: "assets/icons/AfterEffects.png" },
-  { group: "Création", name: "Pro Tools", desc: "Studio audio et mixage", url: O + "ScoutCraft/ProTools/", icon: "assets/fsggb.png" },
-  { group: "Création", name: "Substance Painter", desc: "Peinture de textures 3D", url: O + "ScoutCraft/SubstancePainter/", icon: "assets/fsggb.png" },
+  { group: "Création", name: "Pro Tools", desc: "Studio audio et mixage", url: O + "ScoutCraft/ProTools/", icon: "assets/icons/ProTools.svg" },
+  { group: "Création", name: "Substance Painter", desc: "Peinture de textures 3D", url: O + "ScoutCraft/SubstancePainter/", icon: "assets/icons/SubstancePainter.svg" },
+  { group: "Conception et CAO", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg" },
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png" },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png" },
-    ];
+  { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg" },
+];
 // « Ouvrir avec » (ScoutCloud) : extension -> applications compatibles, la première étant celle par défaut.
 window.SCOUTHUB_OPEN_WITH = {
   docx: ["Word"], doc: ["Word"], odt: ["Word"], rtf: ["Word"], txt: ["Word"], md: ["Word"],

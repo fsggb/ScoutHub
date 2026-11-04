@@ -14,9 +14,11 @@
 
   <main class="shell">
     <section id="auth" class="auth-card" aria-labelledby="auth-title" hidden>
+      <a class="auth-back" id="auth-back" href="index.html">← Retour aux applications</a>
       <img class="auth-logo" src="assets/fsggb.png" alt="" width="84" height="84">
       <p class="label">Espace de travail FSGGB</p>
-      <h1 id="auth-title">Vos applications et vos fichiers, au même endroit.</h1>
+      <h1 id="auth-title">Connexion à ScoutHub</h1>
+      <p class="auth-why">Un compte n’est nécessaire que pour ScoutCloud et l’enregistrement de vos fichiers dans le cloud. Toutes les applications restent utilisables sans compte.</p>
       <div class="tabs" role="tablist">
         <button class="tab active" id="tab-login" role="tab" type="button">Connexion</button>
         <button class="tab" id="tab-register" role="tab" type="button">Créer un compte</button>
@@ -41,10 +43,7 @@
         <div><p class="label">Bienvenue</p><h1 id="hello">Vos applications</h1></div>
         <input id="search" class="search" type="search" placeholder="Rechercher une application…" aria-label="Rechercher une application" autocomplete="off">
       </div>
-      <div id="recent" class="app-group" hidden>
-        <h2>Récemment ouvertes</h2>
-        <div class="grid-apps" id="recent-grid"></div>
-      </div>
+      <p id="guest-note" class="guest-note" hidden>Toutes les applications sont utilisables sans compte. <a href="index.html?connexion=1" id="guest-login">Connectez-vous</a> pour utiliser ScoutCloud et enregistrer vos fichiers dans le cloud ; sinon, enregistrez sur votre ordinateur comme d’habitude.</p>
       <div id="apps" aria-label="Applications"></div>
       <p id="none" class="muted" hidden>Aucune application ne correspond à votre recherche.</p>
     </section>

@@ -23,23 +23,29 @@ var SESSION_DAYS = 30;
 var MAX_FILE_BYTES = 10 * 1024 * 1024;
 var MAX_FAILS = 5;
 var LOCK_SECONDS = 600;
+var LIST_CACHE_SECONDS = 300;
+var SESSION_CACHE_SECONDS = 600;
 
 function doGet() {
   return json_({ ok: true, service: 'ScoutHub' });
 }
 
+// Actions qui modifient des données : seules elles prennent le verrou. Les lectures (list, get, me, login...)
+// ne sont plus mises en file derrière un enregistrement de fichier, ce qui accélère nettement ScoutCloud.
+var WRITES = { register: 1, changePassword: 1, adminReset: 1, adminDelete: 1, put: 1, remove: 1 };
+
 function doPost(e) {
-  var lock = LockService.getScriptLock();
+  var lock = null;
   try {
-    lock.waitLock(20000);
     var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var handler = ACTIONS[req.action];
     if (!handler) return json_({ ok: false, error: 'Action inconnue.' });
+    if (WRITES[req.action]) { lock = LockService.getScriptLock(); lock.waitLock(20000); }
     return json_(handler(req));
   } catch (err) {
     return json_({ ok: false, error: err && err.userMessage ? err.userMessage : 'Erreur du serveur.' });
   } finally {
-    try { lock.releaseLock(); } catch (x) { /* ignore */ }
+    if (lock) { try { lock.releaseLock(); } catch (x) { /* ignore */ } }
   }
 }
 
@@ -60,7 +66,9 @@ var ACTIONS = {
     return { ok: true, token: newSession_(email), user: publicUser_(email) };
   },
   logout: function (r) {
-    PropertiesService.getScriptProperties().deleteProperty('s:' + sha_(String(r.token || '')));
+    var sid = sha_(String(r.token || ''));
+    CacheService.getScriptCache().remove('sc:' + sid);
+    PropertiesService.getScriptProperties().deleteProperty('s:' + sid);
     return { ok: true };
   },
   me: function (r) {
@@ -95,12 +103,19 @@ var ACTIONS = {
     return { ok: true };
   },
   list: function (r) {
-    var res = gh_('GET', userPath_(session_(r.token), r.path), null, 'application/vnd.github+json');
+    var path = userPath_(session_(r.token), r.path);
+    var cache = CacheService.getScriptCache(), key = 'l:' + sha_(path).slice(0, 40);
+    var hit = cache.get(key);
+    if (hit) return { ok: true, entries: JSON.parse(hit) };
+    var res = gh_('GET', path, null, 'application/vnd.github+json');
     if (res.code === 404) return { ok: true, entries: [] };
     if (res.code !== 200) fail_('GitHub a refusé la lecture (' + res.code + ').');
     var data = JSON.parse(res.text);
     if (!Array.isArray(data)) fail_('Ce chemin est un fichier.');
-    return { ok: true, entries: data.map(function (x) { return { name: x.name, type: x.type, size: x.size }; }) };
+    var entries = data.map(function (x) { return { name: x.name, type: x.type, size: x.size }; });
+    var txt = JSON.stringify(entries);
+    if (txt.length < 90000) cache.put(key, txt, LIST_CACHE_SECONDS);
+    return { ok: true, entries: entries };
   },
   get: function (r) {
     var res = gh_('GET', userPath_(session_(r.token), r.path), null, 'application/vnd.github.raw');
@@ -116,6 +131,7 @@ var ACTIONS = {
     if (cur.code === 200) { var meta = JSON.parse(cur.text); if (meta.sha) body.sha = meta.sha; }
     var res = gh_('PUT', path, body, 'application/vnd.github+json');
     if (res.code !== 200 && res.code !== 201) fail_('GitHub a refusé l\'écriture (' + res.code + ').');
+    dropListCache_(path);
     return { ok: true };
   },
   remove: function (r) {
@@ -124,6 +140,7 @@ var ACTIONS = {
     if (cur.code !== 200) fail_('Fichier introuvable.');
     var res = gh_('DELETE', path, { message: 'ScoutHub : suppression', sha: JSON.parse(cur.text).sha }, 'application/vnd.github+json');
     if (res.code !== 200) fail_('Suppression refusée (' + res.code + ').');
+    dropListCache_(path);
     return { ok: true };
   }
 };
@@ -191,6 +208,14 @@ function newSession_(email) {
   return token;
 }
 function session_(token) {
+  var id = sha_(String(token || '')), cache = CacheService.getScriptCache();
+  var hit = cache.get('sc:' + id);
+  if (hit) return hit;
+  var email = sessionUncached_(token);
+  cache.put('sc:' + id, email, SESSION_CACHE_SECONDS);
+  return email;
+}
+function sessionUncached_(token) {
   var raw = props_().getProperty('s:' + sha_(String(token || '')));
   if (!raw) fail_('Session expirée : reconnectez-vous.');
   var s = JSON.parse(raw);
@@ -223,6 +248,12 @@ function userPath_(email, sub) {
   if (!repo || !p.getProperty('GITHUB_TOKEN')) fail_('Stockage GitHub non configuré.');
   var base = 'repos/' + repo + '/contents/users/' + sha_(email).slice(0, 24);
   return base + (parts.length ? '/' + parts.map(encodeURIComponent).join('/') : '');
+}
+// Les listes de dossiers sont gardées quelques minutes ; toute écriture invalide le dossier et ses parents.
+function dropListCache_(path) {
+  var parts = path.split('/'), keys = [];
+  for (var n = parts.length - 1; n >= 6; n--) keys.push('l:' + sha_(parts.slice(0, n).join('/')).slice(0, 40));
+  if (keys.length) CacheService.getScriptCache().removeAll(keys);
 }
 function gh_(method, path, body, accept) {
   var opt = {

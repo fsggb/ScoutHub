@@ -51,9 +51,18 @@
   const api = window.ScoutHub = {
     ready, hubUrl: BASE, loggedIn: () => !!getToken(),
     user: async () => (await call("me")).user,
-    list: async (path = "") => (await call("list", { path })).entries.filter(e => e.name !== ".gitkeep"),
+    list: async (path = "") => {
+      const entries = (await call("list", { path })).entries;
+      try { localStorage.setItem("scouthub.ls:" + path, JSON.stringify(entries)); } catch {}
+      return entries.filter(e => e.name !== ".gitkeep");
+    },
+    cached: (path = "") => { try { const v = JSON.parse(lsGet("scouthub.ls:" + path) || "null"); return v && v.filter(e => e.name !== ".gitkeep"); } catch { return null; } },
     get: async path => fromB64((await call("get", { path })).base64),
-    put: async (path, data) => { const b = asBytes(data); if (b.length > MAX) throw new Error("Fichier de plus de 10 Mo."); await call("put", { path, base64: toB64(b) }); }
+    put: async (path, data) => {
+      const b = asBytes(data); if (b.length > MAX) throw new Error("Fichier de plus de 10 Mo.");
+      const drop = () => { try { Object.keys(localStorage).filter(k => k.startsWith("scouthub.ls:")).forEach(k => localStorage.removeItem(k)); } catch {} };
+      drop(); try { await call("put", { path, base64: toB64(b) }); } finally { drop(); }
+    }
   };
 
   // ---------- boîte de dialogue « Enregistrer sous » / « Ouvrir » (Shadow DOM) ----------
@@ -144,26 +153,36 @@
             const n = (window.prompt("Nom du dossier :") || "").trim().replace(/[\\/]/g, ""); if (!n) return;
             try { await api.put([...dir, n, ".gitkeep"].join("/"), new Uint8Array()); dir.push(n); load(); } catch (e) { status.textContent = e.message; status.className = "hint err"; }
           };
+          const sorted = rs => [...rs].sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name, "fr") : a.type === "dir" ? -1 : 1);
+          let seq = 0;
+          function show(rows) {
+            list.textContent = "";
+            if (!rows.length) list.append(el("li", { className: "dim" }, el("span", { className: "n", textContent: "Ce dossier est vide." })));
+            rows.forEach(r => {
+              const isDir = r.type === "dir", ok = isDir || mode === "save" || match(r.name);
+              const li = el("li", { className: ok ? "" : "dim" }, el("span", { textContent: isDir ? "📁" : "📄" }), el("span", { className: "n", textContent: r.name, title: r.name }), el("span", { className: "m", textContent: isDir ? "" : fmt(r.size) }));
+              if (ok) {
+                li.onclick = () => {
+                  if (isDir) { dir.push(r.name); picked = null; load(); }
+                  else if (mode === "save") nameInput.value = r.name;
+                  else { picked = r; list.querySelectorAll("li").forEach(x => x.classList.remove("sel")); li.classList.add("sel"); go.disabled = false; }
+                };
+                if (!isDir && mode === "open") li.ondblclick = () => go.click();
+              }
+              list.append(li);
+            });
+          }
+          // Affichage immédiat de la dernière liste connue, puis mise à jour depuis le serveur.
           async function load() {
-            drawCrumbs(); list.textContent = ""; status.textContent = "Chargement…"; status.className = "hint";
+            const mine = ++seq, p = dir.join("/"), cached = api.cached(p);
+            drawCrumbs(); list.textContent = ""; picked = null; if (mode === "open") go.disabled = true;
+            if (cached) { show(sorted(cached)); status.textContent = "Actualisation…"; } else status.textContent = "Chargement…";
+            status.className = "hint";
             try {
-              const rows = (await api.list(dir.join("/"))).sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name, "fr") : a.type === "dir" ? -1 : 1);
-              status.textContent = "";
-              if (!rows.length) list.append(el("li", { className: "dim" }, el("span", { className: "n", textContent: "Ce dossier est vide." })));
-              rows.forEach(r => {
-                const isDir = r.type === "dir", ok = isDir || mode === "save" || match(r.name);
-                const li = el("li", { className: ok ? "" : "dim" }, el("span", { textContent: isDir ? "📁" : "📄" }), el("span", { className: "n", textContent: r.name, title: r.name }), el("span", { className: "m", textContent: isDir ? "" : fmt(r.size) }));
-                if (ok) {
-                  li.onclick = () => {
-                    if (isDir) { dir.push(r.name); picked = null; load(); }
-                    else if (mode === "save") nameInput.value = r.name;
-                    else { picked = r; list.querySelectorAll("li").forEach(x => x.classList.remove("sel")); li.classList.add("sel"); go.disabled = false; }
-                  };
-                  if (!isDir && mode === "open") li.ondblclick = () => go.click();
-                }
-                list.append(li);
-              });
-            } catch (e) { status.textContent = e.message; status.className = "hint err"; }
+              const rows = sorted(await api.list(p));
+              if (mine !== seq) return;
+              status.textContent = ""; show(rows);
+            } catch (e) { if (mine === seq) { status.textContent = e.message; status.className = "hint err"; } }
           }
           if (mode === "save") {
             go.textContent = "Enregistrer";

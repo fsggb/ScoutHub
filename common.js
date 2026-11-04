@@ -4,13 +4,16 @@
   const TOKEN_KEY = "scouthub.token";
   const store = {
     get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); } catch {} }
+    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user"), Object.keys(localStorage).filter(k => k.startsWith("scouthub.ls:")).forEach(k => localStorage.removeItem(k))); } catch {} }
   };
+  const USER_KEY = "scouthub.user";
+  const cachedUser = () => { try { return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
+  const cacheUser = u => { try { u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
 
   const Hub = window.Hub = {
-    $, say, store, user: null,
+    $, say, store, user: null, cachedUser, cacheUser,
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",
 
@@ -30,6 +33,12 @@
       return out;
     },
 
+    // Préchauffage : réveille le serveur et mémorise la racine de ScoutCloud pour qu'elle s'affiche instantanément.
+    prefetch() {
+      if (!store.get() || !window.SCOUTHUB_API) return;
+      Hub.call("list", { path: "" }).then(o => { try { localStorage.setItem("scouthub.ls:", JSON.stringify(o.entries)); } catch {} }).catch(() => {});
+    },
+
     toLogin() {
       store.set(null);
       location.replace("index.html?next=" + encodeURIComponent(Hub.here() + location.search));
@@ -43,7 +52,7 @@
     // Vérifie la session ; renvoie l'utilisateur ou redirige vers la connexion.
     async requireUser({ admin = false } = {}) {
       if (!store.get()) { Hub.toLogin(); return null; }
-      try { Hub.user = (await Hub.call("me")).user; }
+      try { Hub.user = (await Hub.call("me")).user; cacheUser(Hub.user); }
       catch { Hub.toLogin(); return null; }
       if (admin && Hub.user.role !== "admin") { location.replace("index.html"); return null; }
       return Hub.user;
@@ -58,7 +67,11 @@
       brand.append(Object.assign(document.createElement("img"), { className: "brand-logo", src: "assets/fsggb.png", alt: "FSGGB", width: 40, height: 40 }),
         Object.assign(document.createElement("strong"), { textContent: "ScoutHub" }));
       bar.append(brand);
-      if (!user) return;
+      if (!user) {
+        const nav = Object.assign(document.createElement("nav"), { className: "topnav" });
+        nav.append(Object.assign(document.createElement("a"), { className: "nav-btn", href: "index.html?connexion=1", textContent: "Se connecter" }));
+        bar.append(nav); return;
+      }
       const nav = Object.assign(document.createElement("nav"), { className: "topnav" });
       const link = (label, href) => {
         const a = Object.assign(document.createElement("a"), { className: "nav-link", href, textContent: label });

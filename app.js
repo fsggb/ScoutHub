@@ -2,7 +2,6 @@
   "use strict";
   const { $, say, store } = Hub;
   let mode = "login";
-  const RECENT_KEY = "scouthub.recent";
 
   // ---------- connexion / inscription ----------
   function setMode(m) {
@@ -26,7 +25,7 @@
     $("auth-submit").disabled = true; say($("auth-status"), "Un instant…");
     try {
       const out = await Hub.call(mode, { email, password });
-      store.set(out.token); Hub.user = out.user;
+      store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user);
       $("password").value = $("password2").value = "";
       enter();
     } catch (e) { say($("auth-status"), e.message, true); }
@@ -44,26 +43,25 @@
     Hub.renderBar(null);
     $("home").hidden = true; $("auth").hidden = false;
     if (!window.SCOUTHUB_API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
+    setTimeout(() => $("email").focus(), 0);
   }
 
   // ---------- accueil ----------
-  const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
-  const remember = name => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([name, ...recent().filter(n => n !== name)].slice(0, 5))); } catch {} };
-
   function appList() {
-    const all = window.SCOUTHUB_APPS || [], featured = all.filter(a => a.featured), apps = all.filter(a => !a.featured);
-    const mine = [{ group: "Mon espace", name: "Mon compte", desc: "Profil et mot de passe", url: "compte.html", icon: "assets/fsggb.png", local: true }];
+    const apps = [...(window.SCOUTHUB_APPS || [])];
+    const mine = [];
+    if (Hub.user) mine.push({ group: "Mon espace", name: "Mon compte", desc: "Profil et mot de passe", url: "compte.html", icon: "assets/icons/Compte.svg", local: true });
     if (Hub.user && Hub.user.role === "admin")
-      mine.push({ group: "Mon espace", name: "Administration", desc: "Comptes et utilisateurs", url: "admin.html", icon: "assets/fsggb.png", local: true });
-    apps.splice(1, 0, ...mine); // juste après ScoutCloud, dans « Mon espace »
-    return [...featured, ...apps];
+      mine.push({ group: "Mon espace", name: "Administration", desc: "Comptes et utilisateurs", url: "admin.html", icon: "assets/icons/Admin.svg", local: true });
+    const at = apps.findIndex(a => a.group === "Mon espace") + 1; // juste après ScoutCloud, dans « Mon espace »
+    apps.splice(at, 0, ...mine);
+    return apps;
   }
 
   function tile(a) {
     const link = document.createElement("a");
     link.className = "app-tile" + (a.featured ? " featured" : ""); link.href = a.url;
     if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
-    link.addEventListener("click", () => remember(a.name));
     let badge;
     if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${a.icon}")`; }
     else { badge = document.createElement("img"); badge.className = "app-badge"; badge.src = a.icon; badge.alt = ""; }
@@ -82,25 +80,33 @@
     groups.forEach(g => {
       const section = document.createElement("section"); section.className = "app-group";
       const grid = document.createElement("div"); grid.className = "grid-apps";
-      g.items.forEach(a => grid.append(tile(a)));
+      // Les applications mises en avant restent dans leur section, en tête.
+      g.items.sort((x, y) => (y.featured ? 1 : 0) - (x.featured ? 1 : 0)).forEach(a => grid.append(tile(a)));
       section.append(Object.assign(document.createElement("h2"), { textContent: g.name }), grid); box.append(section);
     });
     $("none").hidden = shown.length > 0;
-    const rec = q ? [] : recent().map(n => all.find(a => a.name === n)).filter(Boolean);
-    $("recent").hidden = rec.length === 0;
-    $("recent-grid").textContent = ""; rec.forEach(a => $("recent-grid").append(tile(a)));
   }
   $("search").addEventListener("input", renderApps);
 
-  function enter() {
-    if (goNext()) return;
+  // L'accueil est accessible sans compte ; la connexion n'est demandée que pour ScoutCloud et l'enregistrement cloud.
+  function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
     Hub.renderBar(Hub.user);
-    $("hello").textContent = "Bonjour, " + Hub.user.email.split("@")[0].replace(/[._-]+/g, " ");
+    $("hello").textContent = Hub.user ? "Bonjour, " + Hub.user.email.split("@")[0].replace(/[._-]+/g, " ") : "Vos applications";
+    $("guest-note").hidden = !!Hub.user;
     renderApps();
+    if (Hub.user) Hub.prefetch();
   }
+  function enter() { if (!goNext()) showHome(); }
 
   // ---------- démarrage ----------
-  if (store.get() && window.SCOUTHUB_API) Hub.call("me").then(o => { Hub.user = o.user; enter(); }).catch(() => { store.set(null); showAuth(); });
-  else showAuth();
+  const wantLogin = new URLSearchParams(location.search).has("connexion") || new URLSearchParams(location.search).has("next");
+  if (store.get() && window.SCOUTHUB_API) {
+    // Affichage immédiat avec l'utilisateur mémorisé, vérification de la session en arrière-plan.
+    Hub.user = Hub.cachedUser();
+    if (Hub.user && !wantLogin) showHome(); // sinon : on attend la vérification de la session
+    Hub.call("me").then(o => { Hub.user = o.user; Hub.cacheUser(o.user); if (wantLogin) enter(); else showHome(); })
+      .catch(() => { store.set(null); Hub.user = null; wantLogin ? showAuth() : showHome(); });
+  } else if (wantLogin) showAuth();
+  else showHome();
 })();
