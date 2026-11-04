@@ -20,6 +20,7 @@ window.SCOUTHUB_APPS = [
   { group: "Création", name: "Pro Tools", desc: "Studio audio et mixage", url: O + "ScoutOffice/ProTools/", icon: "assets/icons/ProTools.svg" },
   { group: "Création", name: "Substance Painter", desc: "Peinture de textures 3D", url: O + "ScoutOffice/SubstancePainter/", icon: "assets/icons/SubstancePainter.svg" },
   { group: "Conception et CAO", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg" },
+  { group: "Conception et CAO", featured: true, crop: true, name: "SoLeadWorks", desc: "Meubles et coins de patrouille en 3D, avec plans et historique", url: O + "SoLeadWorks/?lang=fr", icon: "assets/icons/CathIA.jpg" },
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png" },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png" },
   { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg" },
