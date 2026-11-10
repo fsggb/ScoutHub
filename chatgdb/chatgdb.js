@@ -167,7 +167,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   const prefs = Object.assign({ custom: "", web: true, style: "concise" }, store.get(PREFS_KEY, {}));
   const KEY = "scouthub.chatgdb.v3:" + user.email;
   let convs = store.get(KEY, []).filter(c => c && Array.isArray(c.messages));
-  let current = null, openArtId = null, openArtVer = 0, tab = "prev", busy = false, live = !!CFG.live, abort = null, pending = [], webOn = prefs.web;
+  let isAdmin = false, current = null, openArtId = null, openArtVer = 0, tab = "prev", busy = false, live = !!CFG.live, abort = null, pending = [], webOn = prefs.web;
   const persist = () => store.set(KEY, convs.slice(0, 100));
 
   // ---------- thème, panneau ----------
@@ -184,12 +184,12 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   function credits(c) {
     const w = c ? c.fenetre : { max: CFG.windowCredits, utilise: 0, reste: CFG.windowCredits, renouvellement: "" };
     const k = c ? c.semaine : { max: CFG.weekCredits, utilise: 0, reste: CFG.weekCredits, renouvellement: "", bonus: 0 };
-    const fill = (bar, txt, o) => { const pct = o.max ? Math.round(o.reste / o.max * 100) : 0; $(bar).style.width = pct + "%"; $(bar).classList.toggle("low", pct <= 15); $(txt).textContent = o.reste + " / " + o.max; };
-    fill("cm-bar", "cm-txt", w); $("cm-txt").textContent = w.reste + " / " + w.max;
-    fill("d-win", "d-win-txt", w); fill("d-week", "d-week-txt", k);
+    const inf = !!(c && c.illimite);
+    const fill = (bar, txt, o) => { const pct = inf ? 100 : (o.max ? Math.round(o.reste / o.max * 100) : 0); $(bar).style.width = pct + "%"; $(bar).classList.toggle("low", !inf && pct <= 15); $(txt).textContent = inf ? "Illimité" : o.reste + " / " + o.max; };
+    fill("cm-bar", "cm-txt", w); fill("d-win", "d-win-txt", w); fill("d-week", "d-week-txt", k);
     $("d-hours").textContent = $("d-hours2").textContent = CFG.windowHours;
-    $("d-win-reset").textContent = "Se renouvelle " + (w.renouvellement || `${CFG.windowHours} h après votre première question`);
-    $("d-week-reset").textContent = "Se renouvelle " + (k.renouvellement || "chaque semaine") + (k.bonus ? " · dont " + k.bonus + " crédit(s) gagnés" : "");
+    $("d-win-reset").textContent = inf ? "Compte administrateur : aucune limite, consommation suivie dans « Consommation »." : "Se renouvelle " + (w.renouvellement || `${CFG.windowHours} h après votre première question`);
+    $("d-week-reset").textContent = inf ? "" : "Se renouvelle " + (k.renouvellement || "chaque semaine") + (k.bonus ? " · dont " + k.bonus + " crédit(s) gagnés" : "");
     $("d-earn").textContent = `Utiliser les applications de ScoutHub rapporte des crédits : ${CFG.earn.credits} crédit toutes les ${CFG.earn.minutes} minutes d’activité, jusqu’à ${CFG.earn.weekCap} par semaine.`;
   }
   credits();
@@ -197,7 +197,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   $("credits-open").onclick = openCredits; $("m-credits").onclick = () => { closeMenu(); openCredits(); };
   document.querySelectorAll("dialog [data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
   // Le serveur dit si ChatGDB est ouvert pour ce compte.
-  Hub.call("credits").then(o => { if (o.chat) live = true; if (o.credits) credits(o.credits); }).catch(() => {}).finally(() => { $("soon").hidden = live; if (!live && !current?.example) notice("ChatGDB n’est pas encore activé : l’interface est prête, l’envoi sera ouvert prochainement."); updateSend(); });
+  Hub.call("credits").then(o => { if (o.chat) live = true; if (o.credits) credits(o.credits); if (o.admin) { isAdmin = true; $("m-memory").hidden = $("m-conso").hidden = false; } }).catch(() => {}).finally(() => { $("soon").hidden = live; if (!live && !current?.example) notice("ChatGDB n’est pas encore activé : l’interface est prête, l’envoi sera ouvert prochainement."); updateSend(); });
 
   // ---------- menu et préférences ----------
   const menu = $("menu"), closeMenu = () => menu.hidden = true;
@@ -208,6 +208,35 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   $("set-save").onclick = () => { prefs.custom = $("set-custom").value.trim().slice(0, 600); prefs.web = $("set-web").checked; prefs.style = $("set-style").value; store.set(PREFS_KEY, prefs); webOn = prefs.web; $("mode").value = prefs.style; syncWeb(); $("dlg-settings").close(); toast("Préférences enregistrées."); };
   const clearAll = () => { if (confirm("Supprimer toutes vos conversations ChatGDB sur cet appareil ?")) { convs = []; persist(); show(null); $("dlg-settings").close(); } };
   $("set-clear").onclick = clearAll;
+
+  // ---------- administrateur : mémoire de ChatGDB et consommation ----------
+  let memSel = "";
+  const memStatus = (t, err) => { $("mem-status").textContent = t || ""; $("mem-status").classList.toggle("error", !!err); };
+  function memForm(n) { memSel = n ? n.id : ""; $("mem-titre").value = n ? n.titre : ""; $("mem-mots").value = n ? n.mots : ""; $("mem-contenu").value = n ? n.contenu : ""; $("mem-del").hidden = !n; document.querySelectorAll("#mem-items li").forEach(li => li.classList.toggle("on", li.dataset.id === memSel)); }
+  async function memLoad() {
+    memStatus("Chargement…"); const ul = $("mem-items"); ul.textContent = "";
+    try {
+      const { notes } = await Hub.call("memoire", { op: "liste" }); memStatus(notes.length ? "" : "Aucune note pour l’instant : créez la première.");
+      notes.forEach(n => { const li = el("li", { innerHTML: esc(n.titre) + "<small>" + esc(n.resume || "") + "</small>" }); li.dataset.id = n.id; li.onclick = async () => { try { memStatus("Chargement…"); const { note } = await Hub.call("memoire", { op: "lire", id: n.id }); memForm(note); memStatus(""); } catch (e) { memStatus(e.message, true); } }; ul.append(li); });
+    } catch (e) { memStatus(e.message, true); }
+  }
+  $("m-memory").onclick = () => { closeMenu(); memForm(null); $("dlg-memory").showModal(); memLoad(); };
+  $("mem-new").onclick = () => memForm(null);
+  $("mem-form").addEventListener("submit", async ev => { ev.preventDefault(); try { memStatus("Enregistrement…"); const { note } = await Hub.call("memoire", { op: "ecrire", id: memSel, titre: $("mem-titre").value, mots: $("mem-mots").value, contenu: $("mem-contenu").value }); memStatus("Note enregistrée."); await memLoad(); memSel = note.id; document.querySelectorAll("#mem-items li").forEach(li => li.classList.toggle("on", li.dataset.id === memSel)); $("mem-del").hidden = false; } catch (e) { memStatus(e.message, true); } });
+  $("mem-del").onclick = async () => { if (!memSel || !confirm("Supprimer cette note de la mémoire ?")) return; try { await Hub.call("memoire", { op: "supprimer", id: memSel }); memForm(null); memLoad(); } catch (e) { memStatus(e.message, true); } };
+  const eur = n => (n || 0).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " $";
+  $("m-conso").onclick = async () => {
+    closeMenu(); $("dlg-conso").showModal(); const st = $("conso-status"); st.textContent = "Chargement…"; st.classList.remove("error");
+    try {
+      const { stats: s } = await Hub.call("consommation"); st.textContent = "Mois en cours : " + s.mois + (s.memoire.configuree ? " · " + s.memoire.notes + " note(s) en mémoire" : " · mémoire non configurée");
+      const box = $("conso-stats"); box.textContent = "";
+      [["Questions", s.appels], ["Recherches web", s.recherches], ["Jetons lus", s.entree.toLocaleString("fr-FR")], ["Jetons écrits", s.sortie.toLocaleString("fr-FR")], ["Coût estimé", eur(s.cout)]].forEach(([k, v]) => box.append(el("div", { className: "stat", innerHTML: "<b>" + esc(v) + "</b><span>" + esc(k) + "</span>" })));
+      const days = $("conso-days"); days.textContent = ""; const mx = Math.max(0.0001, ...s.jours.map(d => d.cout));
+      s.jours.forEach(d => days.append(el("i", { title: d.jour + " : " + d.appels + " question(s), " + eur(d.cout), style: "height:" + Math.max(4, Math.round(d.cout / mx * 100)) + "%" })));
+      const tb = $("conso-users"); tb.textContent = "";
+      s.utilisateurs.forEach(u => tb.append(el("tr", { innerHTML: "<td>" + esc(u.email) + "</td><td>" + u.appels + "</td><td>" + u.recherches + "</td><td>" + u.entree.toLocaleString("fr-FR") + " / " + u.sortie.toLocaleString("fr-FR") + "</td><td>" + eur(u.cout) + "</td>" })));
+    } catch (e) { st.textContent = e.message; st.classList.add("error"); }
+  };
 
   // ---------- liste des conversations ----------
   const when = ts => { const now = new Date(), day = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); return ts >= day ? "Aujourd’hui" : ts >= day - 864e5 ? "Hier" : ts >= day - 6 * 864e5 ? "7 derniers jours" : "Plus ancien"; };
@@ -265,7 +294,20 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
     body.append(wrap);
     if (m.sources && m.sources.length) { const src = el("div", { className: "sources" }); m.sources.forEach((s, i) => src.append(el("a", { className: "src", id: "src-" + i, href: s.url, target: "_blank", rel: "noopener noreferrer", innerHTML: `<i>${i + 1}</i><span><b>${esc(s.title)}</b><small>${esc(host(s.url))}</small></span>` }))); body.append(src); }
     curSources = [];
+    (m.proposals || []).forEach(p => body.append(proposalCard(p)));
     return body;
+  }
+  function proposalCard(p) {
+    const box = el("div", { className: "proposal" }, el("b", { innerHTML: ic("book") + "Retenir dans la mémoire : " + esc(p.titre) }), el("p", { textContent: p.contenu }));
+    if (p.state === "ok") box.append(el("div", { className: "row" }, el("span", { className: "muted", textContent: "Enregistré dans la mémoire." })));
+    else if (p.state === "no") box.append(el("div", { className: "row" }, el("span", { className: "muted", textContent: "Ignoré." })));
+    else {
+      const ok = el("button", { className: "btn primary small", type: "button", textContent: "Enregistrer" }), no = el("button", { className: "btn small", type: "button", textContent: "Ignorer" });
+      ok.onclick = async () => { ok.disabled = true; try { await Hub.call("memoire", { op: "ecrire", titre: p.titre, mots: p.mots, contenu: p.contenu }); p.state = "ok"; persist(); drawThread(false); toast("Note enregistrée dans la mémoire."); } catch (e) { ok.disabled = false; toast(e.message); } };
+      no.onclick = () => { p.state = "no"; persist(); drawThread(false); };
+      box.append(el("div", { className: "row" }, no, ok));
+    }
+    return box;
   }
   function drawThread(scroll = true) {
     const th = $("thread"); th.textContent = "";
@@ -451,7 +493,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
     busy = true; abort = new AbortController(); updateSend(); drawThread(); notice();
     try {
       const out = await chatCall({ app: ctx.value, style: $("mode").value, custom: prefs.custom, web: webOn, messages: history(fullAtts) }, abort.signal);
-      current.messages.push({ role: "assistant", text: String(out.text || ""), sources: out.sources || [], searches: out.searches || [], time: Date.now() });
+      current.messages.push({ role: "assistant", text: String(out.text || ""), sources: out.sources || [], searches: out.searches || [], proposals: (out.proposals || []).map(p => ({ ...p, state: "" })), time: Date.now() });
       if (out.credits) credits(out.credits);
       current.updated = Date.now();
     } catch (e) { if (e.name !== "AbortError") notice(e.message, true); }

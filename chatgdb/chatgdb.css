@@ -156,3 +156,17 @@ dialog h2{margin:0 0 8px;font-weight:600;color:var(--navy)}.app[data-theme=dark]
   .chip.select{max-width:140px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+/* administration : mémoire et consommation */
+dialog.wide{width:min(900px,calc(100% - 32px))}.status{min-height:18px;margin:0 0 8px;font-size:13px;color:var(--mute)}.status.error{color:#b42318}
+.btn.small{padding:6px 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.mem{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start}.mem-list ul{list-style:none;margin:10px 0 0;padding:0;max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.mem-list li{padding:9px 12px;border-top:1px solid var(--line);cursor:pointer;font-size:14px}.mem-list li:first-child{border-top:0}.mem-list li:hover,.mem-list li.on{background:var(--hover)}.mem-list li small{display:block;color:var(--mute);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mem-form .field{margin:0 0 10px}.mem-form input,.mem-form textarea{display:block;width:100%;margin-top:6px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-weight:400}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.stat{min-width:120px;padding:10px 16px;background:var(--bg);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:10px}.stat b{display:block;font-size:22px;font-weight:600;color:var(--navy)}.app[data-theme=dark] .stat b{color:var(--gold)}.stat span{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.days{display:flex;align-items:flex-end;gap:3px;height:70px;margin-bottom:14px}.days i{flex:1;min-width:4px;background:linear-gradient(180deg,var(--gold),var(--gold-d));border-radius:3px 3px 0 0}
+.table-wrap{overflow:auto;max-height:260px}.users{width:100%;border-collapse:collapse;font-size:14px}.users th{padding:6px 8px;text-align:left;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--line)}.users td{padding:8px;border-top:1px solid var(--line)}
+/* proposition de note */
+.proposal{margin:12px 0;padding:12px 14px;border:1px dashed var(--gold);border-radius:14px;background:var(--panel)}.proposal b{display:flex;align-items:center;gap:8px}.proposal .ic{color:var(--gold-d)}
+.proposal p{margin:6px 0;color:var(--mute);font-size:13.5px;white-space:pre-wrap;max-height:120px;overflow:auto}.proposal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+@media(max-width:700px){.mem{grid-template-columns:1fr}}

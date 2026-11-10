@@ -132,6 +132,8 @@
     <div class="menu-who"><b id="me-name"></b><small id="me-role"></small></div>
     <button role="menuitem" id="m-settings" type="button"><svg class="ic sm"><use href="#i-gear"/></svg> Préférences</button>
     <button role="menuitem" id="m-credits" type="button"><svg class="ic sm"><use href="#i-bolt"/></svg> Mes crédits</button>
+    <button role="menuitem" id="m-memory" type="button" hidden><svg class="ic sm"><use href="#i-book"/></svg> Mémoire de ChatGDB</button>
+    <button role="menuitem" id="m-conso" type="button" hidden><svg class="ic sm"><use href="#i-chart"/></svg> Consommation</button>
     <a role="menuitem" href="../compte.html"><svg class="ic sm"><use href="#i-user"/></svg> Mon compte</a>
     <a role="menuitem" href="../"><svg class="ic sm"><use href="#i-home"/></svg> Retour à ScoutHub</a>
     <button role="menuitem" id="m-out" type="button"><svg class="ic sm"><use href="#i-logout"/></svg> Déconnexion</button>
@@ -145,6 +147,31 @@
     <h3>Gagner des crédits</h3>
     <p class="muted" id="d-earn"></p>
     <div class="dlg-actions"><button class="btn" type="button" disabled>Augmenter mon quota (bientôt)</button><button class="btn primary" type="button" data-close>Fermer</button></div>
+  </dialog>
+
+  <dialog id="dlg-memory" class="wide">
+    <h2>Mémoire de ChatGDB</h2>
+    <p class="muted">Ce que vous apprenez à ChatGDB. Les notes sont enregistrées dans GitHub (dépôt privé) et ne sont pas envoyées avec chaque question : l’IA en voit seulement le sommaire et va lire celles qui concernent la question.</p>
+    <p class="status" id="mem-status" role="status"></p>
+    <div class="mem">
+      <div class="mem-list"><button class="btn small" id="mem-new" type="button"><svg class="ic sm"><use href="#i-plus"/></svg> Nouvelle note</button><ul id="mem-items"></ul></div>
+      <form class="mem-form" id="mem-form" autocomplete="off">
+        <label class="field">Titre<input id="mem-titre" type="text" maxlength="120" required></label>
+        <label class="field">Mots-clés <small>(séparés par des virgules)</small><input id="mem-mots" type="text" maxlength="200"></label>
+        <label class="field">Contenu <small>(Markdown)</small><textarea id="mem-contenu" rows="9" maxlength="20000" required></textarea></label>
+        <div class="dlg-actions"><button class="btn danger" id="mem-del" type="button" hidden>Supprimer</button><button class="btn" type="button" data-close>Fermer</button><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-conso" class="wide">
+    <h2>Consommation de ChatGDB</h2>
+    <p class="muted">Réservé à l’administrateur : votre propre usage est illimité, mais il est compté comme les autres. Coûts estimés d’après les tarifs publics (recherche web : 10 $ les 1 000).</p>
+    <p class="status" id="conso-status" role="status"></p>
+    <div class="stats" id="conso-stats"></div>
+    <div class="days" id="conso-days" aria-label="Coût par jour"></div>
+    <div class="table-wrap"><table class="users"><thead><tr><th>Compte</th><th>Questions</th><th>Recherches</th><th>Jetons (entrée / sortie)</th><th>Coût</th></tr></thead><tbody id="conso-users"></tbody></table></div>
+    <div class="dlg-actions"><button class="btn primary" type="button" data-close>Fermer</button></div>
   </dialog>
 
   <dialog id="dlg-settings">
