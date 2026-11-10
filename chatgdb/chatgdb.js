@@ -159,7 +159,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
 
   // ---------- état, préférences, conversations ----------
   const PREFS_KEY = "scouthub.chatgdb.prefs";
-  const prefs = Object.assign({ custom: "", web: true, style: "concise" }, store.get(PREFS_KEY, {}));
+  const prefs = Object.assign({ custom: "", web: true, style: "concise", modele: "claude-haiku-5-5", effort: "low", profondeur: "standard" }, store.get(PREFS_KEY, {}));
   const KEY = "scouthub.chatgdb.v3:" + user.email;
   let convs = store.get(KEY, []).filter(c => c && Array.isArray(c.messages));
   let isAdmin = false, current = null, openArtId = null, openArtVer = 0, tab = "prev", busy = false, live = !!CFG.live, abort = null, pending = [], webOn = prefs.web;
@@ -194,7 +194,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   // Le serveur dit si ChatGDB est ouvert pour ce compte.
   let closedMsg = "";
   Hub.call("credits").then(o => {
-    if (o.chat) live = true; if (o.credits) credits(o.credits); if (o.admin) { isAdmin = true; $("m-memory").hidden = $("m-conso").hidden = false; }
+    if (o.chat) live = true; voiceServer = !!o.voix; if (o.credits) credits(o.credits); if (o.admin) { isAdmin = true; $("m-memory").hidden = $("m-conso").hidden = false; }
     if (!o.chat) closedMsg = o.raison === "cle" ? "ChatGDB attend la clé Claude du serveur (propriété ANTHROPIC_IA des propriétés du script ScoutHub)."
       : "ChatGDB est réservé aux administrateurs pendant les tests. Vous êtes connecté en tant que « " + (Hub.ROLE_LABELS[o.role] || o.role) + " » (" + (o.email || user.email) + "). Connectez-vous avec un compte administrateur.";
   }).catch(e => { closedMsg = /Action inconnue/.test(e.message) ? "Le serveur ScoutHub n’est pas à jour : collez le dernier Code.gs dans Apps Script et redéployez en « Nouvelle version »." : "Impossible de joindre le serveur ScoutHub : " + e.message; })
@@ -205,8 +205,8 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   $("menu-open").onclick = ev => { ev.stopPropagation(); menu.hidden = !menu.hidden; };
   document.addEventListener("click", e => { if (!menu.contains(e.target)) closeMenu(); });
   $("m-out").onclick = () => Hub.logout();
-  $("m-settings").onclick = () => { closeMenu(); $("set-custom").value = prefs.custom; $("set-web").checked = prefs.web; $("set-style").value = prefs.style; $("dlg-settings").showModal(); };
-  $("set-save").onclick = () => { prefs.custom = $("set-custom").value.trim().slice(0, 600); prefs.web = $("set-web").checked; prefs.style = $("set-style").value; store.set(PREFS_KEY, prefs); webOn = prefs.web; $("mode").value = prefs.style; syncWeb(); $("dlg-settings").close(); toast("Préférences enregistrées."); };
+  $("m-settings").onclick = () => { closeMenu(); $("set-custom").value = prefs.custom; $("set-web").checked = prefs.web; $("set-style").value = prefs.style; $("set-model").value = prefs.modele; $("set-effort").value = prefs.effort; $("set-depth").value = prefs.profondeur; $("dlg-settings").showModal(); };
+  $("set-save").onclick = () => { prefs.custom = $("set-custom").value.trim().slice(0, 600); prefs.web = $("set-web").checked; prefs.style = $("set-style").value; prefs.modele = $("set-model").value; prefs.effort = $("set-effort").value; prefs.profondeur = $("set-depth").value; store.set(PREFS_KEY, prefs); webOn = prefs.web; $("mode").value = prefs.style; syncWeb(); $("dlg-settings").close(); toast("Préférences enregistrées."); };
   const clearAll = () => { if (confirm("Supprimer toutes vos conversations ChatGDB sur cet appareil ?")) { convs = []; persist(); show(null); $("dlg-settings").close(); } };
   $("set-clear").onclick = clearAll;
 
@@ -439,9 +439,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   document.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; $("drop-hint").hidden = true; if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
 
   // ---------- composeur ----------
-  const input = $("input"), send = $("send"), ctx = $("ctx");
-  ctx.append(el("option", { value: "", textContent: "Toutes les applications" }));
-  [...new Set((window.SCOUTHUB_APPS || []).filter(a => !a.local).map(a => a.name))].sort((a, b) => a.localeCompare(b, "fr")).forEach(n => ctx.append(el("option", { value: n, textContent: n })));
+  const input = $("input"), send = $("send");
   $("mode").value = prefs.style;
   const syncWeb = () => { $("web").setAttribute("aria-pressed", String(webOn)); };
   $("web").onclick = () => { webOn = !webOn; syncWeb(); };
@@ -455,18 +453,46 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   input.addEventListener("input", autosize);
   input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!busy) $("form").requestSubmit(); } });
 
-  // dictée vocale (si le navigateur la propose)
+  // dictée vocale : on enregistre dans le navigateur (fonctionne partout, y compris Brave), le serveur transcrit.
+  let recorder = null, recStream = null, recTimer = 0, voiceServer = false;
+  const micBtn = $("mic");
+  const hasRec = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null;
-  if (SR) {
-    $("mic").hidden = false;
-    $("mic").onclick = () => {
-      if (rec) { rec.stop(); return; }
-      rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = false; rec.continuous = true; const base = input.value ? input.value + " " : "";
-      rec.onresult = e => { input.value = base + [...e.results].map(r => r[0].transcript).join(" "); autosize(); };
-      rec.onend = () => { rec = null; $("mic").classList.remove("rec"); }; rec.onerror = () => { rec = null; $("mic").classList.remove("rec"); };
-      $("mic").classList.add("rec"); try { rec.start(); } catch { rec = null; $("mic").classList.remove("rec"); }
-    };
+  const micState = on => { micBtn.classList.toggle("rec", on); micBtn.title = on ? "Arrêter la dictée" : "Dicter"; micBtn.setAttribute("aria-label", on ? "Arrêter la dictée" : "Dicter votre message"); };
+  // WAV 16 kHz mono 16 bits : format lu partout par le serveur de transcription
+  async function toWav(blob) {
+    const ctxA = new (window.AudioContext || window.webkitAudioContext)(); const buf = await ctxA.decodeAudioData(await blob.arrayBuffer()); ctxA.close && ctxA.close();
+    const rate = 16000, len = Math.max(1, Math.round(buf.duration * rate)), off = new OfflineAudioContext(1, len, rate), src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+    const pcm = (await off.startRendering()).getChannelData(0), view = new DataView(new ArrayBuffer(44 + pcm.length * 2)), w = (o, s) => [...s].forEach((c, i) => view.setUint8(o + i, c.charCodeAt(0)));
+    w(0, "RIFF"); view.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVEfmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); w(36, "data"); view.setUint32(40, pcm.length * 2, true);
+    for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+    return new Blob([view], { type: "audio/wav" });
   }
+  const b64 = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = ko; r.readAsDataURL(blob); });
+  async function transcribe(blob) {
+    micBtn.disabled = true; toast("Transcription en cours…");
+    try { const wav = await toWav(blob), out = await Hub.call("transcrire", { audio: await b64(wav) }); input.value = (input.value ? input.value.trimEnd() + " " : "") + out.text; autosize(); input.focus(); }
+    catch (e) { toast(/decode|EncodingError/i.test(e.message || e.name) ? "Enregistrement illisible : réessayez." : e.message); }
+    finally { micBtn.disabled = false; }
+  }
+  function nativeDictation() {
+    if (rec) { rec.stop(); return; }
+    rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = false; rec.continuous = true; const base = input.value ? input.value + " " : "";
+    rec.onresult = e => { input.value = base + [...e.results].map(r => r[0].transcript).join(" "); autosize(); };
+    rec.onend = () => { rec = null; micState(false); }; rec.onerror = e => { rec = null; micState(false); toast(e.error === "not-allowed" ? "Micro refusé : autorisez-le dans le navigateur." : "La dictée de ce navigateur ne fonctionne pas ; l’administrateur doit activer la dictée serveur (GEMINI_IA)."); };
+    micState(true); try { rec.start(); } catch { rec = null; micState(false); }
+  }
+  async function toggleMic() {
+    if (!voiceServer && SR) return nativeDictation();
+    if (recorder) { recorder.stop(); return; }
+    try { recStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { toast("Micro refusé : autorisez-le dans le navigateur."); return; }
+    const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+    const chunks = []; recorder = new MediaRecorder(recStream, type ? { mimeType: type } : {});
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => { clearTimeout(recTimer); recStream.getTracks().forEach(t => t.stop()); const blob = new Blob(chunks, { type: recorder.mimeType || type }); recorder = null; micState(false); if (blob.size < 1500) { toast("Enregistrement trop court."); return; } transcribe(blob); };
+    recorder.start(); micState(true); toast("Parlez… (recliquez pour terminer, 90 s au plus)"); recTimer = setTimeout(() => recorder && recorder.stop(), 90000);
+  }
+  if (hasRec || SR) { micBtn.hidden = false; micBtn.onclick = toggleMic; }
 
   // ---------- appel au serveur ----------
   async function chatCall(payload, signal) {
@@ -493,7 +519,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   async function ask(fullAtts) {
     busy = true; abort = new AbortController(); updateSend(); drawThread(); notice();
     try {
-      const out = await chatCall({ app: ctx.value, style: $("mode").value, custom: prefs.custom, web: webOn, messages: history(fullAtts) }, abort.signal);
+      const out = await chatCall({ style: $("mode").value, custom: prefs.custom, web: webOn, modele: prefs.modele, effort: prefs.effort, profondeur: prefs.profondeur, messages: history(fullAtts) }, abort.signal);
       current.messages.push({ role: "assistant", text: String(out.text || ""), sources: out.sources || [], searches: out.searches || [], proposals: (out.proposals || []).map(p => ({ ...p, state: "" })), time: Date.now() });
       if (out.credits) credits(out.credits);
       current.updated = Date.now();

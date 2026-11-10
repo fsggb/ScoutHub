@@ -98,8 +98,6 @@
             <button class="chip icon" id="attach" type="button" title="Joindre une image ou un document" aria-label="Joindre un fichier"><svg class="ic"><use href="#i-clip"/></svg></button>
             <input id="file" type="file" hidden multiple accept="image/*,.pdf,.txt,.md,.csv,.json,.html,.xml,.svg">
             <button class="chip toggle" id="web" type="button" aria-pressed="true" title="Autoriser la recherche sur le web"><svg class="ic"><use href="#i-globe"/></svg><span>Recherche web</span></button>
-            <label class="sr" for="ctx">Application concernée</label>
-            <select id="ctx" class="chip select"></select>
             <select id="mode" class="chip select" aria-label="Style de réponse"><option value="concise">Réponse courte</option><option value="detail">Réponse détaillée</option></select>
           </div>
           <div class="comp-right">
@@ -178,6 +176,12 @@
     <h2>Préférences</h2>
     <label class="field">Instructions personnalisées <small>(facultatif, 600 caractères)</small>
       <textarea id="set-custom" rows="4" maxlength="600" placeholder="Ex. : Je suis chef d’unité louveteaux, réponds simplement et propose des idées d’activités."></textarea></label>
+    <label class="field">Modèle d’IA
+      <select id="set-model"><option value="claude-haiku-5-5">Haiku 5.5 : rapide, économe en crédits</option><option value="claude-sonnet-5-5">Sonnet 5.5 : plus fin, environ 20 fois plus de crédits</option></select></label>
+    <label class="field">Niveau de réflexion
+      <select id="set-effort"><option value="low">Faible : réponses vives</option><option value="medium">Moyenne</option><option value="high">Élevée : raisonnement approfondi (plus lent, plus de crédits)</option></select></label>
+    <label class="field">Profondeur de la recherche web
+      <select id="set-depth"><option value="standard">Standard : quelques recherches ciblées</option><option value="approfondie">Approfondie : nombreuses recherches, pages lues en entier, recoupement des sources (lent, plus de crédits)</option></select></label>
     <label class="check"><input type="checkbox" id="set-web"> Recherche web activée par défaut</label>
     <label class="field">Style par défaut
       <select id="set-style"><option value="concise">Réponse courte</option><option value="detail">Réponse détaillée</option></select></label>
