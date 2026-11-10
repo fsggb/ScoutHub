@@ -3,9 +3,9 @@
 État au 10 novembre 2026. Ce document fixe la direction ; seul ce qui est marqué « fait » existe dans le code.
 
 ## 1. Décisions
-- **Fait** : stockage GitHub supprimé (ScoutCloud fermé, serveur sans accès GitHub, plus de boîtes « Enregistrer sous »). Les applications enregistrent sur l'ordinateur. Le dépôt privé `scouthub-data` n'est plus lu par personne : à exporter puis supprimer par vos soins.
+- **Fait** : stockage GitHub supprimé (serveur sans accès GitHub, plus de boîtes « Enregistrer sous »). Les applications enregistrent sur l'ordinateur. **ScoutCloud est conservé** : ses fichiers iront dans le Google Drive de chaque utilisateur (compte Google requis) ; la page n'affiche pour l'instant que l'aperçu, sans connexion. Le dépôt privé `scouthub-data` n'est plus lu par personne : à exporter puis supprimer par vos soins.
 - **Fait (inactif)** : connexion Google, rôles, interface ChatGDB, système de crédits (affichage), fiches `CHATGDB.md` dans chaque dépôt, Boutique GDB dans le portail.
-- **Pas fait** : IA branchée, crédits réellement décomptés, bibliothèque de documents, stockage de remplacement.
+- **Pas fait** : IA branchée, crédits réellement décomptés, bibliothèque de documents, ScoutCloud sur Google Drive (étendue `drive.file`, comme CathIA : accès limité aux fichiers créés par l'application ; demande un second consentement Google, distinct de la simple connexion).
 
 ## 2. Connexion Google (prioritaire) ou e-mail
 Il faut un **identifiant client OAuth** (« ID client », forme `123…apps.googleusercontent.com`), pas une clé API. Il est public ; aucun secret n'est nécessaire pour ce flux. À ne jamais me transmettre : un « code secret client ».

@@ -17,6 +17,7 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
+  { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers dans Google Drive (bientôt)", url: O + "ScoutCloud/", icon: "assets/icons/ScoutCloud.svg" },
   { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération (bientôt)", url: "chatgdb.html", icon: "assets/icons/ChatGDB.svg", local: true },
   { group: "Boutique", name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },

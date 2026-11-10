@@ -1,6 +1,6 @@
 # ScoutHub
 
-Portail FSGGB : toutes les applications sont accessibles sans compte. Un compte (Google ou e-mail) sert à l'assistant ChatGDB, à Mon compte et, plus tard, aux espaces réservés. Il n'y a plus de stockage de fichiers dans GitHub : les applications enregistrent sur l'ordinateur.
+Portail FSGGB : toutes les applications sont accessibles sans compte. Un compte (Google ou e-mail) sert à l'assistant ChatGDB, à Mon compte et, plus tard, aux espaces réservés. Le stockage de fichiers dans GitHub est supprimé ; ScoutCloud stockera les fichiers dans le Google Drive de l'utilisateur (pas encore ouvert). En attendant, les applications enregistrent sur l'ordinateur.
 
 Projet en cours (ChatGDB, rôles, crédits, connexion Google) : `docs/projet-chatgdb.md`.
 
