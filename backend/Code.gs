@@ -41,7 +41,6 @@ var CHAT_MODELE = 'claude-haiku-5-5';
 var CHAT_MAX_JETONS = 4096;
 var CHAT_WEB_MAX = 4;                       // recherches web par réponse
 var CHAT_FENETRE_H = 5, CHAT_CREDITS_FENETRE = 30, CHAT_CREDITS_SEMAINE = 150, CHAT_BONUS_MAX = 50;
-var CHAT_LOGO_FICHIER = '1wpajNET6wtqmA0u-3Ew2ioocY0LDcGc4';   // logo ChatGDB (Drive de la boutique)
 var CHAT_CONNAISSANCES_URL = 'https://fsggb.github.io/ScoutHub/knowledge/all.md';
 var MAX_FAILS = 5;
 var LOCK_SECONDS = 600;
@@ -113,15 +112,6 @@ var ACTIONS = {
   // Configuration publique pour le navigateur (la connexion Google est-elle prête ?).
   config: function () {
     return { ok: true, google: !!props_().getProperty('GOOGLE_CLIENT_ID') };
-  },
-  // Logo ChatGDB : lu dans le Drive (public, petit), mis en cache par le navigateur.
-  logo: function () {
-    var cache = CacheService.getScriptCache(), hit = cache.get('logo');
-    if (hit) return { ok: true, data: hit };
-    var b = DriveApp.getFileById(CHAT_LOGO_FICHIER).getBlob();
-    var uri = 'data:' + b.getContentType() + ';base64,' + Utilities.base64Encode(b.getBytes());
-    if (uri.length < 95000) cache.put('logo', uri, 21600);
-    return { ok: true, data: uri };
   },
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {

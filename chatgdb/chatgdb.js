@@ -32,13 +32,8 @@
   const download = (name, text, mime) => { const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: mime + ";charset=utf-8" })), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000); };
   const safeName = s => (String(s).replace(/[^\wÀ-ſ .-]+/g, "").trim() || "fichier").slice(0, 60);
 
-  // ---------- logo (celui de la boutique, récupéré une fois depuis le Drive puis mémorisé) ----------
-  const LOGO_KEY = "scouthub.chatgdb.logo";
-  function applyLogo(uri) { document.querySelectorAll("img.logo, .who img").forEach(i => { i.src = uri; }); LOGO.uri = uri; }
-  const LOGO = { uri: "../assets/icons/ChatGDB.svg" };
-  const cachedLogo = store.get(LOGO_KEY, "");
-  if (/^data:image\/(png|jpeg|webp);base64,/.test(cachedLogo)) applyLogo(cachedLogo);
-  else Hub.call("logo").then(o => { if (/^data:image\/(png|jpeg|webp);base64,/.test(o.data || "")) { store.set(LOGO_KEY, o.data); applyLogo(o.data); } }).catch(() => {});
+  // ---------- logo ChatGDB (celui de la boutique) ----------
+  const LOGO = { uri: "../assets/icons/ChatGDB.png" };
 
   // ---------- Markdown sûr : tout est échappé d'abord, seuls quelques motifs sont rendus ----------
   let curSources = [];
