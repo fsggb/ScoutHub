@@ -1,15 +1,16 @@
 /**
- * ScoutHub : serveur de comptes et de fichiers (Google Apps Script, web app).
+ * ScoutHub : serveur d'identification (Google Apps Script, web app).
  *
  * Propriétés du script (Paramètres du projet > Propriétés du script) :
- *   GITHUB_TOKEN : jeton GitHub (fine-grained) avec « Contents : lecture/écriture »
- *                  sur le dépôt de données UNIQUEMENT.
- *   DATA_REPO    : dépôt PRIVÉ des fichiers, au format « organisation/depot ».
+ *   GOOGLE_CLIENT_ID : (facultatif, à renseigner plus tard) identifiant client OAuth « Application Web »
+ *                      du projet Google Cloud. C'est un identifiant PUBLIC, pas une clé secrète.
+ *                      Tant qu'il est vide, la connexion Google est désactivée.
  *
  * Déploiement : Déployer > Nouveau déploiement > Application Web,
  *   exécuter en tant que « Moi », accès « Tout le monde ».
  *
- * Les mots de passe ne sont jamais stockés en clair : sel aléatoire + SHA-256 itéré.
+ * Le stockage de fichiers sur GitHub a été supprimé : ce serveur ne gère plus que les comptes, les rôles
+ * et les sessions. Les mots de passe ne sont jamais stockés en clair : sel aléatoire + SHA-256 itéré.
  * Les requêtes sont des POST JSON envoyés en text/plain (pas de pré-vol CORS).
  */
 var ADMIN_EMAIL = 'jb.combet@fsggb.fr';
@@ -18,12 +19,12 @@ var ADMIN_SALT = 'bbbe881e3ba73791ec4b1440211c592c';
 var ADMIN_HASH = 'd8620ec1d5b9b29559f1829b9cd29a705533090d784f01b303453054cb8a7bfe';
 // Change à chaque réinitialisation du mot de passe administrateur initial.
 var ADMIN_RESET_ID = '2026-11-03';
+// Rôles, du moins au plus privilégié. « user » (ancien nom) vaut « membre ».
+var ROLES = ['membre', 'parent', 'chef_unite', 'chef_groupe', 'admin'];
 var ROUNDS = 5000;
 var SESSION_DAYS = 30;
-var MAX_FILE_BYTES = 10 * 1024 * 1024;
 var MAX_FAILS = 5;
 var LOCK_SECONDS = 600;
-var LIST_CACHE_SECONDS = 300;
 var SESSION_CACHE_SECONDS = 600;
 
 function doGet() {
@@ -32,7 +33,7 @@ function doGet() {
 
 // Actions qui modifient des données : seules elles prennent le verrou. Les lectures (list, get, me, login...)
 // ne sont plus mises en file derrière un enregistrement de fichier, ce qui accélère nettement ScoutCloud.
-var WRITES = { register: 1, changePassword: 1, adminReset: 1, adminDelete: 1, put: 1, remove: 1 };
+var WRITES = { register: 1, google: 1, changePassword: 1, adminReset: 1, adminDelete: 1, adminSetRole: 1 };
 
 function doPost(e) {
   var lock = null;
@@ -54,7 +55,7 @@ var ACTIONS = {
     var email = cleanEmail_(r.email);
     checkPassword_(r.password);
     if (getUser_(email)) fail_('Un compte existe déjà pour cette adresse.');
-    saveUser_(email, newCredential_(r.password), { role: 'user', created: Date.now() });
+    saveUser_(email, newCredential_(r.password), { role: 'membre', created: Date.now() });
     return { ok: true, token: newSession_(email), user: publicUser_(email) };
   },
   login: function (r) {
@@ -64,6 +65,35 @@ var ACTIONS = {
     if (!u || !verify_(u, r.password)) { recordFail_(email); fail_('Adresse ou mot de passe incorrect.'); }
     clearFails_(email);
     return { ok: true, token: newSession_(email), user: publicUser_(email) };
+  },
+  // Connexion Google (Google Identity Services) : le navigateur envoie le jeton d'identité (« credential »),
+  // vérifié ici auprès de Google ; le compte est créé au premier passage. Inactive sans GOOGLE_CLIENT_ID.
+  google: function (r) {
+    var clientId = props_().getProperty('GOOGLE_CLIENT_ID');
+    if (!clientId) fail_('La connexion Google n\'est pas encore activée.');
+    var info = verifyGoogle_(r.credential, clientId);
+    var email = cleanEmail_(info.email), u = getUser_(email);
+    if (!u) {
+      // Pas de mot de passe : un sel aléatoire sans mot de passe connu rend la connexion par mot de passe impossible.
+      var cred = newCredential_(Utilities.getUuid() + Utilities.getUuid());
+      saveUser_(email, cred, { role: 'membre', created: Date.now(), name: info.name || '', google: true });
+    } else if (!u.google || (!u.name && info.name)) {
+      saveUser_(email, { salt: u.salt, hash: u.hash }, { role: u.role, created: u.created, name: u.name || info.name || '', google: true });
+    }
+    return { ok: true, token: newSession_(email), user: publicUser_(email) };
+  },
+  // Configuration publique pour le navigateur (la connexion Google est-elle prête ?).
+  config: function () {
+    return { ok: true, google: !!props_().getProperty('GOOGLE_CLIENT_ID') };
+  },
+  adminSetRole: function (r) {
+    requireAdmin_(r.token);
+    var email = cleanEmail_(r.email), u = getUser_(email);
+    if (!u) fail_('Compte introuvable.');
+    if (ROLES.indexOf(r.role) < 0) fail_('Rôle inconnu.');
+    if (email === ADMIN_EMAIL && r.role !== 'admin') fail_('Le compte administrateur garde son rôle.');
+    saveUser_(email, { salt: u.salt, hash: u.hash }, { role: r.role, created: u.created, name: u.name, google: u.google });
+    return { ok: true };
   },
   logout: function (r) {
     var sid = sha_(String(r.token || ''));
@@ -100,47 +130,6 @@ var ACTIONS = {
     var email = cleanEmail_(r.email);
     if (email === ADMIN_EMAIL) fail_('Le compte administrateur ne peut pas être supprimé.');
     PropertiesService.getScriptProperties().deleteProperty('u:' + email);
-    return { ok: true };
-  },
-  list: function (r) {
-    var path = userPath_(session_(r.token), r.path);
-    var cache = CacheService.getScriptCache(), key = 'l:' + sha_(path).slice(0, 40);
-    var hit = cache.get(key);
-    if (hit) return { ok: true, entries: JSON.parse(hit) };
-    var res = gh_('GET', path, null, 'application/vnd.github+json');
-    if (res.code === 404) return { ok: true, entries: [] };
-    if (res.code !== 200) fail_('GitHub a refusé la lecture (' + res.code + ').');
-    var data = JSON.parse(res.text);
-    if (!Array.isArray(data)) fail_('Ce chemin est un fichier.');
-    var entries = data.map(function (x) { return { name: x.name, type: x.type, size: x.size }; });
-    var txt = JSON.stringify(entries);
-    if (txt.length < 90000) cache.put(key, txt, LIST_CACHE_SECONDS);
-    return { ok: true, entries: entries };
-  },
-  get: function (r) {
-    var res = gh_('GET', userPath_(session_(r.token), r.path), null, 'application/vnd.github.raw');
-    if (res.code !== 200) fail_('Fichier introuvable.');
-    return { ok: true, base64: Utilities.base64Encode(res.bytes) };
-  },
-  put: function (r) {
-    var email = session_(r.token);
-    if (!r.base64 || r.base64.length > MAX_FILE_BYTES * 1.4) fail_('Fichier vide ou trop volumineux (10 Mo maximum).');
-    var path = userPath_(email, r.path);
-    var cur = gh_('GET', path, null, 'application/vnd.github+json');
-    var body = { message: 'ScoutHub : enregistrement', content: r.base64 };
-    if (cur.code === 200) { var meta = JSON.parse(cur.text); if (meta.sha) body.sha = meta.sha; }
-    var res = gh_('PUT', path, body, 'application/vnd.github+json');
-    if (res.code !== 200 && res.code !== 201) fail_('GitHub a refusé l\'écriture (' + res.code + ').');
-    dropListCache_(path);
-    return { ok: true };
-  },
-  remove: function (r) {
-    var path = userPath_(session_(r.token), r.path);
-    var cur = gh_('GET', path, null, 'application/vnd.github+json');
-    if (cur.code !== 200) fail_('Fichier introuvable.');
-    var res = gh_('DELETE', path, { message: 'ScoutHub : suppression', sha: JSON.parse(cur.text).sha }, 'application/vnd.github+json');
-    if (res.code !== 200) fail_('Suppression refusée (' + res.code + ').');
-    dropListCache_(path);
     return { ok: true };
   }
 };
@@ -187,17 +176,19 @@ function getUser_(email) {
 }
 function saveUser_(email, cred, base) {
   props_().setProperty('u:' + email, JSON.stringify({
-    salt: cred.salt, hash: cred.hash, role: email === ADMIN_EMAIL ? 'admin' : (base.role || 'user'), created: base.created || Date.now(), rid: ADMIN_RESET_ID
+    salt: cred.salt, hash: cred.hash, role: email === ADMIN_EMAIL ? 'admin' : normRole_(base.role), created: base.created || Date.now(), rid: ADMIN_RESET_ID,
+    name: base.name || '', google: !!base.google
   }));
 }
+function normRole_(r) { return r === 'user' || !r ? 'membre' : (ROLES.indexOf(r) >= 0 ? r : 'membre'); }
 function publicUser_(email) {
   var u = getUser_(email);
-  return { email: email, role: u.role };
+  return { email: email, role: normRole_(u.role), name: u.name || '', google: !!u.google };
 }
 function allUsers_() {
   var all = props_().getProperties(), out = [];
   Object.keys(all).forEach(function (k) {
-    if (k.indexOf('u:') === 0) { var u = JSON.parse(all[k]); out.push({ email: k.slice(2), role: u.role, created: u.created }); }
+    if (k.indexOf('u:') === 0) { var u = JSON.parse(all[k]); out.push({ email: k.slice(2), role: normRole_(u.role), created: u.created, google: !!u.google }); }
   });
   getUser_(ADMIN_EMAIL);
   return out.sort(function (a, b) { return a.email < b.email ? -1 : 1; });
@@ -222,6 +213,17 @@ function sessionUncached_(token) {
   if (s.exp < Date.now() || !getUser_(s.email)) { props_().deleteProperty('s:' + sha_(String(token))); fail_('Session expirée : reconnectez-vous.'); }
   return s.email;
 }
+function verifyGoogle_(credential, clientId) {
+  if (typeof credential !== 'string' || credential.length < 100 || credential.length > 4000) fail_('Jeton Google invalide.');
+  var res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential), { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) fail_('Jeton Google refusé.');
+  var info = JSON.parse(res.getContentText());
+  if (info.aud !== clientId) fail_('Jeton Google destiné à une autre application.');
+  if (info.iss !== 'accounts.google.com' && info.iss !== 'https://accounts.google.com') fail_('Jeton Google invalide.');
+  if (String(info.email_verified) !== 'true' || !info.email) fail_('Adresse Google non vérifiée.');
+  if (Number(info.exp) * 1000 < Date.now()) fail_('Jeton Google expiré.');
+  return info;
+}
 function requireAdmin_(token) {
   var email = session_(token);
   if (getUser_(email).role !== 'admin') fail_('Réservé à l\'administrateur.');
@@ -236,31 +238,3 @@ function recordFail_(email) {
   c.put('f:' + email, String(n), LOCK_SECONDS);
 }
 function clearFails_(email) { CacheService.getScriptCache().remove('f:' + email); }
-
-// ---------- GitHub (dépôt de données privé) ----------
-function userPath_(email, sub) {
-  var parts = String(sub || '').split('/').filter(function (p) { return p; });
-  parts.forEach(function (p) {
-    if (p === '.' || p === '..' || /[\\\u0000-\u001f]/.test(p) || p.length > 120) fail_('Chemin invalide.');
-  });
-  var p = props_();
-  var repo = p.getProperty('DATA_REPO');
-  if (!repo || !p.getProperty('GITHUB_TOKEN')) fail_('Stockage GitHub non configuré.');
-  var base = 'repos/' + repo + '/contents/users/' + sha_(email).slice(0, 24);
-  return base + (parts.length ? '/' + parts.map(encodeURIComponent).join('/') : '');
-}
-// Les listes de dossiers sont gardées quelques minutes ; toute écriture invalide le dossier et ses parents.
-function dropListCache_(path) {
-  var parts = path.split('/'), keys = [];
-  for (var n = parts.length - 1; n >= 6; n--) keys.push('l:' + sha_(parts.slice(0, n).join('/')).slice(0, 40));
-  if (keys.length) CacheService.getScriptCache().removeAll(keys);
-}
-function gh_(method, path, body, accept) {
-  var opt = {
-    method: method.toLowerCase(), muteHttpExceptions: true,
-    headers: { Authorization: 'Bearer ' + props_().getProperty('GITHUB_TOKEN'), Accept: accept, 'X-GitHub-Api-Version': '2022-11-28' }
-  };
-  if (body) { opt.contentType = 'application/json'; opt.payload = JSON.stringify(body); }
-  var res = UrlFetchApp.fetch('https://api.github.com/' + path, opt);
-  return { code: res.getResponseCode(), text: res.getContentText(), bytes: res.getContent() };
-}

@@ -35,3 +35,8 @@
 .auth-back{display:inline-block;margin-bottom:10px;color:var(--navy);font-size:13px;text-decoration:none}.auth-back:hover{text-decoration:underline}
 .auth-card h1{margin-bottom:10px}.auth-why{margin:0 0 18px;text-align:center;color:var(--text-secondary);font-size:14px}
 .nav-btn{text-decoration:none;display:inline-block}
+.role-select{padding:5px 8px;border:1px solid #cfcabd;border-radius:8px;font:inherit;font-size:13px;background:#fff}
+.users .google::after{content:" · Google";color:#6a6c79;font-size:11px}
+.g-block{margin:0 0 6px}.g-btn{display:flex;justify-content:center;min-height:44px}
+.g-or{display:flex;align-items:center;gap:10px;margin:14px 0 4px;color:#6a6c79;font-size:12px}
+.g-or::before,.g-or::after{content:"";flex:1;height:1px;background:#e7e4dc}

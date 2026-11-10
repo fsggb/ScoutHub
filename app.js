@@ -39,7 +39,33 @@
     return false;
   }
 
+  // Connexion Google (prioritaire) : active seulement quand config.js contient l'identifiant client.
+  let googleReady = false;
+  function setupGoogle() {
+    const id = window.SCOUTHUB_GOOGLE_CLIENT_ID;
+    if (!id || !window.SCOUTHUB_API || googleReady) return;
+    googleReady = true;
+    const s = Object.assign(document.createElement("script"), { src: "https://accounts.google.com/gsi/client", async: true });
+    s.onload = () => {
+      if (!window.google || !google.accounts) return;
+      google.accounts.id.initialize({
+        client_id: id, ux_mode: "popup", auto_select: false,
+        callback: async resp => {
+          say($("auth-status"), "Un instant…");
+          try {
+            const out = await Hub.call("google", { credential: resp.credential });
+            store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); enter();
+          } catch (e) { say($("auth-status"), e.message, true); }
+        }
+      });
+      google.accounts.id.renderButton($("g-btn"), { theme: "outline", size: "large", shape: "pill", text: "continue_with", locale: "fr", width: 340 });
+      $("g-block").hidden = false;
+    };
+    document.head.append(s);
+  }
+
   function showAuth() {
+    setupGoogle();
     Hub.renderBar(null);
     $("home").hidden = true; $("auth").hidden = false;
     if (!window.SCOUTHUB_API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
@@ -95,7 +121,6 @@
     $("hello").textContent = Hub.user ? "Bonjour, " + Hub.user.email.split("@")[0].replace(/[._-]+/g, " ") : "Vos applications";
     $("guest-note").hidden = !!Hub.user;
     renderApps();
-    if (Hub.user) Hub.prefetch();
   }
   function enter() { if (!goNext()) showHome(); }
 

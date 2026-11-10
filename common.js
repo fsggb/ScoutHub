@@ -4,16 +4,20 @@
   const TOKEN_KEY = "scouthub.token";
   const store = {
     get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user"), Object.keys(localStorage).filter(k => k.startsWith("scouthub.ls:")).forEach(k => localStorage.removeItem(k))); } catch {} }
+    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user")); } catch {} }
   };
   const USER_KEY = "scouthub.user";
   const cachedUser = () => { try { return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
   const cacheUser = u => { try { u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
+  const ROLE_LABELS = { membre: "Membre", parent: "Parent", chef_unite: "Chef d’unité", chef_groupe: "Chef de groupe", admin: "Administrateur" };
+  const ROLE_ORDER = ["membre", "parent", "chef_unite", "chef_groupe", "admin"];
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
 
   const Hub = window.Hub = {
-    $, say, store, user: null, cachedUser, cacheUser,
+    $, say, store, user: null, ROLE_LABELS, ROLE_ORDER,
+    // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir docs/projet-chatgdb.md).
+    can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(user.role) >= ROLE_ORDER.indexOf(min)), cachedUser, cacheUser,
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",
 
@@ -31,12 +35,6 @@
         throw new Error(out.error || "Erreur.");
       }
       return out;
-    },
-
-    // Préchauffage : réveille le serveur et mémorise la racine de ScoutCloud pour qu'elle s'affiche instantanément.
-    prefetch() {
-      if (!store.get() || !window.SCOUTHUB_API) return;
-      Hub.call("list", { path: "" }).then(o => { try { localStorage.setItem("scouthub.ls:", JSON.stringify(o.entries)); } catch {} }).catch(() => {});
     },
 
     toLogin() {
@@ -79,6 +77,7 @@
         nav.append(a);
       };
       link("Applications", "index.html");
+      link("ChatGDB", "chatgdb.html");
       link("Mon compte", "compte.html");
       if (user.role === "admin") link("Administration", "admin.html");
       const out = Object.assign(document.createElement("button"), { className: "nav-btn", type: "button", textContent: "Déconnexion" });

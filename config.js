@@ -1,10 +1,24 @@
+// Identifiant client OAuth « Application Web » du projet Google Cloud (identifiant PUBLIC, pas une clé secrète).
+// Tant qu'il est vide, le bouton « Continuer avec Google » reste masqué. Le même identifiant doit aussi être
+// enregistré dans la propriété de script GOOGLE_CLIENT_ID du serveur Apps Script (backend/Code.gs).
+window.SCOUTHUB_GOOGLE_CLIENT_ID = "";
+// ChatGDB : assistant IA de la fédération. « live: false » = interface seule, envoi désactivé.
+// Crédits (unité : 1 crédit ≈ une question courte). Limites glissantes façon Claude : une par session de 5 heures
+// et une par semaine. Les valeurs sont des points de départ à ajuster ; voir docs/projet-chatgdb.md.
+window.SCOUTHUB_CHATGDB = {
+  live: false,
+  windowHours: 5, windowCredits: 30, weekCredits: 150,
+  // Crédits gagnés en utilisant les outils : 1 crédit par tranche de 5 minutes d'activité réelle, plafonné par semaine.
+  earn: { minutes: 5, credits: 1, weekCap: 50 }
+};
 // Adresse du déploiement Apps Script (backend/Code.gs), terminée par /exec.
 window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlrF2CdMNFbkUhXvihwNoTMm67IH0wOk7QZZL_nIfMhWaQinR9j-oFQ/exec";
 // Applications proposées dans le portail : une seule entrée par application, sous son nom d’origine.
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
-  { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers (connexion requise)", url: O + "ScoutCloud/", icon: "assets/icons/ScoutCloud.svg", login: true },
+  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération (bientôt)", url: "chatgdb.html", icon: "assets/icons/ChatGDB.svg", local: true },
+  { group: "Boutique", name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: O + "ScoutOffice/Excel/", icon: "assets/icons/Excel.png" },
   { group: "Bureautique", name: "PowerPoint", desc: "Présentations et diaporamas", url: O + "ScoutOffice/PowerPoint/", icon: "assets/icons/PowerPoint.png" },
@@ -25,22 +39,4 @@ window.SCOUTHUB_APPS = [
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png" },
   { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg" },
 ];
-// « Ouvrir avec » (ScoutCloud) : extension -> applications compatibles, la première étant celle par défaut.
-window.SCOUTHUB_OPEN_WITH = {
-  docx: ["Word"], doc: ["Word"], odt: ["Word"], rtf: ["Word"], txt: ["Word"], md: ["Word"],
-  xlsx: ["Excel"], xls: ["Excel"], ods: ["Excel"], csv: ["Excel"],
-  pptx: ["PowerPoint"], ppt: ["PowerPoint"], odp: ["PowerPoint"],
-  pdf: ["Acrobat"],
-  psd: ["Photoshop"], png: ["Photoshop", "Lightroom"], jpg: ["Photoshop", "Lightroom"], jpeg: ["Photoshop", "Lightroom"],
-  webp: ["Photoshop"], bmp: ["Photoshop"], gif: ["Photoshop"], tif: ["Photoshop"], tiff: ["Photoshop"],
-  svg: ["Illustrator", "CathIA"], ai: ["Illustrator"], eps: ["Illustrator"],
-  idml: ["InDesign"], indd: ["InDesign"],
-  mp4: ["Premiere Pro"], mov: ["Premiere Pro"], webm: ["Premiere Pro"], avi: ["Premiere Pro"],
-  wav: ["Pro Tools"], mp3: ["Pro Tools"], aif: ["Pro Tools"], aiff: ["Pro Tools"],
-  excalidraw: ["Excalidraw"],
-  dxf: ["AutoCAD"], dwg: ["AutoCAD"],
-  stl: ["SolidWorks"], step: ["SolidWorks"], stp: ["SolidWorks"], iges: ["SolidWorks"],
-  gpx: ["Cartes IGN"], kml: ["Cartes IGN"],
-  json: ["CathIA"], html: ["CathIA"], htm: ["CathIA"]
-};
 })();

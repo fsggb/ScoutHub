@@ -19,7 +19,19 @@
     shown.forEach(u => {
       const tr = document.createElement("tr");
       const td = (t, cls) => { const c = document.createElement("td"); if (cls) c.className = cls; if (t != null) c.textContent = t; tr.append(c); return c; };
-      td(u.email, "mail"); td(u.role === "admin" ? "Administrateur" : "Utilisateur"); td(date(u.created));
+      td(u.email, "mail" + (u.google ? " google" : ""));
+      const roleCell = td(null);
+      if (u.email === user.email && u.role === "admin") roleCell.textContent = Hub.ROLE_LABELS.admin;
+      else {
+        const sel = document.createElement("select"); sel.className = "role-select"; sel.setAttribute("aria-label", "Rôle de " + u.email);
+        Hub.ROLE_ORDER.forEach(r => sel.append(Object.assign(document.createElement("option"), { value: r, textContent: Hub.ROLE_LABELS[r], selected: r === u.role })));
+        sel.onchange = async () => {
+          try { await Hub.call("adminSetRole", { email: u.email, role: sel.value }); u.role = sel.value; say($("ad-status"), "Rôle de " + u.email + " : " + Hub.ROLE_LABELS[u.role] + "."); }
+          catch (e) { sel.value = u.role; say($("ad-status"), e.message, true); }
+        };
+        roleCell.append(sel);
+      }
+      td(date(u.created));
       const acts = td(null, "right");
       const reset = Object.assign(document.createElement("button"), { type: "button", className: "ghost small", textContent: "Nouveau mot de passe" });
       reset.onclick = () => { target = u; $("reset-who").textContent = u.email; $("reset-form").reset(); say($("reset-status"), ""); $("dlg-reset").showModal(); };
