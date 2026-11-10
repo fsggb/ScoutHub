@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 350" role="img" aria-label="ChatGDB">
   <title>ChatGDB</title>
+  <defs><clipPath id="x"><circle cx="-26.9" cy="-36.9" r="19"/></clipPath></defs>
   <g fill="#000761">
     <rect x="100" y="48" width="150" height="38" rx="7"/><rect x="159" y="80" width="32" height="60"/>
     <rect x="100" y="264" width="150" height="38" rx="7"/><rect x="159" y="210" width="32" height="60"/>
@@ -7,17 +8,12 @@
     <rect x="264" y="100" width="38" height="150" rx="7"/><rect x="210" y="159" width="60" height="32"/>
   </g>
   <g transform="translate(175 175)" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M -17.3 -60.0 Q 16.7 -28.8 60.6 -15.0" stroke="#ffb800" stroke-width="34"/><path d="M -17.3 -60.0 Q 16.7 -28.8 60.6 -15.0" stroke="#000761" stroke-width="24"/>
-    <path d="M 43.3 -45.0 Q 33.3 0.0 43.3 45.0" stroke="#ffb800" stroke-width="34"/><path d="M 43.3 -45.0 Q 33.3 0.0 43.3 45.0" stroke="#000761" stroke-width="24"/>
-    <path d="M 60.6 15.0 Q 16.7 28.8 -17.3 60.0" stroke="#ffb800" stroke-width="34"/><path d="M 60.6 15.0 Q 16.7 28.8 -17.3 60.0" stroke="#000761" stroke-width="24"/>
-    <path d="M 17.3 60.0 Q -16.7 28.8 -60.6 15.0" stroke="#ffb800" stroke-width="34"/><path d="M 17.3 60.0 Q -16.7 28.8 -60.6 15.0" stroke="#000761" stroke-width="24"/>
-    <path d="M -43.3 45.0 Q -33.3 -0.0 -43.3 -45.0" stroke="#ffb800" stroke-width="34"/><path d="M -43.3 45.0 Q -33.3 -0.0 -43.3 -45.0" stroke="#000761" stroke-width="24"/>
-    <path d="M -60.6 -15.0 Q -16.7 -28.8 17.3 -60.0" stroke="#ffb800" stroke-width="34"/><path d="M -60.6 -15.0 Q -16.7 -28.8 17.3 -60.0" stroke="#000761" stroke-width="24"/>
-    <path d="M 12.0 -20.8 L 24.0 0.0" stroke="#ffb800" stroke-width="22"/><path d="M 12.0 -20.8 L 24.0 0.0" stroke="#000761" stroke-width="13"/>
-    <path d="M 24.0 0.0 L 12.0 20.8" stroke="#ffb800" stroke-width="22"/><path d="M 24.0 0.0 L 12.0 20.8" stroke="#000761" stroke-width="13"/>
-    <path d="M 12.0 20.8 L -12.0 20.8" stroke="#ffb800" stroke-width="22"/><path d="M 12.0 20.8 L -12.0 20.8" stroke="#000761" stroke-width="13"/>
-    <path d="M -12.0 20.8 L -24.0 0.0" stroke="#ffb800" stroke-width="22"/><path d="M -12.0 20.8 L -24.0 0.0" stroke="#000761" stroke-width="13"/>
-    <path d="M -24.0 0.0 L -12.0 -20.8" stroke="#ffb800" stroke-width="22"/><path d="M -24.0 0.0 L -12.0 -20.8" stroke="#000761" stroke-width="13"/>
-    <path d="M -12.0 -20.8 L 12.0 -20.8" stroke="#ffb800" stroke-width="22"/><path d="M -12.0 -20.8 L 12.0 -20.8" stroke="#000761" stroke-width="13"/>
+    <path  d="M -56.0 -20.0 Q 0.0 -64.0 56.0 -20.0" stroke="#ffb800" stroke-width="35"/><path  d="M -56.0 -20.0 Q 0.0 -64.0 56.0 -20.0" stroke="#000761" stroke-width="25"/>
+    <path  d="M -10.7 -58.5 Q 55.4 -32.0 45.3 38.5" stroke="#ffb800" stroke-width="35"/><path  d="M -10.7 -58.5 Q 55.4 -32.0 45.3 38.5" stroke="#000761" stroke-width="25"/>
+    <path  d="M 45.3 -38.5 Q 55.4 32.0 -10.7 58.5" stroke="#ffb800" stroke-width="35"/><path  d="M 45.3 -38.5 Q 55.4 32.0 -10.7 58.5" stroke="#000761" stroke-width="25"/>
+    <path  d="M 56.0 20.0 Q 0.0 64.0 -56.0 20.0" stroke="#ffb800" stroke-width="35"/><path  d="M 56.0 20.0 Q 0.0 64.0 -56.0 20.0" stroke="#000761" stroke-width="25"/>
+    <path  d="M 10.7 58.5 Q -55.4 32.0 -45.3 -38.5" stroke="#ffb800" stroke-width="35"/><path  d="M 10.7 58.5 Q -55.4 32.0 -45.3 -38.5" stroke="#000761" stroke-width="25"/>
+    <path  d="M -45.3 38.5 Q -55.4 -32.0 10.7 -58.5" stroke="#ffb800" stroke-width="35"/><path  d="M -45.3 38.5 Q -55.4 -32.0 10.7 -58.5" stroke="#000761" stroke-width="25"/>
+    <g clip-path="url(#x)"><path  d="M -56.0 -20.0 Q 0.0 -64.0 56.0 -20.0" stroke="#ffb800" stroke-width="35"/><path  d="M -56.0 -20.0 Q 0.0 -64.0 56.0 -20.0" stroke="#000761" stroke-width="25"/></g>
   </g>
 </svg>

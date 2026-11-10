@@ -10,6 +10,8 @@
 ## 2. Connexion Google (prioritaire) ou e-mail
 Identifiant client utilisé : celui du projet **backend** de la fédération (Drive du service informatique, dossier « backend »), `727360235431-74tm8v7o…apps.googleusercontent.com`, dans le même projet Google Cloud que celui de CathIA. C'est un identifiant public, pas un secret.
 À faire une fois dans la console Google Cloud > Identifiants > cet ID client : ajouter `https://fsggb.github.io` aux **origines JavaScript autorisées** (le bouton Google du portail en a besoin ; les redirections déjà déclarées pour les scripts Apps Script ne changent pas). Puis coller le même identifiant dans la propriété de script `GOOGLE_CLIENT_ID` du serveur ScoutHub.
+Erreur « 401 invalid_client — no registered origin » : l'origine `https://fsggb.github.io` n'est pas encore déclarée sur cet ID client (rien à corriger dans le code) ; la prise en compte par Google peut demander quelques minutes. Erreur « org_internal » : l'écran de consentement est réservé au domaine de la fédération ; le passer en « Externe » pour que les comptes personnels (gmail) puissent se connecter.
+Administrateurs : `jb.combet@fsggb.fr` (mot de passe initial) et `service-informatique@fsggb.fr`, ce dernier **uniquement par Google** et seulement pour un compte du domaine `fsggb.fr` (le mot de passe n'ouvre jamais cette adresse, pour que personne ne puisse la créer à sa place).
 Le serveur vérifie le jeton auprès de Google (audience, émetteur, adresse vérifiée, expiration) puis ouvre une session de 30 jours. L'e-mail + mot de passe reste possible.
 
 ## 3. Rôles (serveur : `ROLES` dans `backend/Code.gs`)

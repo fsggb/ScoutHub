@@ -21,6 +21,12 @@
  * Les requêtes sont des POST JSON envoyés en text/plain (pas de pré-vol CORS).
  */
 var ADMIN_EMAIL = 'jb.combet@fsggb.fr';
+// Autres administrateurs : adresses RÉSERVÉES à la connexion Google. Un mot de passe n'ouvre jamais ces comptes (créer un compte
+// sous une adresse sans la vérifier permettrait de s'en emparer) ; le compte n'existe qu'une fois l'adresse prouvée par Google,
+// et seulement pour un compte du domaine de la fédération (champ « hd » du jeton).
+var ADMIN_GOOGLE = ['service-informatique@fsggb.fr'];
+var GOOGLE_DOMAINE = 'fsggb.fr';
+function adminProtege_(email) { return email === ADMIN_EMAIL || ADMIN_GOOGLE.indexOf(email) >= 0; }
 // Empreinte du mot de passe initial de l'administrateur (changez-le après la première connexion).
 var ADMIN_SALT = 'bbbe881e3ba73791ec4b1440211c592c';
 var ADMIN_HASH = 'd8620ec1d5b9b29559f1829b9cd29a705533090d784f01b303453054cb8a7bfe';
@@ -67,6 +73,7 @@ function doPost(e) {
 var ACTIONS = {
   register: function (r) {
     var email = cleanEmail_(r.email);
+    if (ADMIN_GOOGLE.indexOf(email) >= 0) fail_('Cette adresse est réservée : utilisez « Continuer avec Google ».');
     checkPassword_(r.password);
     if (getUser_(email)) fail_('Un compte existe déjà pour cette adresse.');
     saveUser_(email, newCredential_(r.password), { role: 'membre', created: Date.now() });
@@ -74,6 +81,7 @@ var ACTIONS = {
   },
   login: function (r) {
     var email = cleanEmail_(r.email);
+    if (ADMIN_GOOGLE.indexOf(email) >= 0) fail_('Cette adresse se connecte uniquement avec Google.');
     throttle_(email);
     var u = getUser_(email);
     if (!u || !verify_(u, r.password)) { recordFail_(email); fail_('Adresse ou mot de passe incorrect.'); }
@@ -87,6 +95,12 @@ var ACTIONS = {
     if (!clientId) fail_('La connexion Google n\'est pas encore activée.');
     var info = verifyGoogle_(r.credential, clientId);
     var email = cleanEmail_(info.email), u = getUser_(email);
+    if (ADMIN_GOOGLE.indexOf(email) >= 0) {          // administrateur « Google seulement » : domaine de la fédération exigé
+      if (String(info.hd || '').toLowerCase() !== GOOGLE_DOMAINE) fail_('Ce compte doit appartenir au domaine ' + GOOGLE_DOMAINE + '.');
+      var cred0 = u ? { salt: u.salt, hash: u.hash } : newCredential_(Utilities.getUuid() + Utilities.getUuid());
+      saveUser_(email, cred0, { role: 'admin', created: u ? u.created : Date.now(), name: (u && u.name) || info.name || '', google: true });
+      return { ok: true, token: newSession_(email), user: publicUser_(email) };
+    }
     if (!u) {
       // Pas de mot de passe : un sel aléatoire sans mot de passe connu rend la connexion par mot de passe impossible.
       var cred = newCredential_(Utilities.getUuid() + Utilities.getUuid());
@@ -158,7 +172,7 @@ var ACTIONS = {
     var email = cleanEmail_(r.email), u = getUser_(email);
     if (!u) fail_('Compte introuvable.');
     if (ROLES.indexOf(r.role) < 0) fail_('Rôle inconnu.');
-    if (email === ADMIN_EMAIL && r.role !== 'admin') fail_('Le compte administrateur garde son rôle.');
+    if (adminProtege_(email) && r.role !== 'admin') fail_('Ce compte administrateur garde son rôle.');
     saveUser_(email, { salt: u.salt, hash: u.hash }, { role: r.role, created: u.created, name: u.name, google: u.google });
     return { ok: true };
   },
@@ -195,7 +209,7 @@ var ACTIONS = {
   adminDelete: function (r) {
     requireAdmin_(r.token);
     var email = cleanEmail_(r.email);
-    if (email === ADMIN_EMAIL) fail_('Le compte administrateur ne peut pas être supprimé.');
+    if (adminProtege_(email)) fail_('Un compte administrateur ne peut pas être supprimé.');
     PropertiesService.getScriptProperties().deleteProperty('u:' + email);
     return { ok: true };
   }
@@ -243,7 +257,7 @@ function getUser_(email) {
 }
 function saveUser_(email, cred, base) {
   props_().setProperty('u:' + email, JSON.stringify({
-    salt: cred.salt, hash: cred.hash, role: email === ADMIN_EMAIL ? 'admin' : normRole_(base.role), created: base.created || Date.now(), rid: ADMIN_RESET_ID,
+    salt: cred.salt, hash: cred.hash, role: adminProtege_(email) ? 'admin' : normRole_(base.role), created: base.created || Date.now(), rid: ADMIN_RESET_ID,
     name: base.name || '', google: !!base.google
   }));
 }

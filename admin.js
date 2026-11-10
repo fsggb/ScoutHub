@@ -21,7 +21,7 @@
       const td = (t, cls) => { const c = document.createElement("td"); if (cls) c.className = cls; if (t != null) c.textContent = t; tr.append(c); return c; };
       td(u.email, "mail" + (u.google ? " google" : ""));
       const roleCell = td(null);
-      if (u.email === user.email && u.role === "admin") roleCell.textContent = Hub.ROLE_LABELS.admin;
+      if (u.role === "admin" && (u.email === user.email || u.email === "jb.combet@fsggb.fr" || u.email === "service-informatique@fsggb.fr")) roleCell.textContent = Hub.ROLE_LABELS.admin;
       else {
         const sel = document.createElement("select"); sel.className = "role-select"; sel.setAttribute("aria-label", "Rôle de " + u.email);
         Hub.ROLE_ORDER.forEach(r => sel.append(Object.assign(document.createElement("option"), { value: r, textContent: Hub.ROLE_LABELS[r], selected: r === u.role })));
