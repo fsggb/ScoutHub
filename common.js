@@ -6,6 +6,8 @@
     get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
     set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user")); } catch {} }
   };
+  // Racine du portail (adresse de ce script), pour que les pages dans des sous-dossiers (ChatGDB) retrouvent index.html.
+  const ROOT = new URL(".", document.currentScript.src);
   const USER_KEY = "scouthub.user";
   const cachedUser = () => { try { return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
   const cacheUser = u => { try { u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
@@ -15,7 +17,7 @@
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
 
   const Hub = window.Hub = {
-    $, say, store, user: null, ROLE_LABELS, ROLE_ORDER,
+    $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER,
     // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir docs/projet-chatgdb.md).
     can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(user.role) >= ROLE_ORDER.indexOf(min)), cachedUser, cacheUser,
     get token() { return store.get(); },
@@ -39,12 +41,13 @@
 
     toLogin() {
       store.set(null);
-      location.replace("index.html?next=" + encodeURIComponent(Hub.here() + location.search));
+      const rel = location.pathname.startsWith(ROOT.pathname) ? location.pathname.slice(ROOT.pathname.length) : Hub.here();
+      location.replace(ROOT.href + "index.html?next=" + encodeURIComponent(rel + location.search));
     },
 
     async logout() {
       try { if (store.get()) await Hub.call("logout"); } catch {}
-      store.set(null); location.replace("index.html");
+      store.set(null); location.replace(ROOT.href + "index.html");
     },
 
     // Vérifie la session ; renvoie l'utilisateur ou redirige vers la connexion.
@@ -52,7 +55,7 @@
       if (!store.get()) { Hub.toLogin(); return null; }
       try { Hub.user = (await Hub.call("me")).user; cacheUser(Hub.user); }
       catch { Hub.toLogin(); return null; }
-      if (admin && Hub.user.role !== "admin") { location.replace("index.html"); return null; }
+      if (admin && Hub.user.role !== "admin") { location.replace(ROOT.href + "index.html"); return null; }
       return Hub.user;
     },
 
@@ -77,7 +80,6 @@
         nav.append(a);
       };
       link("Applications", "index.html");
-      link("ChatGDB", "chatgdb.html");
       link("Mon compte", "compte.html");
       if (user.role === "admin") link("Administration", "admin.html");
       const out = Object.assign(document.createElement("button"), { className: "nav-btn", type: "button", textContent: "Déconnexion" });

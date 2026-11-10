@@ -1,7 +1,7 @@
 // Identifiant client OAuth « Application Web » du projet Google Cloud (identifiant PUBLIC, pas une clé secrète).
 // Tant qu'il est vide, le bouton « Continuer avec Google » reste masqué. Le même identifiant doit aussi être
 // enregistré dans la propriété de script GOOGLE_CLIENT_ID du serveur Apps Script (backend/Code.gs).
-window.SCOUTHUB_GOOGLE_CLIENT_ID = "";
+window.SCOUTHUB_GOOGLE_CLIENT_ID = "727360235431-i58mtn1svcfniklju1gj8b906pk8e086.apps.googleusercontent.com";
 // ChatGDB : assistant IA de la fédération. « live: false » = interface seule, envoi désactivé.
 // Crédits (unité : 1 crédit ≈ une question courte). Limites glissantes façon Claude : une par session de 5 heures
 // et une par semaine. Les valeurs sont des points de départ à ajuster ; voir docs/projet-chatgdb.md.
@@ -18,7 +18,7 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
   { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers dans Google Drive (bientôt)", url: O + "ScoutCloud/", icon: "assets/icons/ScoutCloud.svg" },
-  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération (bientôt)", url: "chatgdb.html", icon: "assets/icons/ChatGDB.svg", local: true },
+  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération (bientôt)", url: "chatgdb/", icon: "assets/icons/ChatGDB.svg", local: true },
   { group: "Boutique", name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: O + "ScoutOffice/Excel/", icon: "assets/icons/Excel.png" },
