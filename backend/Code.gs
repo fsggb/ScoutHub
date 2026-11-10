@@ -7,6 +7,7 @@
  *   ANTHROPIC_WORKSPACE_ID : (si la clé n'est pas créée dans un workspace) identifiant du workspace Anthropic, envoyé en en-tête.
  *   GITHUB_TOKEN, DATA_REPO : mémoire de ChatGDB uniquement (notes apprises par l'administrateur, dossier memoire/ du dépôt PRIVÉ
  *                      « organisation/depot ») ; jeton fine-grained limité à ce dépôt, « Contents : lecture/écriture ».
+ *   CHAT_TESTEURS    : adresses (séparées par des virgules) qui peuvent utiliser ChatGDB pendant les tests, sans être administrateurs.
  *   CHAT_PUBLIC      : « 1 » pour ouvrir ChatGDB à tous les comptes ; sinon réservé aux administrateurs (phase de test).
  *   CHAT_MODELE      : (facultatif) identifiant du modèle ; par défaut claude-haiku-5-5.
  *   GOOGLE_CLIENT_ID : (facultatif, à renseigner plus tard) identifiant client OAuth « Application Web »
@@ -116,7 +117,7 @@ var ACTIONS = {
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
-    return { ok: true, chat: chatOuvert_(role), admin: role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined };
+    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), role: role, email: email, admin: role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined };
   },
   // Activité réelle dans un outil : 1 crédit bonus par tranche de 5 minutes (plafonné par semaine).
   ping: function (r) {
@@ -130,7 +131,7 @@ var ACTIONS = {
   },
   chat: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role), admin = role === 'admin';
-    if (!chatOuvert_(role)) fail_(props_().getProperty('ANTHROPIC_IA') ? 'ChatGDB n\'est pas encore ouvert à votre compte.' : 'ChatGDB n\'est pas encore configuré.');
+    if (!chatOuvert_(role, email)) fail_(props_().getProperty('ANTHROPIC_IA') ? 'ChatGDB est réservé aux administrateurs pendant les tests (votre compte : ' + role + ').' : 'ChatGDB n\'est pas encore configuré (clé Claude absente du serveur).');
     if (!admin) {   // l'administrateur n'a aucune limite : sa consommation est seulement suivie
       var etat = creditsEtat_(email, role);
       if (etat.fenetre.reste <= 0) fail_('Limite de la session de ' + CHAT_FENETRE_H + ' h atteinte. Elle se renouvelle ' + etat.fenetre.renouvellement + '.');
@@ -311,9 +312,17 @@ function recordFail_(email) {
 function clearFails_(email) { CacheService.getScriptCache().remove('f:' + email); }
 
 // ---------- ChatGDB : accès, crédits, consommation ----------
-function chatOuvert_(role) {
+function chatOuvert_(role, email) {
   var p = props_();
-  return !!p.getProperty('ANTHROPIC_IA') && (p.getProperty('CHAT_PUBLIC') === '1' || role === 'admin');
+  if (!p.getProperty('ANTHROPIC_IA')) return false;
+  if (p.getProperty('CHAT_PUBLIC') === '1' || role === 'admin') return true;
+  var testeurs = String(p.getProperty('CHAT_TESTEURS') || '').toLowerCase().split(/[\s,;]+/);
+  return !!email && testeurs.indexOf(String(email).toLowerCase()) >= 0;
+}
+// Pourquoi ChatGDB est fermé pour ce compte (affiché dans l'interface) : 'cle' | 'reserve' | ''.
+function chatRaison_(role, email) {
+  if (!props_().getProperty('ANTHROPIC_IA')) return 'cle';
+  return chatOuvert_(role, email) ? '' : 'reserve';
 }
 function creditsCle_(email) { return 'cr:' + sha_('credits|' + email).slice(0, 20); }
 function creditsLire_(email) {

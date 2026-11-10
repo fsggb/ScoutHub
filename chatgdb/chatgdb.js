@@ -192,7 +192,13 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   $("credits-open").onclick = openCredits; $("m-credits").onclick = () => { closeMenu(); openCredits(); };
   document.querySelectorAll("dialog [data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
   // Le serveur dit si ChatGDB est ouvert pour ce compte.
-  Hub.call("credits").then(o => { if (o.chat) live = true; if (o.credits) credits(o.credits); if (o.admin) { isAdmin = true; $("m-memory").hidden = $("m-conso").hidden = false; } }).catch(() => {}).finally(() => { $("soon").hidden = live; if (!live && !current?.example) notice("ChatGDB n’est pas encore activé : l’interface est prête, l’envoi sera ouvert prochainement."); updateSend(); });
+  let closedMsg = "";
+  Hub.call("credits").then(o => {
+    if (o.chat) live = true; if (o.credits) credits(o.credits); if (o.admin) { isAdmin = true; $("m-memory").hidden = $("m-conso").hidden = false; }
+    if (!o.chat) closedMsg = o.raison === "cle" ? "ChatGDB attend la clé Claude du serveur (propriété ANTHROPIC_IA des propriétés du script ScoutHub)."
+      : "ChatGDB est réservé aux administrateurs pendant les tests. Vous êtes connecté en tant que « " + (Hub.ROLE_LABELS[o.role] || o.role) + " » (" + (o.email || user.email) + "). Connectez-vous avec un compte administrateur.";
+  }).catch(e => { closedMsg = /Action inconnue/.test(e.message) ? "Le serveur ScoutHub n’est pas à jour : collez le dernier Code.gs dans Apps Script et redéployez en « Nouvelle version »." : "Impossible de joindre le serveur ScoutHub : " + e.message; })
+    .finally(() => { $("soon").hidden = live; if (!live && !current?.example) notice(closedMsg || "ChatGDB n’est pas encore activé : l’interface est prête, l’envoi sera ouvert prochainement."); updateSend(); });
 
   // ---------- menu et préférences ----------
   const menu = $("menu"), closeMenu = () => menu.hidden = true;
@@ -510,7 +516,7 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
     ev.preventDefault();
     if (busy) { if (abort) abort.abort(); return; }
     const text = input.value.trim(); if (!text && !pending.length) return;
-    if (!live) return notice("ChatGDB n’est pas encore activé : votre message n’a pas été envoyé. L’ouverture est prévue prochainement.");
+    if (!live) return notice((closedMsg || "ChatGDB n’est pas encore activé") + " Votre message n’a pas été envoyé.");
     if (!current || current.example) { current = { id: String(Date.now()), title: (text || pending[0].n).slice(0, 60), updated: Date.now(), messages: [] }; convs.unshift(current); $("title").textContent = current.title; $("badge").hidden = true; $("pin").hidden = false; $("export").hidden = false; }
     const sent = pending; pending = []; drawAtts();
     current.messages.push({ role: "user", text: text || "Voici une pièce jointe.", atts: sent.map(a => ({ n: a.n, k: a.k, t: a.t || "" })), time: Date.now() });
