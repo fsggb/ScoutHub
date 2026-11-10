@@ -65,3 +65,19 @@ Ordre proposé : (1) un jeton de session ScoutHub vérifiable par un autre scrip
 4. Bibliothèque de documents.
 5. Rôles appliqués aux tuiles ; fédération des outils Apps Script.
 6. Agent.
+
+## 10. État de novembre 2026 (mise à jour)
+
+**Ouverture à tous.** ChatGDB est ouvert à tout compte connecté (`CHAT_PUBLIC=0` le referme, `CHAT_TESTEURS` limite à une liste). Plafond dur : **0,10 $ par personne et par semaine** (1 crédit = 0,001 $ ; 30 crédits par session de 5 h, 60 par semaine, jusqu'à 40 crédits gagnés en utilisant les outils, soit 100 crédits au maximum). Une estimation est faite avant chaque appel : si elle dépasse le reste, la recherche web est coupée, sinon la question est refusée avec explication. L'administrateur est illimité mais sa consommation (jetons et dollars, par mois et par personne) est visible dans Paramètres, Utilisation et crédits.
+
+**Coût indicatif d'une question** (tarifs publics) : Haiku 5.5 court sans web ≈ 0,0005 $ (1 crédit) ; Haiku avec une recherche web ≈ 0,012 à 0,02 $ ; Sonnet 5.5 court ≈ 0,011 $ (11 crédits) ; recherche approfondie ≈ 0,1 à 0,3 $ (réservée à qui a le budget : l'estimation refuse sinon).
+
+**Outils de l'IA (tous en lecture, sauf après confirmation)** : mémoire (notes et compétences), recherche web et lecture de pages (sources officielles : fsggb.fr d'abord), `voir_image` (image web ou jointe, y compris dans les messages précédents), lecture de dépôts GitHub de l'organisation fsggb (liste `DEPOTS_LECTURE`), bibliothèque (`chercher_bibliotheque`, `lire_document`), demande d'aide au service informatique (`preparer_demande_aide`, carte de validation, envoi limité à 5 par jour), dépôt dans la bibliothèque (administrateur seulement, carte de confirmation, fiche de mémoire créée en même temps). L'IA ne modifie jamais rien sans carte de confirmation.
+
+**Liens d'action (expérimental).** L'IA peut proposer des liens `https://fsggb.github.io/<application>/?paramètres` décrits dans la fiche `CHATGDB.md` de chaque application (ScoutMap : `lieu`, `centre`, `zoom`, `fond`, `couches`, `itineraire`, `boucle`, `titre`). Ils s'affichent comme des boutons.
+
+**Bibliothèque.** Dépôt `ScoutBibliotheque` (Apps Script + dossier Drive). Les documents déposés par l'IA vont dans Drive et dans une copie GitHub du dépôt de données privé (`bibliotheque/`), gardées synchronisées (déclencheur quotidien `synchroniserGithub`). Les très gros PDF sont lus par OCR.
+
+**Aide.** Page `aide.html` du portail et parcours guidé dans ChatGDB (`?aide=1`) ; le projet Rendez-vous est suspendu (dépôt local, non publié).
+
+**Interface.** Calquée sur Claude : barre latérale (Nouvelle conversation, Rechercher, Artefacts, Toutes les conversations, récentes), choix modèle/réflexion/recherche dans la zone de saisie, étapes de raisonnement visibles pendant l'usage d'outils, paramètres par onglets.
