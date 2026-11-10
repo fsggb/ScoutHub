@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"   # chaque lundi : les miroirs et les fiches ChatGDB sont rafraîchis
 
 permissions:
   contents: read
@@ -22,7 +24,24 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Assembler le site
+        run: |
+          mkdir build
+          # Le portail lui-même (sans le serveur, les docs ni la configuration du dépôt).
+          tar -c --exclude='./.git' --exclude='./.github' --exclude='./backend' --exclude='./docs' --exclude='./build' --exclude='*.md' --exclude='./mirrors.txt' --exclude='./knowledge-repos.txt' . | tar -x -C build
+          # Miroirs : chaque dépôt listé dans mirrors.txt est cloné dans son dossier (un échec n'arrête pas le déploiement).
+          grep -vE '^\s*(#|$)' mirrors.txt | while read -r repo dir; do
+            if git clone --depth 1 "https://github.com/fsggb/${repo}.git" "build/${dir}"; then rm -rf "build/${dir}/.git" "build/${dir}/.github"; else echo "::warning::miroir ${repo} impossible"; fi
+          done
+          # Fiches de connaissances de ChatGDB : CHATGDB.md de chaque dépôt, réunies dans knowledge/.
+          mkdir -p build/knowledge
+          grep -vE '^\s*(#|$)' knowledge-repos.txt | while read -r repo; do
+            if curl -fsSL "https://raw.githubusercontent.com/fsggb/${repo}/main/CHATGDB.md" -o "build/knowledge/${repo}.md"; then
+              { printf '\n\n<<< Fiche du dépôt %s >>>\n' "$repo"; cat "build/knowledge/${repo}.md"; } >> build/knowledge/all.md
+            else echo "::warning::fiche ${repo} introuvable"; rm -f "build/knowledge/${repo}.md"; fi
+          done
+          ls build build/knowledge
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: build
       - uses: actions/deploy-pages@v4

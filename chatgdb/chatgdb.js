@@ -1,6 +1,6 @@
-// ChatGDB : application de l'assistant IA de la fédération.
-// L'IA n'est pas encore branchée (SCOUTHUB_CHATGDB.live = false) : l'interface complète est prête (conversations, artefacts,
-// crédits, thème), l'envoi est refusé poliment et une conversation d'exemple montre ce que l'assistant saura produire.
+// ChatGDB : assistant IA de la fédération, en pleine page.
+// Le serveur (backend/Code.gs, action « chat ») appelle Claude avec la recherche web native ; la clé reste côté serveur.
+// Tant que le serveur ne l'ouvre pas pour ce compte, l'interface reste complète mais l'envoi est refusé poliment.
 (async () => {
   "use strict";
   const { $ } = Hub;
@@ -23,22 +23,39 @@
 
   // ---------- utilitaires ----------
   const esc = t => String(t == null ? "" : t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ic = (n, cls = "") => `<svg class="ic ${cls}"><use href="#i-${n}"/></svg>`;
   const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+  const host = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
   let toastTimer = 0;
   const toast = t => { const n = $("toast"); n.textContent = t; n.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => n.hidden = true, 2600); };
   const copy = async t => { try { await navigator.clipboard.writeText(t); } catch { const a = el("textarea", { value: t }); document.body.append(a); a.select(); try { document.execCommand("copy"); } catch {} a.remove(); } toast("Copié dans le presse-papiers."); };
   const download = (name, text, mime) => { const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: mime + ";charset=utf-8" })), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000); };
+  const safeName = s => (String(s).replace(/[^\wÀ-ſ .-]+/g, "").trim() || "fichier").slice(0, 60);
+
+  // ---------- logo (celui de la boutique, récupéré une fois depuis le Drive puis mémorisé) ----------
+  const LOGO_KEY = "scouthub.chatgdb.logo";
+  function applyLogo(uri) { document.querySelectorAll("img.logo, .who img").forEach(i => { i.src = uri; }); LOGO.uri = uri; }
+  const LOGO = { uri: "../assets/icons/ChatGDB.svg" };
+  const cachedLogo = store.get(LOGO_KEY, "");
+  if (/^data:image\/(png|jpeg|webp);base64,/.test(cachedLogo)) applyLogo(cachedLogo);
+  else Hub.call("logo").then(o => { if (/^data:image\/(png|jpeg|webp);base64,/.test(o.data || "")) { store.set(LOGO_KEY, o.data); applyLogo(o.data); } }).catch(() => {});
 
   // ---------- Markdown sûr : tout est échappé d'abord, seuls quelques motifs sont rendus ----------
-  const inline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>").replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  let curSources = [];
+  const inline = t => {
+    let h = esc(t);
+    h = h.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>").replace(/~~([^~]+)~~/g, "<del>$1</del>");
+    h = h.replace(/!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)/g, '<img class="mdimg" src="$2" alt="$1" loading="lazy" referrerpolicy="no-referrer">');
+    h = h.replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    if (curSources.length) h = h.replace(/\[(\d{1,2})\](?!\()/g, (m, n) => +n >= 1 && +n <= curSources.length ? `<a class="cite" data-n="${n}" href="#" title="${esc(curSources[n - 1].title)}">${n}</a>` : m);
+    return h;
+  };
   function md(src) {
     const lines = String(src || "").replace(/\r/g, "").split("\n"); let out = "", i = 0;
     const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
     while (i < lines.length) {
-      const l = lines[i];
-      let m;
-      if ((m = /^```\s*([\w+-]*)/.exec(l))) { const code = []; i++; while (i < lines.length && !/^```/.test(lines[i])) code.push(lines[i++]); i++; out += `<pre><code>${esc(code.join("\n"))}</code></pre>`; continue; }
+      const l = lines[i]; let m;
+      if ((m = /^```\s*([\w+-]*)/.exec(l))) { const code = []; i++; while (i < lines.length && !/^```/.test(lines[i])) code.push(lines[i++]); i++; out += `<div class="pre"><div class="pre-h"><span>${esc(m[1] || "code")}</span><button type="button" data-copy>${ic("copy", "sm")} Copier</button></div><pre><code>${esc(code.join("\n"))}</code></pre></div>`; continue; }
       if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
         const head = cells(l); i += 2; const rows = [];
         while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(cells(lines[i++]));
@@ -50,8 +67,7 @@
       if (/^\s*([-*]|\d+[.)])\s+/.test(l)) {
         const ordered = /^\s*\d+[.)]/.test(l), items = [];
         while (i < lines.length && /^\s*([-*]|\d+[.)])\s+/.test(lines[i])) {
-          const t = lines[i++].replace(/^\s*([-*]|\d+[.)])\s+/, "");
-          const task = /^\[( |x|X)\]\s+(.*)$/.exec(t);
+          const t = lines[i++].replace(/^\s*([-*]|\d+[.)])\s+/, ""), task = /^\[( |x|X)\]\s+(.*)$/.exec(t);
           items.push(task ? `<li style="list-style:none;margin-left:-1.2em">${task[1] === " " ? "☐" : "☑"} ${inline(task[2])}</li>` : `<li>${inline(t)}</li>`);
         }
         out += `<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`; continue;
@@ -63,13 +79,13 @@
     return out;
   }
 
-  // ---------- artefacts : <artifact id="" type="" title="">…</artifact> dans les réponses ----------
+  // ---------- artefacts : <artifact id="" type="" title="">…</artifact> ----------
   const KINDS = {
-    markdown: { ico: "📄", label: "Document", ext: "md", mime: "text/markdown" },
-    html: { ico: "🌐", label: "Page web interactive", ext: "html", mime: "text/html" },
-    svg: { ico: "🖼️", label: "Image vectorielle", ext: "svg", mime: "image/svg+xml" },
-    csv: { ico: "📊", label: "Tableau", ext: "csv", mime: "text/csv" },
-    code: { ico: "⌨️", label: "Code", ext: "txt", mime: "text/plain" }
+    markdown: { ico: "file", label: "Document", ext: "md", mime: "text/markdown" },
+    html: { ico: "globe", label: "Page web interactive", ext: "html", mime: "text/html" },
+    svg: { ico: "image", label: "Image vectorielle", ext: "svg", mime: "image/svg+xml" },
+    csv: { ico: "table", label: "Tableau", ext: "csv", mime: "text/csv" },
+    code: { ico: "code", label: "Code", ext: "txt", mime: "text/plain" }
   };
   function parse(text) {
     const segs = []; let last = 0, n = 0; const re = /<artifact\b([^>]*)>([\s\S]*?)(?:<\/artifact>|$)/g; let m;
@@ -146,125 +162,161 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
 </artifact>` }
   ] };
 
-  // ---------- état et conversations ----------
-  const KEY = "scouthub.chatgdb.v2:" + user.email;
+  // ---------- état, préférences, conversations ----------
+  const PREFS_KEY = "scouthub.chatgdb.prefs";
+  const prefs = Object.assign({ custom: "", web: true, style: "concise" }, store.get(PREFS_KEY, {}));
+  const KEY = "scouthub.chatgdb.v3:" + user.email;
   let convs = store.get(KEY, []).filter(c => c && Array.isArray(c.messages));
-  let current = null, openArtId = null, openArtVer = 0, tab = "prev", busy = false;
+  let current = null, openArtId = null, openArtVer = 0, tab = "prev", busy = false, live = !!CFG.live, abort = null, pending = [], webOn = prefs.web;
   const persist = () => store.set(KEY, convs.slice(0, 100));
-  const find = id => id === EXAMPLE.id ? EXAMPLE : convs.find(c => c.id === id);
 
   // ---------- thème, panneau ----------
-  const setTheme = t => { app.dataset.theme = t; store.set("scouthub.chatgdb.theme", t); };
+  const setTheme = t => { app.dataset.theme = t; store.set("scouthub.chatgdb.theme", t); $("theme").innerHTML = ic(t === "dark" ? "sun" : "moon"); };
   setTheme(store.get("scouthub.chatgdb.theme", "light"));
   $("theme").onclick = () => setTheme(app.dataset.theme === "dark" ? "light" : "dark");
   const mobile = () => matchMedia("(max-width:900px)").matches;
   app.dataset.side = mobile() ? "closed" : "open";
   const setSide = o => { app.dataset.side = o ? "open" : "closed"; $("scrim").hidden = !(o && mobile()); };
   matchMedia("(max-width:900px)").addEventListener("change", e => setSide(!e.matches));
-  $("side-close").onclick = () => setSide(false); $("side-open").onclick = () => setSide(true); $("scrim").onclick = () => { setSide(false); };
+  $("side-toggle").onclick = () => setSide(app.dataset.side !== "open"); $("scrim").onclick = () => setSide(false);
 
-  // ---------- crédits ----------
-  function credits(u = { window: 0, week: 0, resetWindow: "", resetWeek: "" }) {
-    const fill = (bar, txt, used, max) => { const left = Math.max(0, max - used), pct = max ? Math.round(left / max * 100) : 0; $(bar).style.width = pct + "%"; $(bar).classList.toggle("low", pct <= 15); $(txt).textContent = left + " / " + max; };
-    fill("cm-bar", "cm-txt", u.week, CFG.weekCredits); $("cm-txt").textContent = Math.max(0, CFG.weekCredits - u.week) + " cette semaine";
-    fill("d-win", "d-win-txt", u.window, CFG.windowCredits); fill("d-week", "d-week-txt", u.week, CFG.weekCredits);
+  // ---------- crédits (format serveur : { fenetre:{max,utilise,reste,renouvellement}, semaine:{…} }) ----------
+  function credits(c) {
+    const w = c ? c.fenetre : { max: CFG.windowCredits, utilise: 0, reste: CFG.windowCredits, renouvellement: "" };
+    const k = c ? c.semaine : { max: CFG.weekCredits, utilise: 0, reste: CFG.weekCredits, renouvellement: "", bonus: 0 };
+    const fill = (bar, txt, o) => { const pct = o.max ? Math.round(o.reste / o.max * 100) : 0; $(bar).style.width = pct + "%"; $(bar).classList.toggle("low", pct <= 15); $(txt).textContent = o.reste + " / " + o.max; };
+    fill("cm-bar", "cm-txt", w); $("cm-txt").textContent = w.reste + " / " + w.max;
+    fill("d-win", "d-win-txt", w); fill("d-week", "d-week-txt", k);
     $("d-hours").textContent = $("d-hours2").textContent = CFG.windowHours;
-    $("d-win-reset").textContent = u.resetWindow ? "Se renouvelle " + u.resetWindow : `Se renouvelle ${CFG.windowHours} h après votre première question`;
-    $("d-week-reset").textContent = u.resetWeek ? "Se renouvelle " + u.resetWeek : "Se renouvelle chaque semaine";
+    $("d-win-reset").textContent = "Se renouvelle " + (w.renouvellement || `${CFG.windowHours} h après votre première question`);
+    $("d-week-reset").textContent = "Se renouvelle " + (k.renouvellement || "chaque semaine") + (k.bonus ? " · dont " + k.bonus + " crédit(s) gagnés" : "");
     $("d-earn").textContent = `Utiliser les applications de ScoutHub rapporte des crédits : ${CFG.earn.credits} crédit toutes les ${CFG.earn.minutes} minutes d’activité, jusqu’à ${CFG.earn.weekCap} par semaine.`;
   }
   credits();
   const openCredits = () => $("dlg-credits").showModal();
   $("credits-open").onclick = openCredits; $("m-credits").onclick = () => { closeMenu(); openCredits(); };
-  document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+  document.querySelectorAll("dialog [data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+  // Le serveur dit si ChatGDB est ouvert pour ce compte.
+  Hub.call("credits").then(o => { if (o.chat) live = true; if (o.credits) credits(o.credits); }).catch(() => {}).finally(() => { $("soon").hidden = live; if (!live && !current?.example) notice("ChatGDB n’est pas encore activé : l’interface est prête, l’envoi sera ouvert prochainement."); updateSend(); });
 
-  // ---------- menu du compte ----------
-  const menu = $("menu");
-  const closeMenu = () => menu.hidden = true;
-  $("menu-open").onclick = ev => { ev.stopPropagation(); const r = ev.currentTarget.getBoundingClientRect(); menu.hidden = !menu.hidden; menu.style.left = Math.max(8, r.left - 150) + "px"; menu.style.bottom = (innerHeight - r.top + 8) + "px"; };
-  document.addEventListener("click", closeMenu);
+  // ---------- menu et préférences ----------
+  const menu = $("menu"), closeMenu = () => menu.hidden = true;
+  $("menu-open").onclick = ev => { ev.stopPropagation(); menu.hidden = !menu.hidden; };
+  document.addEventListener("click", e => { if (!menu.contains(e.target)) closeMenu(); });
   $("m-out").onclick = () => Hub.logout();
-  $("m-clear").onclick = () => { closeMenu(); if (confirm("Supprimer toutes vos conversations ChatGDB sur cet appareil ?")) { convs = []; persist(); show(null); } };
+  $("m-settings").onclick = () => { closeMenu(); $("set-custom").value = prefs.custom; $("set-web").checked = prefs.web; $("set-style").value = prefs.style; $("dlg-settings").showModal(); };
+  $("set-save").onclick = () => { prefs.custom = $("set-custom").value.trim().slice(0, 600); prefs.web = $("set-web").checked; prefs.style = $("set-style").value; store.set(PREFS_KEY, prefs); webOn = prefs.web; $("mode").value = prefs.style; syncWeb(); $("dlg-settings").close(); toast("Préférences enregistrées."); };
+  const clearAll = () => { if (confirm("Supprimer toutes vos conversations ChatGDB sur cet appareil ?")) { convs = []; persist(); show(null); $("dlg-settings").close(); } };
+  $("set-clear").onclick = clearAll;
 
   // ---------- liste des conversations ----------
-  function when(ts) {
-    const d = new Date(ts), now = new Date(), day = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), t = d.getTime();
-    if (t >= day) return "Aujourd’hui"; if (t >= day - 864e5) return "Hier"; if (t >= day - 6 * 864e5) return "7 derniers jours"; return "Plus ancien";
-  }
+  const when = ts => { const now = new Date(), day = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); return ts >= day ? "Aujourd’hui" : ts >= day - 864e5 ? "Hier" : ts >= day - 6 * 864e5 ? "7 derniers jours" : "Plus ancien"; };
   function drawList() {
     const box = $("convs"); box.textContent = ""; const q = $("q").value.trim().toLowerCase();
     const mine = convs.filter(c => !q || (c.title + " " + c.messages.map(m => m.text).join(" ")).toLowerCase().includes(q)).sort((a, b) => b.updated - a.updated);
     const add = (label, items) => { if (!items.length) return; box.append(el("div", { className: "grp", textContent: label })); items.forEach(c => {
       const row = el("div", { className: "conv" + (current && current.id === c.id ? " on" : ""), role: "button", tabIndex: 0 }, el("span", { textContent: c.title, title: c.title }));
-      if (!c.example) { const x = el("button", { className: "x", type: "button", textContent: "✕", title: "Supprimer", ariaLabel: "Supprimer la conversation" }); x.onclick = ev => { ev.stopPropagation(); if (confirm("Supprimer cette conversation ?")) { convs = convs.filter(k => k !== c); persist(); if (current === c) show(null); else drawList(); } }; row.append(x); }
+      if (!c.example) { const x = el("button", { className: "x", type: "button", ariaLabel: "Supprimer la conversation", title: "Supprimer", innerHTML: ic("trash", "sm") }); x.onclick = ev => { ev.stopPropagation(); if (confirm("Supprimer cette conversation ?")) { convs = convs.filter(k => k !== c); persist(); if (current === c) show(null); else drawList(); } }; row.append(x); }
       row.onclick = () => { show(c); if (mobile()) setSide(false); }; row.onkeydown = e => { if (e.key === "Enter") row.click(); }; box.append(row); }); };
+    add("Épinglées", mine.filter(c => c.pinned));
     if (!q || EXAMPLE.title.toLowerCase().includes(q)) add("Exemple", [EXAMPLE]);
-    ["Aujourd’hui", "Hier", "7 derniers jours", "Plus ancien"].forEach(g => add(g, mine.filter(c => when(c.updated) === g)));
-    if (!mine.length && !box.querySelector(".conv")) box.append(el("p", { className: "empty", textContent: "Aucune conversation." }));
+    ["Aujourd’hui", "Hier", "7 derniers jours", "Plus ancien"].forEach(g => add(g, mine.filter(c => !c.pinned && when(c.updated) === g)));
+    if (!mine.length && !q) box.append(el("p", { className: "empty", textContent: "Vos conversations apparaîtront ici." }));
+    else if (!mine.length && !box.querySelector(".conv")) box.append(el("p", { className: "empty", textContent: "Aucun résultat." }));
   }
   $("q").addEventListener("input", drawList);
 
   // ---------- fil de discussion ----------
   const SUGG = [
-    ["📝", "Rédiger", "Rédige une lettre aux parents pour annoncer le camp d’été."],
-    ["🧭", "Cartes et orientation", "Comment préparer un itinéraire et des azimuts pour un raid sur Cartes IGN ?"],
-    ["🪵", "Froissartage", "Comment concevoir un banc dans CathIA et sortir le plan coté ?"],
-    ["📊", "Budget", "Aide-moi à construire un tableau de budget de camp dans Excel."],
-    ["🛍️", "Boutique", "Quels articles trouver pour l’uniforme d’un louveteau ?"],
-    ["📚", "Documents scouts", "Que dit la réglementation sur les effectifs d’encadrement en camp ?"]
+    ["pencil", "Rédiger", "Rédige une lettre aux parents pour annoncer le camp d’été."],
+    ["compass", "Orientation", "Comment préparer un itinéraire et des azimuts pour un raid sur Cartes IGN ?"],
+    ["tree", "Froissartage", "Comment concevoir un banc dans CathIA et sortir le plan coté ?"],
+    ["chart", "Budget", "Aide-moi à construire un tableau de budget de camp dans Excel."],
+    ["shop", "Boutique", "Quels articles trouver pour l’uniforme d’un louveteau ?"],
+    ["book", "Documents scouts", "Que dit la réglementation sur les effectifs d’encadrement en camp ?"]
   ];
   function welcome() {
     const box = el("div", { className: "welcome" });
-    box.append(el("img", { src: "../assets/icons/ChatGDB.svg", alt: "" }), el("h2", { textContent: "Bonjour " + first + ", comment puis-je vous aider ?" }),
-      el("p", { textContent: "Je connais les applications de la fédération et ses documents." }));
+    box.append(el("img", { className: "logo", src: LOGO.uri, alt: "" }), el("h2", { textContent: "Bonjour " + first + ", comment puis-je vous aider ?" }), el("p", { textContent: "Je connais les applications de la fédération et ses documents." }));
     const cards = el("div", { className: "cards" });
-    SUGG.forEach(([ic, h, t]) => { const c = el("button", { className: "card", type: "button" }, el("span", { className: "ci", textContent: ic }), el("b", { textContent: h }), el("small", { textContent: t })); c.onclick = () => { $("input").value = t; autosize(); $("input").focus(); }; cards.append(c); });
-    box.append(cards); return box;
+    SUGG.forEach(([i, h, t]) => { const c = el("button", { className: "card", type: "button" }, el("span", { className: "ci", innerHTML: ic(i) }), el("b", { textContent: h }), el("small", { textContent: t })); c.onclick = () => { $("input").value = t; autosize(); $("input").focus(); }; cards.append(c); });
+    const caps = el("div", { className: "caps" });
+    [["globe", "Recherche sur le web"], ["image", "Lit vos images"], ["file", "Lit vos PDF"], ["code", "Crée documents, pages et tableaux"], ["book", "Connaît les outils de la fédération"]].forEach(([i, t]) => caps.append(el("span", { className: "cap", innerHTML: ic(i) + esc(t) })));
+    box.append(cards, caps); return box;
+  }
+  function attsOf(m) {
+    if (!m.atts || !m.atts.length) return null;
+    const box = el("div", { className: "thumbs" });
+    m.atts.forEach(a => box.append(a.t ? el("img", { className: "thumb", src: a.t, alt: a.n }) : el("span", { className: "filechip", innerHTML: ic("file") + esc(a.n) })));
+    return box;
   }
   function botBody(m, conv) {
-    const body = el("div", { className: "body" }), wrap = el("div", { className: "md" });
+    const body = el("div", { className: "body" });
+    if (m.searches && m.searches.length) body.append(el("div", { className: "search-note", innerHTML: ic("globe") + "Recherche sur le web : " + esc(m.searches.join(" · ")) }));
+    curSources = m.sources || [];
+    const wrap = el("div", { className: "md" });
     parse(m.text).forEach(s => {
       if (s.t === "text") { if (s.v.trim()) wrap.insertAdjacentHTML("beforeend", md(s.v)); return; }
-      const k = KINDS[s.type], vers = versionsOf(conv, s.id), idx = Math.max(0, vers.findIndex(x => x.msg === m)), v = idx + 1;
+      const k = KINDS[s.type], vers = versionsOf(conv, s.id), idx = Math.max(0, vers.findIndex(x => x.msg === m));
       const card = el("button", { className: "afc" + (openArtId === s.id ? " on" : ""), type: "button" },
-        el("span", { className: "ico", textContent: k.ico }), el("span", {}, el("b", { textContent: s.title }), el("small", { textContent: k.label + (vers.length > 1 ? " · version " + v + " sur " + vers.length : "") })), el("span", { className: "go", textContent: "Ouvrir ›" }));
+        el("span", { className: "ico", innerHTML: ic(k.ico) }), el("span", {}, el("b", { textContent: s.title }), el("small", { textContent: k.label + (vers.length > 1 ? " · version " + (idx + 1) + " sur " + vers.length : "") })), el("span", { className: "go", innerHTML: "Ouvrir" + ic("chev") }));
       card.onclick = () => openArt(conv, s.id, idx); wrap.append(card);
     });
-    body.append(wrap); return body;
+    body.append(wrap);
+    if (m.sources && m.sources.length) { const src = el("div", { className: "sources" }); m.sources.forEach((s, i) => src.append(el("a", { className: "src", id: "src-" + i, href: s.url, target: "_blank", rel: "noopener noreferrer", innerHTML: `<i>${i + 1}</i><span><b>${esc(s.title)}</b><small>${esc(host(s.url))}</small></span>` }))); body.append(src); }
+    curSources = [];
+    return body;
   }
   function drawThread(scroll = true) {
     const th = $("thread"); th.textContent = "";
     if (!current || !current.messages.length) { th.append(welcome()); return; }
-    if (current.example) th.append(el("div", { className: "example-note", textContent: "Exemple de conversation : elle montre ce que ChatGDB saura produire (documents, pages interactives, tableaux, images). ChatGDB n’est pas encore activé." }));
+    if (current.example) th.append(el("div", { className: "example-note", textContent: "Exemple de conversation : elle montre ce que ChatGDB saura produire (documents, pages interactives, tableaux, images). Les réponses de cet exemple ne viennent pas de l’IA." }));
     current.messages.forEach((m, i) => {
       const msg = el("div", { className: "msg " + (m.role === "user" ? "user" : "bot") });
-      msg.append(m.role === "user" ? el("span", { className: "who", textContent: first.charAt(0).toUpperCase() }) : el("span", { className: "who" }, el("img", { src: "../assets/icons/ChatGDB.svg", alt: "" })));
-      if (m.role === "user") msg.append(el("div", { className: "body", textContent: m.text }));
-      else {
-        const body = botBody(m, current), acts = el("div", { className: "actions" });
-        const btn = (t, title, fn) => { const b = el("button", { type: "button", textContent: t, title, ariaLabel: title }); b.onclick = fn; acts.append(b); return b; };
-        btn("⧉ Copier", "Copier la réponse", () => copy(m.text.replace(/<\/?artifact[^>]*>/g, "")));
-        const up = btn("👍", "Bonne réponse", () => { m.fb = m.fb === "up" ? "" : "up"; persist(); up.classList.toggle("on", m.fb === "up"); dn.classList.remove("on"); toast("Merci pour votre retour."); });
-        const dn = btn("👎", "Réponse insuffisante", () => { m.fb = m.fb === "down" ? "" : "down"; persist(); dn.classList.toggle("on", m.fb === "down"); up.classList.remove("on"); toast("Merci, nous en tenons compte."); });
+      msg.append(m.role === "user" ? el("span", { className: "who", textContent: first.charAt(0).toUpperCase() }) : el("span", { className: "who" }, el("img", { src: LOGO.uri, alt: "" })));
+      const last = i === current.messages.length - 1, acts = el("div", { className: "actions" });
+      const btn = (i2, label, title, fn) => { const b = el("button", { type: "button", title, ariaLabel: title, innerHTML: ic(i2) + (label ? esc(label) : "") }); b.onclick = fn; acts.append(b); return b; };
+      if (m.role === "user") {
+        const body = el("div", { className: "body" }), a = attsOf(m); if (a) body.append(a);
+        body.append(el("div", { className: "bubble", textContent: m.text }));
+        if (!current.example && live && !busy) { btn("pencil", "", "Modifier le message", () => editMsg(i, body)); }
+        body.append(acts); msg.append(body);
+      } else {
+        const body = botBody(m, current);
+        btn("copy", "Copier", "Copier la réponse", () => copy(m.text.replace(/<\/?artifact[^>]*>/g, "")));
+        const up = btn("up", "", "Bonne réponse", () => { m.fb = m.fb === "up" ? "" : "up"; persist(); up.classList.toggle("on", m.fb === "up"); dn.classList.remove("on"); toast("Merci pour votre retour."); });
+        const dn = btn("down", "", "Réponse insuffisante", () => { m.fb = m.fb === "down" ? "" : "down"; persist(); dn.classList.toggle("on", m.fb === "down"); up.classList.remove("on"); toast("Merci, nous en tenons compte."); });
         up.classList.toggle("on", m.fb === "up"); dn.classList.toggle("on", m.fb === "down");
-        if (!current.example) btn("↻ Régénérer", "Régénérer la réponse", () => { if (i === current.messages.length - 1) regenerate(); });
+        if (!current.example && last && live && !busy) btn("refresh", "Régénérer", "Régénérer la réponse", () => regenerate());
         body.append(acts); msg.append(body);
       }
       th.append(msg);
     });
-    if (busy) th.append(el("div", { className: "msg bot" }, el("span", { className: "who" }, el("img", { src: "../assets/icons/ChatGDB.svg", alt: "" })), el("div", { className: "body" }, el("span", { className: "typing" }, el("i"), el("i"), el("i")))));
+    if (busy) th.append(el("div", { className: "msg bot" }, el("span", { className: "who" }, el("img", { src: LOGO.uri, alt: "" })), el("div", { className: "body" }, el("span", { className: "typing" }, el("i"), el("i"), el("i"), document.createTextNode(webOn ? "ChatGDB réfléchit ou cherche sur le web…" : "ChatGDB réfléchit…")))));
     if (scroll) th.scrollTop = th.scrollHeight;
   }
+  // clics dans le fil : copie de code, citations, images
+  $("thread").addEventListener("click", e => {
+    const t = e.target;
+    const cp = t.closest("[data-copy]"); if (cp) { copy(cp.closest(".pre").querySelector("code").textContent); return; }
+    const ci = t.closest(".cite"); if (ci) { e.preventDefault(); const s = ci.closest(".body").querySelector("#src-" + (+ci.dataset.n - 1)); if (s) { s.scrollIntoView({ block: "center", behavior: "smooth" }); s.classList.add("flash"); setTimeout(() => s.classList.remove("flash"), 1400); } return; }
+    if (t.matches("img.mdimg, img.thumb")) { $("lb-img").src = t.src; $("dlg-image").showModal(); }
+  });
+  $("thread").addEventListener("error", e => { if (e.target.matches && e.target.matches("img.mdimg")) e.target.remove(); }, true);
+  $("dlg-image").addEventListener("click", e => { if (e.target.id === "dlg-image") e.target.close(); });
+
   function show(c) {
     current = c; $("title").textContent = c ? c.title : "Nouvelle conversation"; $("badge").hidden = !(c && c.example);
-    closeArt(); drawList(); drawThread(false); $("thread").scrollTop = 0; notice();
+    $("pin").hidden = !c || c.example; $("pin").classList.toggle("on", !!(c && c.pinned)); $("export").hidden = !c;
+    closeArt(); drawList(); drawThread(false); $("thread").scrollTop = 0; notice(); updateSend();
   }
   $("new").onclick = () => { show(null); $("input").focus(); if (mobile()) setSide(false); };
   $("title").onclick = () => { if (!current || current.example) return; const t = (prompt("Nom de la conversation :", current.title) || "").trim(); if (t) { current.title = t.slice(0, 80); persist(); $("title").textContent = current.title; drawList(); } };
+  $("pin").onclick = () => { if (!current) return; current.pinned = !current.pinned; persist(); $("pin").classList.toggle("on", current.pinned); drawList(); };
   $("export").onclick = () => {
-    if (!current) return toast("Rien à exporter pour l’instant.");
-    const txt = "# " + current.title + "\n\n" + current.messages.map(m => (m.role === "user" ? "**Vous**\n\n" : "**ChatGDB**\n\n") + m.text.replace(/<artifact[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/artifact>/g, (_, t, c) => `\n\n### ${t}\n\n${c}\n`)).join("\n\n---\n\n");
-    download((current.title.replace(/[^\wÀ-ſ -]+/g, "").trim() || "conversation") + ".md", txt, "text/markdown");
+    if (!current) return;
+    const txt = "# " + current.title + "\n\n" + current.messages.map(m => (m.role === "user" ? "**Vous**\n\n" : "**ChatGDB**\n\n") + m.text.replace(/<artifact[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/artifact>/g, (_, t, c) => `\n\n### ${t}\n\n${c}\n`) + (m.sources && m.sources.length ? "\n\nSources :\n" + m.sources.map((s, i) => `${i + 1}. ${s.title} — ${s.url}`).join("\n") : "")).join("\n\n---\n\n");
+    download(safeName(current.title) + ".md", txt, "text/markdown");
   };
 
   // ---------- volet des artefacts ----------
@@ -277,21 +329,20 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   function renderArt(conv = current) {
     const vers = versionsOf(conv, openArtId), a = vers[openArtVer]; if (!a) return closeArt();
     const k = KINDS[a.type];
-    $("art-ico").textContent = k.ico; $("art-name").textContent = a.title; $("art-kind").textContent = k.label;
+    $("art-ico").innerHTML = `<use href="#i-${k.ico}"/>`; $("art-name").textContent = a.title; $("art-kind").textContent = k.label;
     const sel = $("art-ver"); sel.hidden = vers.length < 2; sel.textContent = "";
     vers.forEach((_, i) => sel.append(el("option", { value: i, textContent: "Version " + (i + 1), selected: i === openArtVer })));
     $("tab-prev").setAttribute("aria-selected", String(tab === "prev")); $("tab-code").setAttribute("aria-selected", String(tab === "code"));
     const body = $("art-body"); body.textContent = "";
     if (tab === "code") { body.append(el("pre", { className: "raw", textContent: a.content })); return; }
-    if (a.type === "markdown") body.append(el("div", { className: "md", innerHTML: md(a.content) }));
+    if (a.type === "markdown") { curSources = []; body.append(el("div", { className: "md", innerHTML: md(a.content) })); }
     else if (a.type === "html") {
       const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: blob: https:; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; font-src data:">';
       body.append(el("iframe", { title: a.title, sandbox: "allow-scripts", srcdoc: csp + a.content, referrerPolicy: "no-referrer" }));
     } else if (a.type === "svg") body.append(el("div", { className: "svgwrap" }, el("img", { alt: a.title, src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(a.content) })));
     else if (a.type === "csv") {
-      const rows = a.content.split(/\r?\n/).filter(Boolean).map(r => (r.match(/("([^"]|"")*"|[^,;]*)([,;]|$)/g) || []).map(c => c.replace(/[,;]$/, "").replace(/^"|"$/g, "").replace(/""/g, '"')));
-      const t = "<table><thead><tr>" + (rows[0] || []).map(c => `<th>${esc(c)}</th>`).join("") + "</tr></thead><tbody>" + rows.slice(1).map(r => "<tr>" + r.map(c => `<td>${esc(c)}</td>`).join("") + "</tr>").join("") + "</tbody></table>";
-      body.append(el("div", { className: "md", innerHTML: t }));
+      const rows = a.content.split(/\r?\n/).filter(Boolean).map(line => { const out = []; let cur = "", q = false; for (let i = 0; i < line.length; i++) { const ch = line[i]; if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; } else if (ch === '"') q = true; else if (ch === "," || ch === ";") { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out; });
+      body.append(el("div", { className: "md", innerHTML: "<table><thead><tr>" + (rows[0] || []).map(c => `<th>${esc(c)}</th>`).join("") + "</tr></thead><tbody>" + rows.slice(1).map(r => "<tr>" + r.map(c => `<td>${esc(c)}</td>`).join("") + "</tr>").join("") + "</tbody></table>" }));
     } else body.append(el("pre", { className: "raw", textContent: a.content }));
   }
   $("tab-prev").onclick = () => { tab = "prev"; renderArt(); }; $("tab-code").onclick = () => { tab = "code"; renderArt(); };
@@ -299,38 +350,137 @@ td[contenteditable]{background:#fffdf4}input{width:18px;height:18px;accent-color
   $("art-close").onclick = () => { closeArt(); drawThread(false); };
   $("art-full").onclick = () => $("art").classList.toggle("full");
   $("art-copy").onclick = () => { const a = versionsOf(current, openArtId)[openArtVer]; if (a) copy(a.content); };
-  $("art-dl").onclick = () => { const a = versionsOf(current, openArtId)[openArtVer]; if (!a) return; const k = KINDS[a.type]; download((a.title.replace(/[^\wÀ-ſ -]+/g, "").trim() || "artefact") + "." + (a.type === "code" && /^[\w+-]{1,6}$/.test(a.lang) ? a.lang : k.ext), a.content, k.mime); };
+  $("art-dl").onclick = () => { const a = versionsOf(current, openArtId)[openArtVer]; if (!a) return; const k = KINDS[a.type]; download(safeName(a.title) + "." + (a.type === "code" && /^[\w+-]{1,6}$/.test(a.lang) ? a.lang : k.ext), a.content, k.mime); };
+
+  // ---------- pièces jointes : images (réduites), PDF, fichiers texte ----------
+  const MAX_ATT = 6, MAX_PDF = 9 * 1048576, MAX_TXT = 200000;
+  const readAs = (f, how) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r[how](f); });
+  async function shrink(file, max, q) {
+    const url = await readAs(file, "readAsDataURL"), img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+    const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", q);
+  }
+  async function addFiles(files) {
+    for (const f of [...files]) {
+      if (pending.length >= MAX_ATT) { toast("Six pièces jointes au maximum."); break; }
+      try {
+        if (/^image\//.test(f.type) && f.type !== "image/svg+xml") {
+          const big = await shrink(f, 1568, .85), thumb = await shrink(f, 160, .7);
+          pending.push({ k: "image", n: f.name || "image", m: "image/jpeg", d: big.split(",")[1], t: thumb });
+        } else if (f.type === "application/pdf") {
+          if (f.size > MAX_PDF) { toast("« " + f.name + " » dépasse 9 Mo."); continue; }
+          pending.push({ k: "pdf", n: f.name, m: "application/pdf", d: (await readAs(f, "readAsDataURL")).split(",")[1] });
+        } else if (/^text\/|json|xml|svg|csv/.test(f.type) || /\.(txt|md|csv|json|html|xml|svg)$/i.test(f.name)) {
+          if (f.size > MAX_TXT) { toast("« " + f.name + " » est trop volumineux (200 Ko)."); continue; }
+          pending.push({ k: "text", n: f.name, text: await readAs(f, "readAsText") });
+        } else toast("Type de fichier non pris en charge : " + f.name);
+      } catch { toast("Impossible de lire « " + (f.name || "fichier") + " »."); }
+    }
+    drawAtts(); updateSend();
+  }
+  function drawAtts() {
+    const box = $("atts"); box.hidden = !pending.length; box.textContent = "";
+    pending.forEach((a, i) => {
+      const chip = el("div", { className: "att" }, a.t ? el("img", { src: a.t, alt: "" }) : el("span", { className: "fi", innerHTML: ic("file") }), el("span", { textContent: a.n, title: a.n }));
+      const x = el("button", { type: "button", ariaLabel: "Retirer", innerHTML: ic("close") }); x.onclick = () => { pending.splice(i, 1); drawAtts(); updateSend(); }; chip.append(x); box.append(chip);
+    });
+  }
+  $("attach").onclick = () => $("file").click();
+  $("file").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
+  document.addEventListener("paste", e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
+  let dragDepth = 0;
+  document.addEventListener("dragenter", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { dragDepth++; $("drop-hint").hidden = false; } });
+  document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop-hint").hidden = true; } });
+  document.addEventListener("dragover", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) e.preventDefault(); });
+  document.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; $("drop-hint").hidden = true; if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
 
   // ---------- composeur ----------
   const input = $("input"), send = $("send"), ctx = $("ctx");
   ctx.append(el("option", { value: "", textContent: "Toutes les applications" }));
   [...new Set((window.SCOUTHUB_APPS || []).filter(a => !a.local).map(a => a.name))].sort((a, b) => a.localeCompare(b, "fr")).forEach(n => ctx.append(el("option", { value: n, textContent: n })));
+  $("mode").value = prefs.style;
+  const syncWeb = () => { $("web").setAttribute("aria-pressed", String(webOn)); };
+  $("web").onclick = () => { webOn = !webOn; syncWeb(); };
+  syncWeb();
   function notice(text, err) { const n = $("notice"); n.hidden = !text; n.textContent = text || ""; n.classList.toggle("err", !!err); }
-  $("soon").hidden = CFG.live;
-  function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; $("count").textContent = input.value.length > 4500 ? input.value.length + " / 6000" : ""; send.disabled = busy || !input.value.trim() || (current && current.example); }
+  function updateSend() {
+    send.classList.toggle("stop", busy); send.innerHTML = ic(busy ? "stop" : "send"); send.setAttribute("aria-label", busy ? "Arrêter" : "Envoyer");
+    send.disabled = !busy && (!(input.value.trim() || pending.length) || (current && current.example));
+  }
+  function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; $("count").textContent = input.value.length > 6000 ? input.value.length + " / 8000" : ""; updateSend(); }
   input.addEventListener("input", autosize);
-  input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); } });
-  $("attach").onclick = () => $("file").click();
-  $("file").onchange = e => { const names = [...e.target.files].map(f => f.name).join(", "); e.target.value = ""; if (names) toast(CFG.live ? "Pièces jointes : " + names : "Les pièces jointes seront prises en charge à l’ouverture de ChatGDB."); };
+  input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!busy) $("form").requestSubmit(); } });
 
-  async function ask() {
-    busy = true; autosize(); drawThread(); notice();
+  // dictée vocale (si le navigateur la propose)
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null;
+  if (SR) {
+    $("mic").hidden = false;
+    $("mic").onclick = () => {
+      if (rec) { rec.stop(); return; }
+      rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = false; rec.continuous = true; const base = input.value ? input.value + " " : "";
+      rec.onresult = e => { input.value = base + [...e.results].map(r => r[0].transcript).join(" "); autosize(); };
+      rec.onend = () => { rec = null; $("mic").classList.remove("rec"); }; rec.onerror = () => { rec = null; $("mic").classList.remove("rec"); };
+      $("mic").classList.add("rec"); try { rec.start(); } catch { rec = null; $("mic").classList.remove("rec"); }
+    };
+  }
+
+  // ---------- appel au serveur ----------
+  async function chatCall(payload, signal) {
+    const API = window.SCOUTHUB_API; if (!API) throw new Error("Le serveur ScoutHub n’est pas configuré.");
+    let res; try { res = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "chat", token: Hub.token, ...payload }), signal }); }
+    catch (e) { if (e.name === "AbortError") throw e; throw new Error("Serveur injoignable."); }
+    let out; try { out = await res.json(); } catch { throw new Error("Réponse invalide du serveur."); }
+    if (!out.ok) { if (/Session expirée/.test(out.error)) Hub.toLogin(); throw new Error(out.error || "Erreur."); }
+    return out;
+  }
+  // Historique envoyé : les pièces jointes complètes ne partent qu'avec le dernier message ; avant, seule leur mention.
+  function history(fullAtts) {
+    const list = current.messages.slice(-24), lastUser = list.map(m => m.role).lastIndexOf("user");
+    return list.map((m, i) => {
+      if (m.role !== "user") return { role: "assistant", text: m.text };
+      let text = m.text; const o = { role: "user" };
+      if (i === lastUser && fullAtts) {
+        o.images = fullAtts.filter(a => a.k === "image").map(a => ({ m: a.m, d: a.d })); o.docs = fullAtts.filter(a => a.k === "pdf").map(a => ({ n: a.n, m: a.m, d: a.d }));
+        fullAtts.filter(a => a.k === "text").forEach(a => { text += `\n\n[Fichier joint : ${a.n}]\n${a.text}`; });
+      } else if (m.atts && m.atts.length) text += "\n\n[Pièces jointes précédentes : " + m.atts.map(a => a.n).join(", ") + "]";
+      o.text = text; return o;
+    });
+  }
+  async function ask(fullAtts) {
+    busy = true; abort = new AbortController(); updateSend(); drawThread(); notice();
     try {
-      // Action serveur « chat » : à créer à la mise en route (vérifie session, rôle et crédits, appelle le modèle).
-      const out = await Hub.call("chat", { app: ctx.value, style: $("mode").value, messages: current.messages.slice(-24).map(m => ({ role: m.role, text: m.text })) });
-      current.messages.push({ role: "assistant", text: String(out.text || ""), time: Date.now() });
+      const out = await chatCall({ app: ctx.value, style: $("mode").value, custom: prefs.custom, web: webOn, messages: history(fullAtts) }, abort.signal);
+      current.messages.push({ role: "assistant", text: String(out.text || ""), sources: out.sources || [], searches: out.searches || [], time: Date.now() });
       if (out.credits) credits(out.credits);
       current.updated = Date.now();
-    } catch (e) { notice(e.message, true); }
-    finally { busy = false; persist(); drawList(); drawThread(); autosize(); const last = current.messages[current.messages.length - 1]; if (last && last.role !== "user") { const a = parse(last.text).filter(s => s.t === "art").pop(); if (a) openArt(current, a.id, versionsOf(current, a.id).length - 1); } }
+    } catch (e) { if (e.name !== "AbortError") notice(e.message, true); }
+    finally {
+      busy = false; abort = null; persist(); drawList(); drawThread(); updateSend();
+      const last = current.messages[current.messages.length - 1];
+      if (last && last.role !== "user") { const a = parse(last.text).filter(s => s.t === "art").pop(); if (a) openArt(current, a.id, versionsOf(current, a.id).length - 1); }
+    }
   }
-  function regenerate() { if (!CFG.live || busy) return; if (current.messages.at(-1).role !== "user") current.messages.pop(); ask(); }
+  function regenerate() { if (busy || !live) return; if (current.messages.at(-1).role !== "user") current.messages.pop(); ask(null); }
+  function editMsg(i, body) {
+    const m = current.messages[i], bub = body.querySelector(".bubble"), acts = body.querySelector(".actions"); if (acts) acts.hidden = true;
+    const box = el("div", { className: "edit-box" }), ta = el("textarea", { value: m.text }), ok = el("button", { className: "btn primary", type: "button", textContent: "Envoyer" }), no = el("button", { className: "btn", type: "button", textContent: "Annuler" });
+    no.onclick = () => drawThread(false);
+    ok.onclick = () => { const t = ta.value.trim(); if (!t) return; current.messages.length = i; current.messages.push({ role: "user", text: t, atts: m.atts, time: Date.now() }); ask(null); };
+    box.append(ta, el("div", {}, no, ok)); bub.replaceWith(box); ta.focus();
+  }
   $("form").addEventListener("submit", ev => {
-    ev.preventDefault(); const text = input.value.trim(); if (!text || busy) return;
-    if (!CFG.live) return notice("ChatGDB n’est pas encore activé : votre message n’a pas été envoyé. L’ouverture est prévue prochainement.");
-    if (!current || current.example) { current = { id: String(Date.now()), title: text.slice(0, 60), updated: Date.now(), messages: [] }; convs.unshift(current); $("title").textContent = current.title; $("badge").hidden = true; }
-    current.messages.push({ role: "user", text, time: Date.now() }); current.updated = Date.now(); input.value = ""; ask();
+    ev.preventDefault();
+    if (busy) { if (abort) abort.abort(); return; }
+    const text = input.value.trim(); if (!text && !pending.length) return;
+    if (!live) return notice("ChatGDB n’est pas encore activé : votre message n’a pas été envoyé. L’ouverture est prévue prochainement.");
+    if (!current || current.example) { current = { id: String(Date.now()), title: (text || pending[0].n).slice(0, 60), updated: Date.now(), messages: [] }; convs.unshift(current); $("title").textContent = current.title; $("badge").hidden = true; $("pin").hidden = false; $("export").hidden = false; }
+    const sent = pending; pending = []; drawAtts();
+    current.messages.push({ role: "user", text: text || "Voici une pièce jointe.", atts: sent.map(a => ({ n: a.n, k: a.k, t: a.t || "" })), time: Date.now() });
+    current.updated = Date.now(); input.value = ""; autosize(); ask(sent);
   });
+  // clic sur « arrêter »
+  send.addEventListener("click", e => { if (busy) { e.preventDefault(); if (abort) abort.abort(); } });
 
   document.addEventListener("keydown", e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("new").click(); }

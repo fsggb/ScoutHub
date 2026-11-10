@@ -1,0 +1,7 @@
+# Miroirs hebdomadaires : un dépôt d'application (site statique) cloné dans un dossier du site ScoutHub.
+# Format : <dépôt de l'organisation fsggb> <dossier dans https://fsggb.github.io/ScoutHub/>
+# Les applications construites à la compilation (Rust : ScoutCAD, ScoutDraft, ScoutOffice, ScoutCraft) ne peuvent pas
+# être clonées ainsi : leur dépôt ne contient pas le site, il est produit par leur propre déploiement.
+CathIA CathIA
+ScoutMap ScoutMap
+ScoutCloud ScoutCloud
