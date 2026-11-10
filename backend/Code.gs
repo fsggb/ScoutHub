@@ -153,6 +153,7 @@ var ACTIONS = {
       if (etat.fenetre.reste <= 0) fail_('Limite de la session de ' + CHAT_FENETRE_H + ' h atteinte. Elle se renouvelle ' + etat.fenetre.renouvellement + '.');
       if (etat.semaine.reste <= 0) fail_('Limite de la semaine atteinte. Elle se renouvelle ' + etat.semaine.renouvellement + '.');
     }
+    _chatRole_ = role;
     var rep = chatAppeler_(r, admin);
     var cout = chatCout_(rep.usage, rep.nbRecherches, rep.modele);
     creditsDebiter_(email, cout, rep.usage, rep.nbRecherches, rep.modele);
@@ -563,8 +564,9 @@ var CHAT_OUTILS_BIBLIO = [
   { name: 'lire_document', description: "Lit un document de la bibliothèque (identifiant donné par chercher_bibliotheque) : texte pour les documents Google et fichiers texte, document complet pour les PDF.", input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }
 ];
 function biblioActive_() { var p = props_(); return !!(p.getProperty('BIBLIO_API') && p.getProperty('BIBLIO_CLE')); }
+var _chatRole_ = 'membre';      // rôle du compte qui pose la question : la bibliothèque filtre ses rubriques en conséquence
 function biblioAppel_(action, donnees) {
-  var p = props_(), corps = { action: action, cle: p.getProperty('BIBLIO_CLE') };
+  var p = props_(), corps = { action: action, cle: p.getProperty('BIBLIO_CLE'), role: _chatRole_ };
   Object.keys(donnees).forEach(function (k) { corps[k] = donnees[k]; });
   var res = UrlFetchApp.fetch(p.getProperty('BIBLIO_API'), { method: 'post', contentType: 'text/plain;charset=utf-8', muteHttpExceptions: true, payload: JSON.stringify(corps) });
   var j; try { j = JSON.parse(res.getContentText()); } catch (e) { throw new Error('Bibliothèque injoignable.'); }

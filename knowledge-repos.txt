@@ -6,3 +6,6 @@ ScoutDraft
 ScoutCAD
 ScoutMap
 CathIA
+ChatGDB
+ScoutBibliotheque
+ScoutRendezVous

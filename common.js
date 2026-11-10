@@ -41,7 +41,8 @@
 
     toLogin() {
       store.set(null);
-      const rel = location.pathname.startsWith(ROOT.pathname) ? location.pathname.slice(ROOT.pathname.length) : Hub.here();
+      // Hors du dossier de ScoutHub (ex. /ChatGDB/ publié ailleurs) : adresse absolue du site ; dedans : adresse relative au portail.
+      const rel = location.pathname.startsWith(ROOT.pathname) ? location.pathname.slice(ROOT.pathname.length) : location.pathname;
       location.replace(ROOT.href + "index.html?next=" + encodeURIComponent(rel + location.search));
     },
 
