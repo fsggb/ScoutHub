@@ -1,7 +1,7 @@
 // Identifiant client OAuth « Application Web » du projet Google Cloud (identifiant PUBLIC, pas une clé secrète).
 // Tant qu'il est vide, le bouton « Continuer avec Google » reste masqué. Le même identifiant doit aussi être
 // enregistré dans la propriété de script GOOGLE_CLIENT_ID du serveur Apps Script (backend/Code.gs).
-window.SCOUTHUB_GOOGLE_CLIENT_ID = "727360235431-74tm8v7osufevtbc4clsu5f36lm93j3j.apps.googleusercontent.com";
+window.SCOUTHUB_GOOGLE_CLIENT_ID = "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com";
 // ChatGDB : assistant IA de la fédération. « live: false » = interface seule, envoi désactivé.
 // Crédits (unité : 1 crédit ≈ une question courte). Limites glissantes façon Claude : une par session de 5 heures
 // et une par semaine. Les valeurs sont des points de départ à ajuster ; voir docs/projet-chatgdb.md.
