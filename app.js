@@ -66,6 +66,10 @@
 
   function showAuth() {
     setupGoogle();
+    if (new URLSearchParams(location.search).has("diag")) {   // ?diag=1 : montre ce que la page envoie à Google
+      const id = window.SCOUTHUB_GOOGLE_CLIENT_ID || "(aucun)";
+      $("g-diag").hidden = false; $("g-diag").textContent = "Diagnostic Google — identifiant : " + id + " · origine du site : " + location.origin + " (à déclarer dans « Origines JavaScript autorisées »)";
+    }
     Hub.renderBar(null);
     $("home").hidden = true; $("auth").hidden = false;
     if (!window.SCOUTHUB_API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
@@ -73,16 +77,8 @@
   }
 
   // ---------- accueil ----------
-  function appList() {
-    const apps = [...(window.SCOUTHUB_APPS || [])];
-    const mine = [];
-    if (Hub.user) mine.push({ group: "Mon espace", name: "Mon compte", desc: "Profil et mot de passe", url: "compte.html", icon: "assets/icons/Compte.svg", local: true });
-    if (Hub.user && Hub.user.role === "admin")
-      mine.push({ group: "Mon espace", name: "Administration", desc: "Comptes et utilisateurs", url: "admin.html", icon: "assets/icons/Admin.svg", local: true });
-    const at = apps.findIndex(a => a.group === "Mon espace") + 1; // juste après ScoutCloud, dans « Mon espace »
-    apps.splice(at, 0, ...mine);
-    return apps;
-  }
+  // « Mon compte » et « Administration » sont déjà dans la barre du haut : pas de tuile en plus (une seule ligne en tête).
+  function appList() { return [...(window.SCOUTHUB_APPS || [])]; }
 
   function tile(a) {
     const link = document.createElement("a");
@@ -103,12 +99,20 @@
     const all = appList(), shown = all.filter(a => !q || (a.name + " " + a.desc + " " + a.group).toLowerCase().includes(q));
     const groups = [];
     shown.forEach(a => { let g = groups.find(x => x.name === a.group); if (!g) groups.push(g = { name: a.group, items: [] }); g.items.push(a); });
+    // « Mon espace », « Assistant » et « Boutique » partagent une même ligne pour gagner de la place en hauteur.
+    const TOP = ["Mon espace", "Assistant", "Boutique"];
+    const topGroups = groups.filter(g => TOP.includes(g.name)).sort((x, y) => TOP.indexOf(x.name) - TOP.indexOf(y.name));
+    const row = document.createElement("div"); row.className = "group-row";
+    groups.sort((x, y) => (TOP.includes(x.name) ? 0 : 1) - (TOP.includes(y.name) ? 0 : 1) || 0);
+    let rowAdded = false;
     groups.forEach(g => {
       const section = document.createElement("section"); section.className = "app-group";
+      if (TOP.includes(g.name)) { if (g.items.length > 1) section.classList.add("wide"); }
       const grid = document.createElement("div"); grid.className = "grid-apps";
       // Les applications mises en avant restent dans leur section, en tête.
       g.items.sort((x, y) => (y.featured ? 1 : 0) - (x.featured ? 1 : 0)).forEach(a => grid.append(tile(a)));
-      section.append(Object.assign(document.createElement("h2"), { textContent: g.name }), grid); box.append(section);
+      section.append(Object.assign(document.createElement("h2"), { textContent: g.name }), grid);
+      if (TOP.includes(g.name)) { if (!rowAdded) { box.append(row); rowAdded = true; } row.append(section); } else box.append(section);
     });
     $("none").hidden = shown.length > 0;
   }

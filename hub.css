@@ -40,3 +40,10 @@
 .g-block{margin:0 0 6px}.g-btn{display:flex;justify-content:center;min-height:44px}
 .g-or{display:flex;align-items:center;gap:10px;margin:14px 0 4px;color:#6a6c79;font-size:12px}
 .g-or::before,.g-or::after{content:"";flex:1;height:1px;background:#e7e4dc}
+
+/* Première ligne : Mon espace, Assistant, Boutique côte à côte */
+.group-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:0 22px;align-items:start}
+.group-row .app-group{min-width:0}.group-row .app-group.wide{grid-column:span 2}
+.group-row .grid-apps{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+@media(max-width:640px){.group-row .app-group.wide{grid-column:auto}}
+.g-diag{margin:10px 0 0;padding:8px 10px;background:#fffdf4;border:1px dashed var(--gold);border-radius:8px;text-align:left;word-break:break-all}

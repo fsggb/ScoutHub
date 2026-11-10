@@ -19,7 +19,7 @@ const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
   { group: "Mon espace", name: "ScoutCloud", desc: "Vos fichiers dans Google Drive (bientôt)", url: O + "ScoutCloud/", icon: "assets/icons/ScoutCloud.svg" },
   { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération (bientôt)", url: "chatgdb/", icon: "assets/icons/ChatGDB.png", local: true },
-  { group: "Boutique", name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
+  { group: "Boutique", featured: true, name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: O + "ScoutOffice/Excel/", icon: "assets/icons/Excel.png" },
   { group: "Bureautique", name: "PowerPoint", desc: "Présentations et diaporamas", url: O + "ScoutOffice/PowerPoint/", icon: "assets/icons/PowerPoint.png" },
