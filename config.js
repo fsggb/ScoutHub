@@ -7,9 +7,9 @@ window.SCOUTHUB_GOOGLE_CLIENT_ID = "599247454430-5q2iim2k770v5159vphuael9sl6k160
 // et une par semaine. Les valeurs sont des points de départ à ajuster ; voir docs/projet-chatgdb.md.
 window.SCOUTHUB_CHATGDB = {
   live: false,
-  windowHours: 5, windowCredits: 30, weekCredits: 150,
+  windowHours: 5, windowCredits: 30, weekCredits: 60,
   // Crédits gagnés en utilisant les outils : 1 crédit par tranche de 5 minutes d'activité réelle, plafonné par semaine.
-  earn: { minutes: 5, credits: 1, weekCap: 50 }
+  earn: { minutes: 5, credits: 1, weekCap: 40 }
 };
 // Adresse du déploiement Apps Script (backend/Code.gs), terminée par /exec.
 window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlrF2CdMNFbkUhXvihwNoTMm67IH0wOk7QZZL_nIfMhWaQinR9j-oFQ/exec";
@@ -21,7 +21,7 @@ window.SCOUTHUB_APPS = [
   { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération (bientôt)", url: "ChatGDB/", icon: "assets/icons/ChatGDB.png", local: true },
   { group: "Boutique", featured: true, name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Ressources et aide", name: "Bibliothèque", desc: "Documents et ressources de la fédération", url: "ScoutBibliotheque/", icon: "assets/icons/Bibliotheque.svg", local: true },
-  { group: "Ressources et aide", name: "Rendez-vous informatique", desc: "Un coup de main du service informatique", url: "ScoutRendezVous/", icon: "assets/icons/RendezVous.svg", local: true },
+  { group: "Ressources et aide", name: "Aide", desc: "Un souci avec une application ? Écrire au service informatique", url: "aide.html", icon: "assets/icons/Aide.svg", local: true },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: O + "ScoutOffice/Word/", icon: "assets/icons/Word.png" },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: O + "ScoutOffice/Excel/", icon: "assets/icons/Excel.png" },
   { group: "Bureautique", name: "PowerPoint", desc: "Présentations et diaporamas", url: O + "ScoutOffice/PowerPoint/", icon: "assets/icons/PowerPoint.png" },

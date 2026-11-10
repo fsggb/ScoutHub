@@ -5,7 +5,6 @@
 # être clonées ainsi : leur dépôt ne contient pas le site, il est produit par leur propre déploiement.
 ChatGDB ChatGDB
 ScoutBibliotheque ScoutBibliotheque
-ScoutRendezVous ScoutRendezVous
 CathIA CathIA
 ScoutMap ScoutMap
 ScoutCloud ScoutCloud

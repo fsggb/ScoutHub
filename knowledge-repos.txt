@@ -1,11 +1,10 @@
 # Dépôts dont la fiche CHATGDB.md alimente l'assistant ChatGDB (une fiche par dépôt, à la racine).
 ScoutHub
 ScoutOffice
-ScoutCraft
+SoLeadWorks
 ScoutDraft
 ScoutCAD
 ScoutMap
 CathIA
 ChatGDB
 ScoutBibliotheque
-ScoutRendezVous
