@@ -33,9 +33,6 @@
       }
       td(date(u.created));
       const acts = td(null, "right");
-      const reset = Object.assign(document.createElement("button"), { type: "button", className: "ghost small", textContent: "Nouveau mot de passe" });
-      reset.onclick = () => { target = u; $("reset-who").textContent = u.email; $("reset-form").reset(); say($("reset-status"), ""); $("dlg-reset").showModal(); };
-      acts.append(reset);
       if (u.role !== "admin") {
         const del = Object.assign(document.createElement("button"), { type: "button", className: "text-danger", textContent: "Supprimer" });
         del.onclick = async () => {
@@ -53,12 +50,5 @@
   }
   $("filter").addEventListener("input", render);
   document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
-  $("reset-form").addEventListener("submit", async ev => {
-    ev.preventDefault();
-    try {
-      await Hub.call("adminReset", { email: target.email, newPassword: $("reset-pw").value });
-      $("dlg-reset").close(); say($("ad-status"), "Mot de passe de " + target.email + " réinitialisé.");
-    } catch (e) { say($("reset-status"), e.message, true); }
-  });
   load();
 })();

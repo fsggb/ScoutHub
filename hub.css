@@ -83,3 +83,6 @@
 .auth-trust{display:flex;gap:8px;align-items:center;margin:14px 0 0;font-size:12.5px;color:var(--text-secondary)}
 @media(max-width:720px){.auth-split{grid-template-columns:1fr}.auth-aside{padding:22px 22px 18px}.auth-aside ul,.auth-aside small{display:none}.auth-main{padding:22px 20px}}
 @media(prefers-reduced-motion:reduce){.pw-meter i{transition:none}}
+
+.code-input{font:600 28px/1 ui-monospace,Consolas,monospace;letter-spacing:.5em;text-align:center;padding:12px 8px 12px calc(8px + .5em)!important}
+.code-links{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 0}.code-links .text-button:disabled{color:#8a8c99;cursor:default}

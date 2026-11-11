@@ -23,8 +23,8 @@
  * Déploiement : Déployer > Nouveau déploiement > Application Web,
  *   exécuter en tant que « Moi », accès « Tout le monde ».
  *
- * Le stockage de fichiers sur GitHub a été supprimé : ce serveur ne gère plus que les comptes, les rôles
- * et les sessions. Les mots de passe ne sont jamais stockés en clair : sel aléatoire + SHA-256 itéré.
+ * Plus de stockage de fichiers, plus d'inscription ni de mot de passe : connexion par Google ou par code à 6 chiffres envoyé par e-mail,
+ * réservée aux adresses @fsggb.fr ; ce serveur gère les rôles, les sessions, ChatGDB et la mise en page du portail.
  * Les requêtes sont des POST JSON envoyés en text/plain (pas de pré-vol CORS).
  */
 var ADMIN_EMAIL = 'jb.combet@fsggb.fr';
@@ -34,14 +34,8 @@ var ADMIN_EMAIL = 'jb.combet@fsggb.fr';
 var ADMIN_GOOGLE = ['service-informatique@fsggb.fr'];
 var GOOGLE_DOMAINE = 'fsggb.fr';
 function adminProtege_(email) { return email === ADMIN_EMAIL || ADMIN_GOOGLE.indexOf(email) >= 0; }
-// Empreinte du mot de passe initial de l'administrateur (changez-le après la première connexion).
-var ADMIN_SALT = 'bbbe881e3ba73791ec4b1440211c592c';
-var ADMIN_HASH = 'd8620ec1d5b9b29559f1829b9cd29a705533090d784f01b303453054cb8a7bfe';
-// Change à chaque réinitialisation du mot de passe administrateur initial.
-var ADMIN_RESET_ID = '2026-11-03';
 // Rôles, du moins au plus privilégié. « user » (ancien nom) vaut « membre ».
 var ROLES = ['membre', 'parent', 'chef_unite', 'chef_groupe', 'admin'];
-var ROUNDS = 5000;
 var SESSION_DAYS = 30;
 // ---- ChatGDB ----
 var CHAT_MODELE = 'claude-haiku-5-5';
@@ -66,7 +60,7 @@ function doGet() {
 
 // Actions qui modifient des données : seules elles prennent le verrou. Les lectures (list, get, me, login...)
 // ne sont plus mises en file derrière un enregistrement de fichier, ce qui accélère nettement ScoutCloud.
-var WRITES = { ping: 1, register: 1, google: 1, changePassword: 1, adminReset: 1, adminDelete: 1, adminSetRole: 1, portailEcrire: 1 };
+var WRITES = { ping: 1, google: 1, codeVerifier: 1, adminDelete: 1, adminSetRole: 1, portailEcrire: 1 };
 
 function doPost(e) {
   var lock = null;
@@ -84,44 +78,50 @@ function doPost(e) {
 }
 
 var ACTIONS = {
-  register: function (r) {
-    var email = cleanEmail_(r.email);
-    if (ADMIN_GOOGLE.indexOf(email) >= 0) fail_('Cette adresse est réservée : utilisez « Continuer avec Google ».');
-    checkPassword_(r.password);
-    if (getUser_(email)) fail_('Un compte existe déjà pour cette adresse.');
-    saveUser_(email, newCredential_(r.password), { role: 'membre', created: Date.now() });
-    return { ok: true, token: newSession_(email), user: publicUser_(email) };
-  },
-  login: function (r) {
-    var email = cleanEmail_(r.email);
-    if (ADMIN_GOOGLE.indexOf(email) >= 0) fail_('Cette adresse se connecte uniquement avec Google.');
-    throttle_(email);
-    var u = getUser_(email);
-    if (!u || !verify_(u, r.password)) { recordFail_(email); fail_('Adresse ou mot de passe incorrect.'); }
-    clearFails_(email);
-    return { ok: true, token: newSession_(email), user: publicUser_(email) };
-  },
-  // Connexion Google (Google Identity Services) : le navigateur envoie le jeton d'identité (« credential »),
-  // vérifié ici auprès de Google ; le compte est créé au premier passage. Inactive sans GOOGLE_CLIENT_ID.
+  // Plus d'inscription ni de mot de passe : on se connecte avec Google ou avec un code reçu par e-mail, et seulement avec une adresse
+  // @fsggb.fr. Les autres personnes n'ont pas besoin de compte : elles voient les applications publiques, sans savoir que d'autres existent.
+  // Connexion Google (Google Identity Services) : le navigateur envoie le jeton d'identité (« credential »), vérifié ici auprès de Google.
   google: function (r) {
     var clientId = props_().getProperty('GOOGLE_CLIENT_ID');
     if (!clientId) fail_('La connexion Google n\'est pas encore activée.');
     var info = verifyGoogle_(r.credential, clientId);
-    var email = cleanEmail_(info.email), u = getUser_(email);
-    if (ADMIN_GOOGLE.indexOf(email) >= 0) {          // administrateur « Google seulement » : domaine de la fédération exigé
-      if (String(info.hd || '').toLowerCase() !== GOOGLE_DOMAINE) fail_('Ce compte doit appartenir au domaine ' + GOOGLE_DOMAINE + '.');
-      var cred0 = u ? { salt: u.salt, hash: u.hash } : newCredential_(Utilities.getUuid() + Utilities.getUuid());
-      saveUser_(email, cred0, { role: 'admin', created: u ? u.created : Date.now(), name: (u && u.name) || info.name || '', google: true });
-      return { ok: true, token: newSession_(email), user: publicUser_(email) };
-    }
-    if (!u) {
-      // Pas de mot de passe : un sel aléatoire sans mot de passe connu rend la connexion par mot de passe impossible.
-      var cred = newCredential_(Utilities.getUuid() + Utilities.getUuid());
-      saveUser_(email, cred, { role: 'membre', created: Date.now(), name: info.name || '', google: true });
-    } else if (!u.google || (!u.name && info.name)) {
-      saveUser_(email, { salt: u.salt, hash: u.hash }, { role: u.role, created: u.created, name: u.name || info.name || '', google: true });
-    }
-    return { ok: true, token: newSession_(email), user: publicUser_(email) };
+    var email = cleanEmail_(info.email);
+    if (!estFsggb_(email) || String(info.hd || '').toLowerCase() !== GOOGLE_DOMAINE) fail_(MSG_DOMAINE);
+    return { ok: true, token: provisionner_(email, info.name, true), user: publicUser_(email) };
+  },
+  // Connexion par e-mail, étape 1 : un code à 6 chiffres est envoyé à l'adresse (valable 10 minutes).
+  codeDemander: function (r) {
+    var email = cleanEmail_(r.email);
+    if (!estFsggb_(email)) fail_(MSG_DOMAINE);
+    if (ADMIN_GOOGLE.indexOf(email) >= 0) fail_('Cette adresse se connecte uniquement avec Google.');
+    var cache = CacheService.getScriptCache(), id = sha_(email).slice(0, 24), now = Date.now();
+    var dernier = Number(cache.get('cl:' + id) || 0);
+    if (now - dernier < 45000) fail_('Un code vient d\'être envoyé : patientez un instant avant d\'en demander un autre.');
+    var n = Number(cache.get('cn:' + id) || 0);
+    if (n >= 5) fail_('Trop de demandes pour cette adresse. Réessayez dans une heure.');
+    var jour = Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyy-MM-dd'), kg = 'cg:' + jour, g = Number(props_().getProperty(kg) || 0);
+    if (g >= Number(props_().getProperty('CODE_QUOTA_JOUR') || 90)) fail_('Envoi de codes momentanément indisponible : réessayez demain ou utilisez Google.');
+    var code = ('000000' + (parseInt(sha_(Utilities.getUuid() + Utilities.getUuid()).slice(0, 8), 16) % 1000000)).slice(-6);
+    var sel = sha_(Utilities.getUuid()).slice(0, 16);
+    cache.put('cd:' + id, JSON.stringify({ h: sha_(sel + ':' + email + ':' + code), s: sel, n: 0 }), 600);
+    cache.put('cl:' + id, String(now), 600); cache.put('cn:' + id, String(n + 1), 3600);
+    props_().setProperty(kg, String(g + 1));
+    MailApp.sendEmail({ to: email, name: 'ScoutHub FSGGB', subject: 'Votre code de connexion ScoutHub : ' + code,
+      body: 'Votre code de connexion ScoutHub : ' + code + '\n\nIl est valable 10 minutes et ne sert qu\'une fois.\nSi vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message : personne ne peut se connecter sans ce code.\n\nFSGGB' });
+    return { ok: true };
+  },
+  // Étape 2 : le code est vérifié (5 essais au plus), la session est créée.
+  codeVerifier: function (r) {
+    var email = cleanEmail_(r.email);
+    if (!estFsggb_(email) || ADMIN_GOOGLE.indexOf(email) >= 0) fail_(MSG_DOMAINE);
+    var cache = CacheService.getScriptCache(), id = sha_(email).slice(0, 24), raw = cache.get('cd:' + id);
+    if (!raw) fail_('Code expiré ou inconnu : demandez-en un nouveau.');
+    var c = JSON.parse(raw), code = String(r.code || '').replace(/\D/g, '');
+    if (code.length !== 6) fail_('Le code comporte 6 chiffres.');
+    if (c.n >= 5) { cache.remove('cd:' + id); fail_('Trop d\'essais : demandez un nouveau code.'); }
+    if (!egal_(sha_(c.s + ':' + email + ':' + code), c.h)) { c.n++; cache.put('cd:' + id, JSON.stringify(c), 600); fail_('Code incorrect.'); }
+    cache.remove('cd:' + id);
+    return { ok: true, token: provisionner_(email, '', false), user: publicUser_(email) };
   },
   // Configuration publique pour le navigateur (la connexion Google est-elle prête ?).
   config: function () {
@@ -221,11 +221,11 @@ var ACTIONS = {
   // Mise en page du portail (sections, ordre, textes, logos, applications masquées) : fichier portail.json du dépôt de données privé.
   // Lecture ouverte à tous (l'accueil est public) mais les applications masquées ne sont envoyées qu'à l'administrateur, qui les voit signalées.
   portailLire: function (r) {
-    var admin = false;
-    if (r.token) { try { admin = getUser_(session_(r.token)).role === 'admin'; } catch (e) { admin = false; } }
+    var admin = false, connecte = false;
+    if (r.token) { try { var em = session_(r.token); connecte = true; admin = getUser_(em).role === 'admin'; } catch (e) { admin = false; connecte = false; } }
     var m = portailCharger_();
-    if (m && !admin) m = portailPublic_(m);
-    return { ok: true, portail: m, admin: admin };
+    if (m && !admin) m = portailPublic_(m, connecte);
+    return { ok: true, portail: m, admin: admin, connecte: connecte };
   },
   portailEcrire: function (r) {
     requireAdmin_(r.token);
@@ -245,7 +245,7 @@ var ACTIONS = {
     if (!u) fail_('Compte introuvable.');
     if (ROLES.indexOf(r.role) < 0) fail_('Rôle inconnu.');
     if (adminProtege_(email) && r.role !== 'admin') fail_('Ce compte administrateur garde son rôle.');
-    saveUser_(email, { salt: u.salt, hash: u.hash }, { role: r.role, created: u.created, name: u.name, google: u.google });
+    saveUser_(email, { role: r.role, created: u.created, name: u.name, google: u.google });
     return { ok: true };
   },
   logout: function (r) {
@@ -257,26 +257,9 @@ var ACTIONS = {
   me: function (r) {
     return { ok: true, user: publicUser_(session_(r.token)) };
   },
-  changePassword: function (r) {
-    var email = session_(r.token);
-    var u = getUser_(email);
-    if (!verify_(u, r.oldPassword)) fail_('Mot de passe actuel incorrect.');
-    checkPassword_(r.newPassword);
-    saveUser_(email, newCredential_(r.newPassword), u);
-    return { ok: true };
-  },
   adminList: function (r) {
     requireAdmin_(r.token);
     return { ok: true, users: allUsers_() };
-  },
-  adminReset: function (r) {
-    requireAdmin_(r.token);
-    var email = cleanEmail_(r.email);
-    var u = getUser_(email);
-    if (!u) fail_('Compte introuvable.');
-    checkPassword_(r.newPassword);
-    saveUser_(email, newCredential_(r.newPassword), u);
-    return { ok: true };
   },
   adminDelete: function (r) {
     requireAdmin_(r.token);
@@ -297,41 +280,33 @@ function sha_(s) {
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8)
     .map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
 }
-function hashPassword_(salt, pw) {
-  var st = salt + ':' + pw;
-  for (var i = 0; i < ROUNDS; i++) st = sha_(st + salt + pw);
-  return st;
-}
-function newCredential_(pw) {
-  var salt = sha_(Utilities.getUuid() + Utilities.getUuid() + Date.now()).slice(0, 32);
-  return { salt: salt, hash: hashPassword_(salt, pw) };
-}
-function verify_(u, pw) {
-  return !!u && typeof pw === 'string' && hashPassword_(u.salt, pw) === u.hash;
-}
 function cleanEmail_(v) {
   var e = String(v || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) || e.length > 120) fail_('Adresse e-mail invalide.');
   return e;
 }
-function checkPassword_(pw) {
-  if (typeof pw !== 'string' || pw.length < 8 || pw.length > 200) fail_('Le mot de passe doit contenir au moins 8 caractères.');
-}
 function getUser_(email) {
   var raw = props_().getProperty('u:' + email), found = raw ? JSON.parse(raw) : null;
-  if (found && (email !== ADMIN_EMAIL || found.rid === ADMIN_RESET_ID)) return found;
-  if (email === ADMIN_EMAIL) {
-    var admin = { salt: ADMIN_SALT, hash: ADMIN_HASH, role: 'admin', created: Date.now(), rid: ADMIN_RESET_ID };
+  if (found) return found;
+  if (email === ADMIN_EMAIL) {            // l'administrateur existe d'office ; il prouve son adresse par Google ou par code
+    var admin = { role: 'admin', created: Date.now(), name: '', google: false };
     props_().setProperty('u:' + email, JSON.stringify(admin));
     return admin;
   }
   return null;
 }
-function saveUser_(email, cred, base) {
-  props_().setProperty('u:' + email, JSON.stringify({
-    salt: cred.salt, hash: cred.hash, role: adminProtege_(email) ? 'admin' : normRole_(base.role), created: base.created || Date.now(), rid: ADMIN_RESET_ID,
-    name: base.name || '', google: !!base.google
-  }));
+function saveUser_(email, base) {
+  props_().setProperty('u:' + email, JSON.stringify({ role: adminProtege_(email) ? 'admin' : normRole_(base.role), created: base.created || Date.now(), name: base.name || '', google: !!base.google }));
+}
+var MSG_DOMAINE = 'La connexion est réservée aux adresses @fsggb.fr. Les applications publiques restent accessibles sans compte.';
+function estFsggb_(email) { return /^[^@\s]+@fsggb\.fr$/.test(String(email || '')); }
+function egal_(a, b) { a = String(a); b = String(b); if (a.length !== b.length) return false; var d = 0; for (var i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
+// Crée le compte au premier passage (aucune inscription : l'adresse a été prouvée par Google ou par le code) puis ouvre une session.
+function provisionner_(email, nom, google) {
+  var u = getUser_(email);
+  if (!u) saveUser_(email, { role: 'membre', created: Date.now(), name: nom || '', google: !!google });
+  else if ((google && !u.google) || (!u.name && nom)) saveUser_(email, { role: u.role, created: u.created, name: u.name || nom || '', google: !!u.google || !!google });
+  return newSession_(email);
 }
 function normRole_(r) { return r === 'user' || !r ? 'membre' : (ROLES.indexOf(r) >= 0 ? r : 'membre'); }
 function publicUser_(email) {
@@ -363,7 +338,7 @@ function sessionUncached_(token) {
   var raw = props_().getProperty('s:' + sha_(String(token || '')));
   if (!raw) fail_('Session expirée : reconnectez-vous.');
   var s = JSON.parse(raw);
-  if (s.exp < Date.now() || !getUser_(s.email)) { props_().deleteProperty('s:' + sha_(String(token))); fail_('Session expirée : reconnectez-vous.'); }
+  if (s.exp < Date.now() || !estFsggb_(s.email) || !getUser_(s.email)) { props_().deleteProperty('s:' + sha_(String(token))); fail_('Session expirée : reconnectez-vous.'); }
   return s.email;
 }
 function verifyGoogle_(credential, clientId) {
@@ -794,8 +769,10 @@ function portailCharger_() {
   if (res.code !== 200) return null;
   try { var m = JSON.parse(res.text); portailCacheEcrire_(res.text); return m; } catch (e) { return null; }
 }
-function portailPublic_(m) {
-  var apps = (m.apps || []).filter(function (a) { return !a.masque; });
+// Applications masquées : jamais envoyées (sauf à l'administrateur). Applications protégées : réservées aux comptes connectés (@fsggb.fr) ;
+// pour les autres personnes elles n'existent tout simplement pas dans la liste.
+function portailPublic_(m, connecte) {
+  var apps = (m.apps || []).filter(function (a) { return !a.masque && (connecte || !a.protege); });
   var utiles = {}; apps.forEach(function (a) { utiles[a.section] = 1; });
   return { v: m.v, maj: m.maj, sections: (m.sections || []).filter(function (x) { return utiles[x.id]; }), apps: apps };
 }
@@ -817,7 +794,7 @@ function portailNettoyer_(m) {
     if (!portailIconeOk_(a.icone)) fail_('Logo invalide pour « ' + texte(a.nom, 40) + ' » (PNG, JPEG ou WebP de 150 Ko au plus).');
     total += String(a.icone).length;
     var nom = texte(a.nom, 40); if (!nom) fail_('Une application n\'a pas de nom.');
-    return { id: id, section: a.section, nom: nom, desc: texte(a.desc, 140), url: a.url, icone: a.icone, crop: !!a.crop, featured: !!a.featured, masque: !!a.masque, local: !!a.local };
+    return { id: id, section: a.section, nom: nom, desc: texte(a.desc, 140), url: a.url, icone: a.icone, crop: !!a.crop, featured: !!a.featured, masque: !!a.masque, protege: !!a.protege, local: !!a.local };
   });
   if (total > 1500000) fail_('Logos trop volumineux au total.');
   return { v: 1, maj: new Date().toISOString(), sections: sections, apps: apps };

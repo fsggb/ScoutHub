@@ -15,7 +15,7 @@
     (window.SCOUTHUB_APPS || []).forEach(a => {
       let s = sections.find(x => x.titre === a.group);
       if (!s) sections.push(s = { id: slug(a.group), titre: a.group, haut: TOP.includes(a.group) });
-      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, local: !!a.local });
+      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, local: !!a.local });
     });
     return { v: 1, sections, apps };
   }
@@ -36,6 +36,8 @@
   const P = window.Portail = {
     TOP, slug, safeUrl, safeIcon, defaults, merge, valid, isAdmin: false, model: null,
     current() { return P.model || (P.model = merge(cached() || defaults())); },
+    // Connecté (compte @fsggb.fr) ? Sinon les applications protégées n'existent pas pour la personne (le serveur ne les envoie pas non plus).
+    connected: () => !!(window.Hub && Hub.token && Hub.cachedUser()),
     // Interroge le serveur ; appelle onChange(modèle) si la mise en page diffère de celle affichée.
     async refresh(onChange) {
       try {

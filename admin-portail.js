@@ -81,7 +81,7 @@
   function appCard(a) {
     const icon = P.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
     const card = el("div", { className: "pt-app" + (a.masque ? " masque" : ""), draggable: true });
-    card.append(el("img", { src: icon, alt: "" }), el("span", { className: "t" }, el("b", { textContent: a.nom }), el("small", { textContent: (a.masque ? "Masquée · " : "") + (a.featured ? "En avant · " : "") + a.url.replace(/^https:\/\//, "") })),
+    card.append(el("img", { src: icon, alt: "" }), el("span", { className: "t" }, el("b", { textContent: a.nom }), el("small", { textContent: (a.masque ? "Masquée · " : "") + (a.protege ? "Protégée · " : "") + (a.featured ? "En avant · " : "") + a.url.replace(/^https:\/\//, "") })),
       el("span", { className: "btns" },
         btn(a.masque ? "👁‍🗨" : "👁", a.masque ? "Afficher pour tout le monde" : "Masquer aux autres", () => { a.masque = !a.masque; render(); mark(); }),
         btn("←", "Reculer", () => moveApp(a, -1)), btn("→", "Avancer", () => moveApp(a, 1)),
@@ -97,12 +97,12 @@
   let logo = "";
   const origIcon = a => { const d = P.defaults().apps.find(x => x.id === a.id); return d ? d.icone : "assets/fsggb.png"; };
   function edit(a) {
-    editing = a || { id: "perso-" + Date.now().toString(36), section: m.sections[0].id, nom: "", desc: "", url: "", icone: "assets/fsggb.png", crop: false, featured: false, masque: false, local: false, _new: true };
+    editing = a || { id: "perso-" + Date.now().toString(36), section: m.sections[0].id, nom: "", desc: "", url: "", icone: "assets/fsggb.png", crop: false, featured: false, masque: false, local: false, protege: false, _new: true };
     $("app-dlg-title").textContent = editing._new ? "Nouveau lien d’application" : editing.nom;
     $("ap-nom").value = editing.nom; $("ap-desc").value = editing.desc; $("ap-url").value = editing.url;
     const sel = $("ap-sec"); sel.textContent = ""; m.sections.forEach(s => sel.append(el("option", { value: s.id, textContent: s.titre, selected: s.id === editing.section })));
     logo = editing.icone; $("ap-img").src = P.safeIcon(logo) ? logo : "assets/fsggb.png"; $("ap-file").value = "";
-    $("ap-crop").checked = !!editing.crop; $("ap-feat").checked = !!editing.featured; $("ap-new").checked = !editing.local; $("ap-mask").checked = !!editing.masque;
+    $("ap-crop").checked = !!editing.crop; $("ap-feat").checked = !!editing.featured; $("ap-new").checked = !editing.local; $("ap-mask").checked = !!editing.masque; $("ap-prot").checked = !!editing.protege;
     $("ap-del").hidden = !String(editing.id).startsWith("perso-") || !!editing._new; $("ap-orig").hidden = !!editing._new || !P.defaults().apps.some(x => x.id === editing.id);
     say($("ap-status"), ""); $("dlg-app").showModal();
   }
@@ -123,7 +123,7 @@
     const url = $("ap-url").value.trim();
     if (!P.safeUrl(url)) return say($("ap-status"), "Adresse invalide : https://… ou un dossier du portail (ex. Word/).", true);
     if (!P.safeIcon(logo)) return say($("ap-status"), "Logo invalide.", true);
-    Object.assign(editing, { nom: $("ap-nom").value.trim(), desc: $("ap-desc").value.trim(), url, section: $("ap-sec").value, icone: logo, crop: $("ap-crop").checked, featured: $("ap-feat").checked, local: !$("ap-new").checked, masque: $("ap-mask").checked });
+    Object.assign(editing, { nom: $("ap-nom").value.trim(), desc: $("ap-desc").value.trim(), url, section: $("ap-sec").value, icone: logo, crop: $("ap-crop").checked, featured: $("ap-feat").checked, local: !$("ap-new").checked, masque: $("ap-mask").checked, protege: $("ap-prot").checked });
     if (!editing.nom) return say($("ap-status"), "Le nom est obligatoire.", true);
     if (editing._new) { delete editing._new; m.apps.push(editing); } else { const i = m.apps.findIndex(x => x.id === editing.id); if (i >= 0) m.apps[i] = editing; }
     delete editing.nouveau; $("dlg-app").close(); render(); mark();

@@ -17,10 +17,10 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
-  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération", url: "ChatGDB/", icon: "assets/icons/ChatGDB.png", local: true },
+  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération", url: "ChatGDB/", icon: "assets/icons/ChatGDB.png", protege: true, local: true },
   { group: "Boutique", featured: true, name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
-  { group: "Ressources et aide", name: "Bibliothèque", desc: "Documents et ressources de la fédération", url: "ScoutBibliotheque/", icon: "assets/icons/Bibliotheque.svg", local: true },
-  { group: "Ressources et aide", name: "Aide", desc: "Un souci avec une application ? Écrire au service informatique", url: "aide.html", icon: "assets/icons/Aide.svg", local: true },
+  { group: "Ressources et aide", name: "Bibliothèque", desc: "Documents et ressources de la fédération", url: "ScoutBibliotheque/", icon: "assets/icons/Bibliotheque.svg", protege: true, local: true },
+  { group: "Ressources et aide", name: "Aide", desc: "Un souci avec une application ? Écrire au service informatique", url: "aide.html", icon: "assets/icons/Aide.svg", protege: true, local: true },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: "Word/", icon: "assets/icons/Word.png", local: true },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: "Excel/", icon: "assets/icons/Excel.png", local: true },
   { group: "Bureautique", name: "PowerPoint", desc: "Présentations et diaporamas", url: "PowerPoint/", icon: "assets/icons/PowerPoint.png", local: true },

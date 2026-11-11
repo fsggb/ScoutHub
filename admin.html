@@ -50,23 +50,13 @@
         <label class="chk"><input id="ap-crop" type="checkbox"> Remplir tout le cadre (recadrer le logo)</label>
         <label class="chk"><input id="ap-feat" type="checkbox"> Mettre en avant (contour doré)</label>
         <label class="chk"><input id="ap-new" type="checkbox"> Ouvrir dans un nouvel onglet</label>
-        <label class="chk"><input id="ap-mask" type="checkbox"> Masquer aux autres personnes (je continue à la voir)</label>
+        <label class="chk"><input id="ap-prot" type="checkbox"> Protégée : visible seulement des comptes connectés @fsggb.fr (les autres ne savent pas qu’elle existe)</label>
+        <label class="chk"><input id="ap-mask" type="checkbox"> Masquer à tout le monde sauf à moi</label>
         <p id="ap-status" class="status" role="status"></p>
         <div class="dlg-actions"><button class="text-danger" type="button" id="ap-del" hidden>Supprimer ce lien</button><button class="ghost" type="button" data-close>Annuler</button><button class="primary" type="submit">Valider</button></div>
       </form>
     </dialog>
 
-    <dialog id="dlg-reset">
-      <form method="dialog" id="reset-form">
-        <h2>Nouveau mot de passe</h2>
-        <p class="muted" id="reset-who"></p>
-        <label for="reset-pw">Nouveau mot de passe (8 caractères minimum)</label>
-        <input id="reset-pw" type="text" autocomplete="off" minlength="8" required>
-        <p class="hint left">Communiquez-le à la personne : elle pourra le changer dans « Mon compte ».</p>
-        <p id="reset-status" class="status" role="status"></p>
-        <div class="dlg-actions"><button class="ghost" type="button" data-close>Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
-      </form>
-    </dialog>
   </main>
   <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
   <script src="config.js"></script>

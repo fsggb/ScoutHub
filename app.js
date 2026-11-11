@@ -1,53 +1,40 @@
 (() => {
   "use strict";
   const { $, say, store } = Hub;
-  let mode = "login";
-
-  // ---------- connexion / inscription ----------
-  function setMode(m) {
-    mode = m;
-    $("tab-login").classList.toggle("active", m === "login");
-    $("tab-register").classList.toggle("active", m === "register");
-    $("confirm-row").hidden = m === "login";
-    $("auth-submit").textContent = m === "login" ? "Se connecter" : "Créer mon compte";
-    $("auth-title").textContent = m === "login" ? "Connexion" : "Créer un compte";
-    $("password").autocomplete = m === "login" ? "current-password" : "new-password";
-    say($("auth-status"), "");
+  // ---------- connexion : Google ou code à 6 chiffres reçu par e-mail (aucune inscription, aucun mot de passe) ----------
+  let sentTo = "", resendTimer = 0;
+  const DOMAINE = /^[^@\s]+@fsggb\.fr$/i;
+  function step(n) {
+    $("step-mail").hidden = n !== 1; $("step-code").hidden = n !== 2; say($("auth-status"), "");
+    setTimeout(() => $(n === 1 ? "email" : "code").focus(), 0);
   }
-  // Afficher / masquer le mot de passe, alerte majuscules, jauge de robustesse (inscription)
-  $("pw-toggle").onclick = () => { const on = $("password").type === "password"; $("password").type = on ? "text" : "password"; $("pw-toggle").textContent = on ? "Masquer" : "Afficher"; $("pw-toggle").setAttribute("aria-pressed", String(on)); };
-  $("password").addEventListener("keyup", e => { $("caps").hidden = !(e.getModifierState && e.getModifierState("CapsLock")); });
-  $("password").addEventListener("blur", () => { $("caps").hidden = true; });
-  function strength(p) {
-    let n = 0; if (p.length >= 8) n++; if (p.length >= 12) n++; if (/[a-z]/.test(p) && /[A-Z]/.test(p)) n++; if (/\d/.test(p)) n++; if (/[^A-Za-z0-9]/.test(p)) n++;
-    if (/^(.)\1+$/.test(p) || /^(password|motdepasse|12345678|azerty)/i.test(p)) n = Math.min(n, 1);
-    return n;
+  function cooldown(sec) {
+    clearInterval(resendTimer); const b = $("code-resend"); b.disabled = true;
+    let left = sec; const tick = () => { b.textContent = left > 0 ? "Renvoyer un code (" + left + " s)" : "Renvoyer un code"; if (left-- <= 0) { clearInterval(resendTimer); b.disabled = false; } };
+    tick(); resendTimer = setInterval(tick, 1000);
   }
-  $("password").addEventListener("input", () => {
-    if (mode !== "register") return;
-    const n = strength($("password").value), bar = $("pw-bar");
-    bar.style.width = ($("password").value ? Math.max(12, n * 20) : 0) + "%"; bar.style.background = n <= 1 ? "#c0392b" : n <= 3 ? "#d98e04" : "#2e7d32";
-    $("pw-hint").textContent = !$("password").value ? "" : n <= 1 ? "Trop faible : allongez-le (12 caractères ou plus, une phrase fait très bien)." : n <= 3 ? "Correct. Ajoutez de la longueur pour le renforcer." : "Solide.";
-  });
-  $("tab-login").onclick = () => setMode("login");
-  $("tab-register").onclick = () => setMode("register");
-
-  $("auth-form").addEventListener("submit", async ev => {
-    ev.preventDefault();
-    const email = $("email").value.trim(), password = $("password").value;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say($("auth-status"), "Saisissez une adresse e-mail valide.", true);
-    if (password.length < 8) return say($("auth-status"), "Le mot de passe doit contenir au moins 8 caractères.", true);
-    if (mode === "register" && strength(password) <= 1) return say($("auth-status"), "Mot de passe trop faible : au moins 8 caractères, mieux 12, évitez les mots courants.", true);
-    if (mode === "register" && password !== $("password2").value) return say($("auth-status"), "Les deux mots de passe sont différents.", true);
-    $("auth-submit").disabled = true; say($("auth-status"), "Un instant…");
-    try {
-      const out = await Hub.call(mode, { email, password });
-      store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user);
-      $("password").value = $("password2").value = "";
-      enter();
-    } catch (e) { say($("auth-status"), e.message, true); }
+  async function askCode() {
+    const email = $("email").value.trim().toLowerCase();
+    if (!DOMAINE.test(email)) return say($("auth-status"), "Saisissez votre adresse @fsggb.fr. Sans adresse de la fédération, pas besoin de compte : les applications publiques sont déjà accessibles.", true);
+    $("auth-submit").disabled = true; say($("auth-status"), "Envoi du code…");
+    try { await Hub.call("codeDemander", { email }); sentTo = email; $("sent-to").textContent = email; $("code").value = ""; step(2); cooldown(45); }
+    catch (e) { say($("auth-status"), e.message, true); }
     finally { $("auth-submit").disabled = false; }
-  });
+  }
+  async function sendCode() {
+    const code = $("code").value.replace(/\D/g, "");
+    if (code.length !== 6) return say($("auth-status"), "Le code comporte 6 chiffres.", true);
+    $("code-submit").disabled = true; say($("auth-status"), "Vérification…");
+    try {
+      const out = await Hub.call("codeVerifier", { email: sentTo, code });
+      store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); $("code").value = ""; enter();
+    } catch (e) { say($("auth-status"), e.message, true); $("code").select(); }
+    finally { $("code-submit").disabled = false; }
+  }
+  $("auth-form").addEventListener("submit", ev => { ev.preventDefault(); $("step-code").hidden ? askCode() : sendCode(); });
+  $("code").addEventListener("input", () => { const d = $("code").value.replace(/\D/g, "").slice(0, 6); $("code").value = d; if (d.length === 6) sendCode(); });
+  $("code-resend").onclick = () => askCode();
+  $("code-back").onclick = () => { clearInterval(resendTimer); step(1); };
 
   // Retour vers l'application ou la page qui a demandé la connexion (adresses relatives du site uniquement).
   function goNext() {
@@ -106,7 +93,7 @@
     const strong = Object.assign(document.createElement("strong"), { textContent: a.nom });
     const small = Object.assign(document.createElement("small"), { textContent: a.desc });
     text.append(strong, small); link.append(badge, text);
-    if (a.masque) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: "Masquée pour les autres" }));
+    if (Portail.isAdmin && (a.masque || a.protege)) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: a.masque ? "Masquée pour les autres" : "Réservée aux @fsggb.fr" }));
     return link;
   }
 
@@ -115,7 +102,7 @@
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.masque || Portail.isAdmin) && (!q || (a.nom + " " + a.desc + " " + s.titre).toLowerCase().includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || (a.nom + " " + a.desc + " " + s.titre).toLowerCase().includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";

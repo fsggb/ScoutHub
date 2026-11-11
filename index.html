@@ -21,39 +21,35 @@
         <ul>
           <li><span><b>ChatGDB</b>, l’assistant de la fédération : questions, documents, aide à la rédaction.</span></li>
           <li><span>La <b>bibliothèque</b> de documents selon votre rôle.</span></li>
-          <li><span>Toutes les applications restent <b>utilisables sans compte</b>.</span></li>
+          <li><span>Les applications publiques restent <b>utilisables sans compte</b>.</span></li>
         </ul>
-        <small>Les mots de passe ne sont jamais conservés : seule une empreinte salée est enregistrée. Aucune donnée n’est revendue ni partagée.</small>
+        <small>Aucun mot de passe n’existe : rien à retenir, rien à voler. Vos fichiers restent dans votre navigateur ou votre Drive Google, jamais sur nos serveurs.</small>
       </aside>
       <div class="auth-main">
         <a class="auth-back" id="auth-back" href="index.html">← Retour aux applications</a>
         <p class="label">Espace de travail FSGGB</p>
         <h1 id="auth-title">Connexion</h1>
-        <p class="auth-why">Un compte sert à utiliser ChatGDB et la bibliothèque. Les applications n’en ont pas besoin.</p>
+        <p class="auth-why">Réservée aux adresses <b>@fsggb.fr</b> : elle donne accès aux applications réservées (ChatGDB, bibliothèque…). Sans compte, les applications publiques restent accessibles.</p>
         <div id="g-block" class="g-block" hidden>
           <div id="g-btn" class="g-btn"></div>
           <p class="g-or"><span>ou avec une adresse e-mail</span></p>
         </div>
         <p id="g-diag" class="hint g-diag" hidden></p>
-        <div class="tabs" role="tablist">
-          <button class="tab active" id="tab-login" role="tab" type="button">Connexion</button>
-          <button class="tab" id="tab-register" role="tab" type="button">Créer un compte</button>
-        </div>
         <form id="auth-form" novalidate>
-          <label for="email">Adresse e-mail</label>
-          <input id="email" type="email" autocomplete="username" required maxlength="254" placeholder="vous@exemple.fr" autocapitalize="none" spellcheck="false">
-          <label for="password">Mot de passe</label>
-          <div class="pw-wrap"><input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="200"><button class="pw-toggle" id="pw-toggle" type="button" aria-controls="password" aria-pressed="false">Afficher</button></div>
-          <p id="caps" class="caps" hidden>Verrouillage des majuscules activé.</p>
-          <div id="confirm-row" hidden>
-            <div class="pw-meter" aria-hidden="true"><i id="pw-bar"></i></div>
-            <p id="pw-hint" class="pw-hint" aria-live="polite"></p>
-            <label for="password2">Confirmer le mot de passe</label>
-            <input id="password2" type="password" autocomplete="new-password" minlength="8" maxlength="200">
+          <div id="step-mail">
+            <label for="email">Adresse e-mail @fsggb.fr</label>
+            <input id="email" type="email" autocomplete="username" required maxlength="120" placeholder="prenom.nom@fsggb.fr" autocapitalize="none" spellcheck="false">
+            <button id="auth-submit" class="primary" type="submit">Recevoir un code par e-mail</button>
           </div>
-          <button id="auth-submit" class="primary" type="submit">Se connecter</button>
+          <div id="step-code" hidden>
+            <p class="hint left">Un code à 6 chiffres vient d’être envoyé à <b id="sent-to"></b>. Il est valable 10 minutes.</p>
+            <label for="code">Code reçu</label>
+            <input id="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="······" aria-describedby="sent-to">
+            <button id="code-submit" class="primary" type="submit">Se connecter</button>
+            <p class="code-links"><button id="code-resend" class="text-button" type="button">Renvoyer un code</button><button id="code-back" class="text-button" type="button">Changer d’adresse</button></p>
+          </div>
           <p id="auth-status" class="status" role="status" aria-live="polite"></p>
-          <p class="auth-trust">Connexion chiffrée (HTTPS). Après plusieurs essais ratés, le compte est bloqué quelques minutes.</p>
+          <p class="auth-trust">Pas d’inscription ni de mot de passe : un code à usage unique prouve votre adresse. Essais limités.</p>
         </form>
       </div>
     </section>
@@ -63,7 +59,7 @@
         <div><p class="label">Bienvenue</p><h1 id="hello">Vos applications</h1></div>
         <input id="search" class="search" type="search" placeholder="Rechercher une application…" aria-label="Rechercher une application" autocomplete="off">
       </div>
-      <p id="guest-note" class="guest-note" hidden>Toutes les applications sont utilisables sans compte. <a href="index.html?connexion=1" id="guest-login">Connectez-vous</a> pour utiliser ChatGDB et la bibliothèque.</p>
+      <p id="guest-note" class="guest-note" hidden>Les applications publiques sont utilisables sans compte. <a href="index.html?connexion=1" id="guest-login">Connectez-vous</a> avec votre adresse @fsggb.fr pour les applications réservées.</p>
       <div id="apps" aria-label="Applications"></div>
       <p id="none" class="muted" hidden>Aucune application ne correspond à votre recherche.</p>
     </section>
