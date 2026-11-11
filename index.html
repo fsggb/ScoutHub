@@ -13,34 +13,49 @@
   <header class="topbar" id="bar"></header>
 
   <main class="shell">
-    <section id="auth" class="auth-card" aria-labelledby="auth-title" hidden>
-      <a class="auth-back" id="auth-back" href="index.html">← Retour aux applications</a>
-      <img class="auth-logo" src="assets/fsggb.png" alt="" width="84" height="84">
-      <p class="label">Espace de travail FSGGB</p>
-      <h1 id="auth-title">Connexion à ScoutHub</h1>
-      <p class="auth-why">Un compte n’est nécessaire que pour ScoutCloud et l’enregistrement de vos fichiers dans le cloud. Toutes les applications restent utilisables sans compte.</p>
-      <div id="g-block" class="g-block" hidden>
-        <div id="g-btn" class="g-btn"></div>
-        <p class="g-or"><span>ou avec une adresse e-mail</span></p>
-      </div>
-      <p id="g-diag" class="hint g-diag" hidden></p>
-      <div class="tabs" role="tablist">
-        <button class="tab active" id="tab-login" role="tab" type="button">Connexion</button>
-        <button class="tab" id="tab-register" role="tab" type="button">Créer un compte</button>
-      </div>
-      <form id="auth-form" novalidate>
-        <label for="email">Adresse e-mail</label>
-        <input id="email" type="email" autocomplete="username" required placeholder="vous@exemple.fr">
-        <label for="password">Mot de passe</label>
-        <input id="password" type="password" autocomplete="current-password" required minlength="8">
-        <div id="confirm-row" hidden>
-          <label for="password2">Confirmer le mot de passe</label>
-          <input id="password2" type="password" autocomplete="new-password" minlength="8">
+    <section id="auth" class="auth-split" aria-labelledby="auth-title" hidden>
+      <aside class="auth-aside" aria-hidden="false">
+        <img src="assets/fsggb.png" alt="" width="72" height="72">
+        <h2>ScoutHub</h2>
+        <p>Les outils numériques de la fédération, réunis au même endroit.</p>
+        <ul>
+          <li><span><b>ChatGDB</b>, l’assistant de la fédération : questions, documents, aide à la rédaction.</span></li>
+          <li><span>La <b>bibliothèque</b> de documents selon votre rôle.</span></li>
+          <li><span>Toutes les applications restent <b>utilisables sans compte</b>.</span></li>
+        </ul>
+        <small>Les mots de passe ne sont jamais conservés : seule une empreinte salée est enregistrée. Aucune donnée n’est revendue ni partagée.</small>
+      </aside>
+      <div class="auth-main">
+        <a class="auth-back" id="auth-back" href="index.html">← Retour aux applications</a>
+        <p class="label">Espace de travail FSGGB</p>
+        <h1 id="auth-title">Connexion</h1>
+        <p class="auth-why">Un compte sert à utiliser ChatGDB et la bibliothèque. Les applications n’en ont pas besoin.</p>
+        <div id="g-block" class="g-block" hidden>
+          <div id="g-btn" class="g-btn"></div>
+          <p class="g-or"><span>ou avec une adresse e-mail</span></p>
         </div>
-        <button id="auth-submit" class="primary" type="submit">Se connecter</button>
-        <p id="auth-status" class="status" role="status"></p>
-        <p class="hint">Choisissez un mot de passe d’au moins 8 caractères. L’inscription est immédiate, sans validation.</p>
-      </form>
+        <p id="g-diag" class="hint g-diag" hidden></p>
+        <div class="tabs" role="tablist">
+          <button class="tab active" id="tab-login" role="tab" type="button">Connexion</button>
+          <button class="tab" id="tab-register" role="tab" type="button">Créer un compte</button>
+        </div>
+        <form id="auth-form" novalidate>
+          <label for="email">Adresse e-mail</label>
+          <input id="email" type="email" autocomplete="username" required maxlength="254" placeholder="vous@exemple.fr" autocapitalize="none" spellcheck="false">
+          <label for="password">Mot de passe</label>
+          <div class="pw-wrap"><input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="200"><button class="pw-toggle" id="pw-toggle" type="button" aria-controls="password" aria-pressed="false">Afficher</button></div>
+          <p id="caps" class="caps" hidden>Verrouillage des majuscules activé.</p>
+          <div id="confirm-row" hidden>
+            <div class="pw-meter" aria-hidden="true"><i id="pw-bar"></i></div>
+            <p id="pw-hint" class="pw-hint" aria-live="polite"></p>
+            <label for="password2">Confirmer le mot de passe</label>
+            <input id="password2" type="password" autocomplete="new-password" minlength="8" maxlength="200">
+          </div>
+          <button id="auth-submit" class="primary" type="submit">Se connecter</button>
+          <p id="auth-status" class="status" role="status" aria-live="polite"></p>
+          <p class="auth-trust">Connexion chiffrée (HTTPS). Après plusieurs essais ratés, le compte est bloqué quelques minutes.</p>
+        </form>
+      </div>
     </section>
 
     <section id="home" hidden>
@@ -48,7 +63,7 @@
         <div><p class="label">Bienvenue</p><h1 id="hello">Vos applications</h1></div>
         <input id="search" class="search" type="search" placeholder="Rechercher une application…" aria-label="Rechercher une application" autocomplete="off">
       </div>
-      <p id="guest-note" class="guest-note" hidden>Toutes les applications sont utilisables sans compte. <a href="index.html?connexion=1" id="guest-login">Connectez-vous</a> pour utiliser ScoutCloud et enregistrer vos fichiers dans le cloud ; sinon, enregistrez sur votre ordinateur comme d’habitude.</p>
+      <p id="guest-note" class="guest-note" hidden>Toutes les applications sont utilisables sans compte. <a href="index.html?connexion=1" id="guest-login">Connectez-vous</a> pour utiliser ChatGDB et la bibliothèque.</p>
       <div id="apps" aria-label="Applications"></div>
       <p id="none" class="muted" hidden>Aucune application ne correspond à votre recherche.</p>
     </section>

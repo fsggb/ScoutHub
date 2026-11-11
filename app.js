@@ -10,9 +10,25 @@
     $("tab-register").classList.toggle("active", m === "register");
     $("confirm-row").hidden = m === "login";
     $("auth-submit").textContent = m === "login" ? "Se connecter" : "Créer mon compte";
+    $("auth-title").textContent = m === "login" ? "Connexion" : "Créer un compte";
     $("password").autocomplete = m === "login" ? "current-password" : "new-password";
     say($("auth-status"), "");
   }
+  // Afficher / masquer le mot de passe, alerte majuscules, jauge de robustesse (inscription)
+  $("pw-toggle").onclick = () => { const on = $("password").type === "password"; $("password").type = on ? "text" : "password"; $("pw-toggle").textContent = on ? "Masquer" : "Afficher"; $("pw-toggle").setAttribute("aria-pressed", String(on)); };
+  $("password").addEventListener("keyup", e => { $("caps").hidden = !(e.getModifierState && e.getModifierState("CapsLock")); });
+  $("password").addEventListener("blur", () => { $("caps").hidden = true; });
+  function strength(p) {
+    let n = 0; if (p.length >= 8) n++; if (p.length >= 12) n++; if (/[a-z]/.test(p) && /[A-Z]/.test(p)) n++; if (/\d/.test(p)) n++; if (/[^A-Za-z0-9]/.test(p)) n++;
+    if (/^(.)\1+$/.test(p) || /^(password|motdepasse|12345678|azerty)/i.test(p)) n = Math.min(n, 1);
+    return n;
+  }
+  $("password").addEventListener("input", () => {
+    if (mode !== "register") return;
+    const n = strength($("password").value), bar = $("pw-bar");
+    bar.style.width = ($("password").value ? Math.max(12, n * 20) : 0) + "%"; bar.style.background = n <= 1 ? "#c0392b" : n <= 3 ? "#d98e04" : "#2e7d32";
+    $("pw-hint").textContent = !$("password").value ? "" : n <= 1 ? "Trop faible : allongez-le (12 caractères ou plus, une phrase fait très bien)." : n <= 3 ? "Correct. Ajoutez de la longueur pour le renforcer." : "Solide.";
+  });
   $("tab-login").onclick = () => setMode("login");
   $("tab-register").onclick = () => setMode("register");
 
@@ -21,6 +37,7 @@
     const email = $("email").value.trim(), password = $("password").value;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say($("auth-status"), "Saisissez une adresse e-mail valide.", true);
     if (password.length < 8) return say($("auth-status"), "Le mot de passe doit contenir au moins 8 caractères.", true);
+    if (mode === "register" && strength(password) <= 1) return say($("auth-status"), "Mot de passe trop faible : au moins 8 caractères, mieux 12, évitez les mots courants.", true);
     if (mode === "register" && password !== $("password2").value) return say($("auth-status"), "Les deux mots de passe sont différents.", true);
     $("auth-submit").disabled = true; say($("auth-status"), "Un instant…");
     try {
