@@ -10,10 +10,8 @@ on:
   schedule:
     - cron: "17 3 * * *"
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Aucun droit par défaut : les compilations exécutent du code de dépôts tiers et ne doivent pas pouvoir publier le site.
+permissions: {}
 
 concurrency:
   group: pages
@@ -22,6 +20,8 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       versions: ${{ steps.v.outputs.versions }}
       matrix: ${{ steps.v.outputs.matrix }}
@@ -45,6 +45,8 @@ jobs:
   build:
     needs: plan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 60
     continue-on-error: true
     strategy:
@@ -62,6 +64,7 @@ jobs:
           repository: ${{ matrix.repo }}
           ref: ${{ matrix.sha }}
           path: src
+          persist-credentials: false
       - if: steps.cache.outputs.cache-hit != 'true' && matrix.kind == 'trunk'
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -103,6 +106,10 @@ jobs:
     needs: [plan, build]
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -147,6 +154,9 @@ jobs:
               { printf '\n\n<<< Fiche du dépôt %s >>>\n' "$repo"; cat "build/knowledge/${repo}.md"; } >> build/knowledge/all.md
             else echo "::warning::fiche ${repo} introuvable"; rm -f "build/knowledge/${repo}.md"; fi
           done
+          # rien d'autre que des fichiers ordinaires : ni lien symbolique (qui pourrait pointer hors du site), ni dépôt git, ni fichier caché
+          find build -type l -print -delete
+          find build -name '.git*' -prune -exec rm -rf {} + 2>/dev/null || true
           du -sh build; du -sh build/* | sort -h | tail -8
       - uses: actions/upload-pages-artifact@v3
         with:

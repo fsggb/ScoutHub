@@ -36,7 +36,7 @@ var GOOGLE_DOMAINE = 'fsggb.fr';
 function adminProtege_(email) { return email === ADMIN_EMAIL || ADMIN_GOOGLE.indexOf(email) >= 0; }
 // Rôles, du moins au plus privilégié. « user » (ancien nom) vaut « membre ».
 var ROLES = ['membre', 'parent', 'chef_unite', 'chef_groupe', 'admin'];
-var SESSION_DAYS = 30;
+var SESSION_DAYS = 14;
 // ---- ChatGDB ----
 var CHAT_MODELE = 'claude-haiku-5-5';
 // Modèles autorisés (jamais plus gros que Sonnet) ; prix en $ par million de jetons [entrée, sortie].
@@ -60,13 +60,13 @@ function doGet() {
 
 // Actions qui modifient des données : seules elles prennent le verrou. Les lectures (list, get, me, login...)
 // ne sont plus mises en file derrière un enregistrement de fichier, ce qui accélère nettement ScoutCloud.
-var WRITES = { ping: 1, google: 1, codeVerifier: 1, adminDelete: 1, adminSetRole: 1, portailEcrire: 1 };
+var WRITES = { ping: 1, adminDelete: 1, adminSetRole: 1, portailEcrire: 1 };   // google, codeDemander et codeVerifier : pas de verrou global pendant les appels réseau
 
 function doPost(e) {
   var lock = null;
   try {
     var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    var handler = ACTIONS[req.action];
+    var handler = Object.prototype.hasOwnProperty.call(ACTIONS, String(req.action)) ? ACTIONS[req.action] : null;
     if (!handler) return json_({ ok: false, error: 'Action inconnue.' });
     if (WRITES[req.action]) { lock = LockService.getScriptLock(); lock.waitLock(20000); }
     return json_(handler(req));
@@ -93,19 +93,23 @@ var ACTIONS = {
   codeDemander: function (r) {
     var email = cleanEmail_(r.email);
     if (!estFsggb_(email)) fail_(MSG_DOMAINE);
-    if (ADMIN_GOOGLE.indexOf(email) >= 0) fail_('Cette adresse se connecte uniquement avec Google.');
+    if (adminGoogleSeul_(email)) fail_('Les comptes administrateur se connectent uniquement avec Google.');
+    var lockC = LockService.getScriptLock(); lockC.waitLock(5000);      // verrou court autour des compteurs (aucun appel réseau)
+    try {
     var cache = CacheService.getScriptCache(), id = sha_(email).slice(0, 24), now = Date.now();
     var dernier = Number(cache.get('cl:' + id) || 0);
     if (now - dernier < 45000) fail_('Un code vient d\'être envoyé : patientez un instant avant d\'en demander un autre.');
     var n = Number(cache.get('cn:' + id) || 0);
     if (n >= 5) fail_('Trop de demandes pour cette adresse. Réessayez dans une heure.');
     var jour = Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyy-MM-dd'), kg = 'cg:' + jour, g = Number(props_().getProperty(kg) || 0);
-    if (g >= Number(props_().getProperty('CODE_QUOTA_JOUR') || 90)) fail_('Envoi de codes momentanément indisponible : réessayez demain ou utilisez Google.');
+    var heure = Number(cache.get('ch:h') || 0);
+    if (heure >= 25 || g >= Number(props_().getProperty('CODE_QUOTA_JOUR') || 90)) fail_('Envoi de codes momentanément indisponible : réessayez un peu plus tard ou utilisez Google.');
     var code = ('000000' + (parseInt(sha_(Utilities.getUuid() + Utilities.getUuid()).slice(0, 8), 16) % 1000000)).slice(-6);
     var sel = sha_(Utilities.getUuid()).slice(0, 16);
     cache.put('cd:' + id, JSON.stringify({ h: sha_(sel + ':' + email + ':' + code), s: sel, n: 0 }), 600);
-    cache.put('cl:' + id, String(now), 600); cache.put('cn:' + id, String(n + 1), 3600);
+    cache.put('cl:' + id, String(now), 600); cache.put('cn:' + id, String(n + 1), 3600); cache.put('ch:h', String(heure + 1), 3600);
     props_().setProperty(kg, String(g + 1));
+    } finally { try { lockC.releaseLock(); } catch (x) { /* ignore */ } }
     MailApp.sendEmail({ to: email, name: 'ScoutHub FSGGB', subject: 'Votre code de connexion ScoutHub : ' + code,
       body: 'Votre code de connexion ScoutHub : ' + code + '\n\nIl est valable 10 minutes et ne sert qu\'une fois.\nSi vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message : personne ne peut se connecter sans ce code.\n\nFSGGB' });
     return { ok: true };
@@ -113,7 +117,7 @@ var ACTIONS = {
   // Étape 2 : le code est vérifié (5 essais au plus), la session est créée.
   codeVerifier: function (r) {
     var email = cleanEmail_(r.email);
-    if (!estFsggb_(email) || ADMIN_GOOGLE.indexOf(email) >= 0) fail_(MSG_DOMAINE);
+    if (!estFsggb_(email) || adminGoogleSeul_(email)) fail_(MSG_DOMAINE);
     var cache = CacheService.getScriptCache(), id = sha_(email).slice(0, 24), raw = cache.get('cd:' + id);
     if (!raw) fail_('Code expiré ou inconnu : demandez-en un nouveau.');
     var c = JSON.parse(raw), code = String(r.code || '').replace(/\D/g, '');
@@ -135,6 +139,9 @@ var ACTIONS = {
   // Dictée vocale : le navigateur envoie un enregistrement (WAV 16 kHz mono), Gemini le transcrit.
   transcrire: function (r) {
     var email = session_(r.token), cache = CacheService.getScriptCache(), k = 'tr:' + sha_(email).slice(0, 16), n = Number(cache.get(k) || 0);
+    if (!chatOuvert_(normRole_(getUser_(email).role), email)) fail_('ChatGDB n\'est pas ouvert pour ce compte.');
+    var kgt = 'tg:' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyy-MM-dd'), gt = Number(cache.get(kgt) || 0);
+    if (gt >= 600) fail_('Dictée indisponible aujourd\'hui : limite globale atteinte.'); cache.put(kgt, String(gt + 1), 86400);
     if (n >= 40) fail_('Trop de dictées en peu de temps : réessayez dans un moment.');
     cache.put(k, String(n + 1), 3600);
     return { ok: true, text: transcrire_(r.audio) };
@@ -166,16 +173,29 @@ var ACTIONS = {
         else if (r.profondeur === 'approfondie') { r.profondeur = 'standard'; r.web = false; degrade = { web: false, raison: 'Recherche approfondie indisponible avec votre quota : réponse sans recherche web.' }; }
       }
     }
-    _chatRole_ = role; _chatRid_ = String(r.rid || '').replace(/[^\w-]/g, '').slice(0, 40);
-    var rep = chatAppeler_(r, admin);
+    // Une demande à la fois par personne (sinon des appels parallèles passent tous le contrôle de quota avant le premier débit)
+    var cacheB = CacheService.getScriptCache(), kb = 'busy:' + sha_(email).slice(0, 16);
+    if (!admin && !(Array.isArray(r.reprise) && r.reprise.length) && cacheB.get(kb)) fail_('Une demande est déjà en cours : attendez sa réponse.');
+    cacheB.put(kb, '1', 150);
+    // Plafond global mensuel (en dollars) : garde-fou du budget Anthropic, quoi qu'il arrive aux quotas individuels
+    var moisG = Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyy-MM'), cm = props_().getProperty('cs:' + moisG), dm = cm ? JSON.parse(cm).d : 0;
+    if (dm >= Number(props_().getProperty('CHAT_PLAFOND_MOIS') || 20)) { cacheB.remove(kb); fail_('Le budget mensuel de ChatGDB est atteint : il reprendra le mois prochain (l\'administrateur peut le relever).'); }
+    // Pièces jointes bornées pour les non-administrateurs (le coût réel d'un gros PDF dépasserait le plafond de la semaine)
+    if (!admin) {
+      var nImg = 0, octPdf = 0;
+      (Array.isArray(r.messages) ? r.messages : []).forEach(function (m) { if (m) { nImg += (Array.isArray(m.images) ? m.images.length : 0); (Array.isArray(m.docs) ? m.docs : []).forEach(function (d) { octPdf += String(d && d.d || '').length * 0.75; }); } });
+      if (nImg > 8 || octPdf > 6 * 1048576) { cacheB.remove(kb); fail_('Pièces jointes trop volumineuses pour votre quota : 6 Mo de PDF au plus.'); }
+    }
+    _chatRole_ = role; _chatRid_ = sha_(email).slice(0, 8) + '-' + String(r.rid || '').replace(/[^\w-]/g, '').slice(0, 40);
+    var rep; try { rep = chatAppeler_(r, admin); } finally { cacheB.remove(kb); }
     var cout = chatCout_(rep.usage, rep.nbRecherches, rep.modele);
     creditsDebiter_(email, cout, rep.usage, rep.nbRecherches, rep.modele);
     return { ok: true, text: rep.texte, sources: rep.sources, searches: rep.recherches, steps: rep.etapes, proposals: rep.propositions, aides: rep.aides, depots: rep.depots, degrade: degrade, credits: creditsEtat_(email, role), cost: cout, attente: rep.attente };
   },
   // Étapes en cours d'un échange (le navigateur interroge pendant que « chat » travaille).
   progression: function (r) {
-    session_(r.token);
-    var raw = CacheService.getScriptCache().get('pg:' + String(r.rid || '').replace(/[^\w-]/g, '').slice(0, 40));
+    var em = session_(r.token);
+    var raw = CacheService.getScriptCache().get('pg:' + sha_(em).slice(0, 8) + '-' + String(r.rid || '').replace(/[^\w-]/g, '').slice(0, 40));
     return { ok: true, steps: raw ? JSON.parse(raw) : [] };
   },
   // Envoi d'une demande d'aide préparée par ChatGDB, VALIDÉE (et modifiable) par la personne dans l'interface.
@@ -274,6 +294,7 @@ var ACTIONS = {
 function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
+function esc_(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function fail_(msg) { var e = new Error(msg); e.userMessage = msg; throw e; }
 function props_() { return PropertiesService.getScriptProperties(); }
 function sha_(s) {
@@ -299,13 +320,17 @@ function saveUser_(email, base) {
   props_().setProperty('u:' + email, JSON.stringify({ role: adminProtege_(email) ? 'admin' : normRole_(base.role), created: base.created || Date.now(), name: base.name || '', google: !!base.google }));
 }
 var MSG_DOMAINE = 'La connexion est réservée aux adresses @fsggb.fr. Les applications publiques restent accessibles sans compte.';
-function estFsggb_(email) { return /^[^@\s]+@fsggb\.fr$/.test(String(email || '')); }
+function estFsggb_(email) { return /^[^@\s+]+@fsggb\.fr$/.test(String(email || '')); }      // les alias « +étiquette » sont refusés (ils contourneraient les limites)
+function adminGoogleSeul_(email) { var u = getUser_(email); return adminProtege_(email) || (!!u && u.role === 'admin'); }
 function egal_(a, b) { a = String(a); b = String(b); if (a.length !== b.length) return false; var d = 0; for (var i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
 // Crée le compte au premier passage (aucune inscription : l'adresse a été prouvée par Google ou par le code) puis ouvre une session.
 function provisionner_(email, nom, google) {
-  var u = getUser_(email);
-  if (!u) saveUser_(email, { role: 'membre', created: Date.now(), name: nom || '', google: !!google });
-  else if ((google && !u.google) || (!u.name && nom)) saveUser_(email, { role: u.role, created: u.created, name: u.name || nom || '', google: !!u.google || !!google });
+  var lock = LockService.getScriptLock(); lock.waitLock(5000);      // verrou court : aucun appel réseau dedans
+  try {
+    var u = getUser_(email);
+    if (!u) saveUser_(email, { role: 'membre', created: Date.now(), name: nom || '', google: !!google });
+    else if ((google && !u.google) || (!u.name && nom)) saveUser_(email, { role: u.role, created: u.created, name: u.name || nom || '', google: !!u.google || !!google });
+  } finally { try { lock.releaseLock(); } catch (x) { /* ignore */ } }
   return newSession_(email);
 }
 function normRole_(r) { return r === 'user' || !r ? 'membre' : (ROLES.indexOf(r) >= 0 ? r : 'membre'); }
@@ -428,12 +453,21 @@ function creditsEtat_(email, role) {
 // Crédits débités = coût réel de l'échange (tarifs publics) / 0,001 $, au moins 1.
 function chatCout_(usage, nbRecherches, modele) { return Math.max(1, Math.ceil(coutDollars_(usage, nbRecherches, modele) / CHAT_CREDIT_DOLLARS - 1e-9)); }
 // Estimation du coût MAXIMAL PROBABLE d'un échange avant de le lancer (en crédits) : sert à ne jamais dépasser le quota restant.
+function tokensEntree_(r) {
+  var t = 0;
+  (Array.isArray(r.messages) ? r.messages : []).slice(-24).forEach(function (m) {
+    if (!m) return; t += String(m.text || '').length / 3.5;
+    (Array.isArray(m.images) ? m.images : []).forEach(function () { t += 1600; });
+    (Array.isArray(m.docs) ? m.docs : []).forEach(function (d) { t += (String(d && d.d || '').length * 0.75 / 1048576) * 3000; });
+  });
+  return Math.ceil(t);
+}
 function estimerCredits_(r) {
   var m = CHAT_MODELES[r.modele] || CHAT_MODELES[CHAT_MODELE], approf = r.profondeur === 'approfondie', web = r.web !== false;
   var sortie = { low: 700, medium: 1500, high: 3000 }[CHAT_EFFORTS.indexOf(r.effort) >= 0 ? r.effort : (r.style === 'detail' ? 'medium' : 'low')] * (approf ? 2 : 1);
   var entree = 1500 + 4000 * 0.1;                                  // le préfixe fixe est lu dans le cache
   var recherches = web ? (approf ? 8 : 2) : 0, pages = web ? (approf ? 4 : 1) : 0;
-  entree += recherches * 3000 + pages * 9000 + (Array.isArray(r.reprise) ? r.reprise.length : 0) * 4000;
+  entree += recherches * 3000 + pages * 9000 + (Array.isArray(r.reprise) ? r.reprise.length : 0) * 4000 + tokensEntree_(r);
   var dollars = (entree * m.prix[0] + sortie * m.prix[1]) / 1e6 + recherches * 0.01;
   return Math.max(1, Math.ceil(dollars / CHAT_CREDIT_DOLLARS - 1e-9));
 }
@@ -667,11 +701,14 @@ function transcrire_(audio) {
 
 // ---------- vision : récupérer une vraie image (adresse https publique) ----------
 var CHAT_OUTIL_IMAGE = { name: 'voir_image', description: "Télécharge une image à partir de son adresse directe (https) pour que tu la VOIES réellement (photo, schéma, carte, capture…). À utiliser sur les adresses d'images trouvées dans les résultats de recherche ou données par l'utilisateur. Formats : JPEG, PNG, GIF, WebP, 4 Mo au plus.", input_schema: { type: 'object', properties: { url: { type: 'string', description: "Adresse directe de l'image, en https." } }, required: ['url'] } };
-function imageDistante_(url) {
+function imageDistante_(url, permis) {
   url = String(url || '').trim();
-  var m = /^https:\/\/([^\/?#:]+)(?::443)?(\/[^\s]*)?$/i.exec(url);
-  if (!m || /^(localhost|metadata|.*\.local|.*\.internal)$/i.test(m[1]) || /^[\d.]+$/.test(m[1]) || m[1].indexOf('[') >= 0) return 'Adresse refusée : seule une adresse https publique est acceptée.';
-  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true, headers: { Accept: 'image/*', 'User-Agent': 'ChatGDB-FSGGB/1.0' } });
+  // Seules les images déjà vues (résultats de recherche) ou données par la personne sont lisibles : une consigne cachée dans une page ne peut pas
+  // faire sortir de données par l'adresse demandée (chaîne de requête).
+  if (!permis || !permis(url)) return 'Adresse refusée : seules les images trouvées par la recherche ou fournies par la personne peuvent être examinées.';
+  var m = /^https:\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)(?::443)?(\/[^\s]*)?$/i.exec(url);
+  if (!m || /^(localhost|metadata)$/i.test(m[1]) || /\.(local|internal|localhost|lan|home|corp)$/i.test(m[1]) || !/[a-z]{2,}$/i.test(m[1].split('.').pop())) return 'Adresse refusée : seule une adresse https publique est acceptée.';
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: false, headers: { Accept: 'image/*', 'User-Agent': 'ChatGDB-FSGGB/1.0' } });
   if (res.getResponseCode() !== 200) return 'Image inaccessible (code ' + res.getResponseCode() + ').';
   var type = String(res.getHeaders()['Content-Type'] || res.getHeaders()['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) return 'Ce n\'est pas une image JPEG, PNG, GIF ou WebP (type reçu : ' + (type || 'inconnu') + ').';
@@ -712,12 +749,12 @@ var CHAT_OUTIL_DEPOT = { name: 'proposer_depot_bibliotheque', description: "RÉS
 var CHAT_OUTIL_AIDE = { name: 'preparer_demande_aide', description: "Prépare un message au service informatique de la fédération, à faire RELIRE, corriger et VALIDER par la personne (rien ne part sans son clic). À appeler seulement quand tu as posé les questions utiles et obtenu les détails (et la capture d'écran si elle aide). Rédige un message complet, précis et autonome : le service ne verra pas la conversation.", input_schema: { type: 'object', properties: { titre: { type: 'string', description: 'Objet court et précis.' }, application: { type: 'string', description: "Application ou page concernée." }, resume: { type: 'string', description: "Ce que la personne veut faire / le problème, en deux phrases." }, details: { type: 'string', description: "Ce qui s'est passé, depuis quand, message d'erreur exact, appareil et navigateur, ce qui a déjà été essayé." }, etapes: { type: 'string', description: "Étapes pour reproduire, une par ligne (facultatif)." }, urgence: { type: 'string', enum: ['normale', 'haute'] }, captures: { type: 'string', description: "Si une capture d'écran manque encore et aiderait, dis laquelle (sinon laisse vide)." } }, required: ['titre', 'resume', 'details'] } };
 
 // Exécute un outil client demandé par le modèle ; renvoie le contenu du résultat (texte, ou blocs pour un PDF / une image) — jamais d'exception vers le modèle.
-function chatOutil_(b, admin, sortie) {
+function chatOutil_(b, admin, sortie, permis) {
   try {
     var e = b.input || {};
     if (b.name === 'chercher_memoire') { if (!memBase_()) return 'Mémoire non configurée.'; var r = memChercher_(String(e.requete || '')); return r.length ? JSON.stringify(r) : 'Aucune note ne correspond.'; }
     if (b.name === 'lire_memoire') { if (!memBase_()) return 'Mémoire non configurée.'; var n = memLire_(String(e.id || '')); return n ? '# ' + n.titre + (n.genre === 'competence' ? ' (compétence)' : '') + '\n(mise à jour : ' + n.maj + ')\n\n' + n.contenu.slice(0, 12000) : 'Note introuvable.'; }
-    if (b.name === 'voir_image') return imageDistante_(e.url);
+    if (b.name === 'voir_image') return imageDistante_(e.url, permis);
     if (b.name === 'lister_depot' || b.name === 'lire_depot') return depotOutil_(b.name, e);
     if (b.name === 'chercher_bibliotheque') { if (!biblioActive_()) return 'Bibliothèque non configurée.'; var rb = biblioAppel_('chercher', { requete: String(e.requete || '').slice(0, 200) }); return rb.documents.length ? JSON.stringify(rb.documents) : 'Aucun document ne correspond.'; }
     if (b.name === 'lire_document') {
@@ -862,6 +899,9 @@ function chatAppeler_(r, admin) {
   var noms = appsNoms_(r.apps), repTours = Array.isArray(r.reprise) ? r.reprise.length : 0;
   if (repTours) messages = messages.concat(repriseMessages_(r.reprise));
   var web = r.web !== false, version = CHAT_MODELES[modele].web;
+  var urlsPersonne = {};
+  (Array.isArray(r.messages) ? r.messages : []).forEach(function (m) { if (m && m.role === 'user') (String(m.text || '').match(/https:\/\/[^\s)>"']+/g) || []).forEach(function (u) { urlsPersonne[u] = 1; }); });
+  var permis = function (u) { return !!urlsPersonne[u] || (typeof index !== 'undefined' && Object.prototype.hasOwnProperty.call(index, u)); };
   var corps = {
     model: modele, max_tokens: prof.jetons,
     system: [{ type: 'text', text: sys[0], cache_control: { type: 'ephemeral' } }, { type: 'text', text: sys[1] }],
@@ -919,7 +959,7 @@ function chatAppeler_(r, admin) {
       var deferes = appels.filter(function (b) { return b.name === 'application'; }), autres = appels.filter(function (b) { return b.name !== 'application'; });
       if (deferes.length && repTours < CHAT_APP_TOURS) {         // l'application se manipule dans le navigateur : on lui rend la main
         var pre = autres.map(function (b) {
-          etape_(etapes, 'outil', nomOutil_(b)); var c = chatOutil_(b, admin, sortie);
+          etape_(etapes, 'outil', nomOutil_(b)); var c = chatOutil_(b, admin, sortie, permis);
           if (Array.isArray(c) && c.some(function (x) { return x && x.type === 'document'; })) c = '(document trop volumineux pour être conservé pendant la manipulation de l\'application : redemande-le ensuite)';
           return { tool_use_id: b.id, contenu: c };
         });
@@ -928,7 +968,7 @@ function chatAppeler_(r, admin) {
           attente: { assistant: j.content, resultats: pre, appels: deferes.map(function (b) { return { id: b.id, input: b.input || {} }; }) } };
       }
       messages.push({ role: 'assistant', content: j.content });
-      messages.push({ role: 'user', content: appels.map(function (b) { etape_(etapes, 'outil', nomOutil_(b)); return { type: 'tool_result', tool_use_id: b.id, content: b.name === 'application' ? 'Limite d\'actions sur les applications atteinte : conclus avec ce que tu as vu.' : chatOutil_(b, admin, sortie) }; }) });
+      messages.push({ role: 'user', content: appels.map(function (b) { etape_(etapes, 'outil', nomOutil_(b)); return { type: 'tool_result', tool_use_id: b.id, content: b.name === 'application' ? 'Limite d\'actions sur les applications atteinte : conclus avec ce que tu as vu.' : chatOutil_(b, admin, sortie, permis) }; }) });
       corps.messages = messages; continue;                         // le texte d'introduction avant l'outil est écarté
     }
     texte += blocsTexte;
