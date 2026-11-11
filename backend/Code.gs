@@ -66,7 +66,7 @@ function doGet() {
 
 // Actions qui modifient des données : seules elles prennent le verrou. Les lectures (list, get, me, login...)
 // ne sont plus mises en file derrière un enregistrement de fichier, ce qui accélère nettement ScoutCloud.
-var WRITES = { ping: 1, register: 1, google: 1, changePassword: 1, adminReset: 1, adminDelete: 1, adminSetRole: 1 };
+var WRITES = { ping: 1, register: 1, google: 1, changePassword: 1, adminReset: 1, adminDelete: 1, adminSetRole: 1, portailEcrire: 1 };
 
 function doPost(e) {
   var lock = null;
@@ -217,6 +217,27 @@ var ACTIONS = {
   consommation: function (r) {
     requireAdmin_(r.token);
     return { ok: true, stats: consoStats_() };
+  },
+  // Mise en page du portail (sections, ordre, textes, logos, applications masquées) : fichier portail.json du dépôt de données privé.
+  // Lecture ouverte à tous (l'accueil est public) mais les applications masquées ne sont envoyées qu'à l'administrateur, qui les voit signalées.
+  portailLire: function (r) {
+    var admin = false;
+    if (r.token) { try { admin = getUser_(session_(r.token)).role === 'admin'; } catch (e) { admin = false; } }
+    var m = portailCharger_();
+    if (m && !admin) m = portailPublic_(m);
+    return { ok: true, portail: m, admin: admin };
+  },
+  portailEcrire: function (r) {
+    requireAdmin_(r.token);
+    var m = portailNettoyer_(r.portail), base = portailBase_();
+    if (!base) fail_('Le dépôt de données GitHub n\'est pas configuré (propriétés DATA_REPO et GITHUB_TOKEN).');
+    var texte = JSON.stringify(m, null, 1), cur = ghMem_('GET', base);
+    var body = { message: 'Portail : mise en page', content: Utilities.base64Encode(Utilities.newBlob(texte).getBytes()) };
+    if (cur.code === 200) { try { body.sha = JSON.parse(cur.text).sha; } catch (e) { /* nouveau fichier */ } }
+    var res = ghMem_('PUT', base, body);
+    if (res.code !== 200 && res.code !== 201) fail_('GitHub a refusé l\'enregistrement (' + res.code + ').');
+    portailCacheEcrire_(texte);
+    return { ok: true, portail: m };
   },
   adminSetRole: function (r) {
     requireAdmin_(r.token);
@@ -756,6 +777,50 @@ function chatOutil_(b, admin, sortie) {
     }
     return 'Outil inconnu.';
   } catch (err) { return 'Erreur : ' + (err && err.userMessage ? err.userMessage : (err && err.message) || 'lecture impossible.'); }
+}
+
+// ---------- portail : stockage, validation, cache ----------
+function portailBase_() { var p = props_(), repo = p.getProperty('DATA_REPO'); return repo && p.getProperty('GITHUB_TOKEN') ? 'repos/' + repo + '/contents/portail.json' : null; }
+function portailCacheEcrire_(texte) {
+  var c = CacheService.getScriptCache(), n = Math.ceil(texte.length / 90000), kv = { 'pt:n': String(n) };
+  for (var i = 0; i < n; i++) kv['pt:' + i] = texte.substr(i * 90000, 90000);
+  try { c.putAll(kv, 300); } catch (e) { /* tant pis : prochaine lecture depuis GitHub */ }
+}
+function portailCharger_() {
+  var c = CacheService.getScriptCache(), n = Number(c.get('pt:n') || 0);
+  if (n > 0) { var parts = []; for (var i = 0; i < n; i++) parts.push(c.get('pt:' + i)); if (parts.every(function (x) { return x != null; })) { try { return JSON.parse(parts.join('')); } catch (e) { /* relire */ } } }
+  var base = portailBase_(); if (!base) return null;
+  var res = ghMem_('GET', base, null, 'application/vnd.github.raw+json');
+  if (res.code !== 200) return null;
+  try { var m = JSON.parse(res.text); portailCacheEcrire_(res.text); return m; } catch (e) { return null; }
+}
+function portailPublic_(m) {
+  var apps = (m.apps || []).filter(function (a) { return !a.masque; });
+  var utiles = {}; apps.forEach(function (a) { utiles[a.section] = 1; });
+  return { v: m.v, maj: m.maj, sections: (m.sections || []).filter(function (x) { return utiles[x.id]; }), apps: apps };
+}
+function portailUrlOk_(u) { return typeof u === 'string' && (/^https:\/\/[^\s"'<>\\]{3,300}$/.test(u) || /^[A-Za-z0-9][\w.\-\/]{0,120}(\?[\w=&%.\-]{0,160})?$/.test(u)); }
+function portailIconeOk_(i) { return typeof i === 'string' && (/^assets\/icons\/[\w.\-]{1,60}$/.test(i) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]{20,200000}$/.test(i)); }
+function portailNettoyer_(m) {
+  if (!m || !Array.isArray(m.sections) || !Array.isArray(m.apps)) fail_('Mise en page invalide.');
+  if (m.sections.length < 1 || m.sections.length > 15 || m.apps.length > 100) fail_('Trop de sections ou d\'applications.');
+  var texte = function (t, max) { return String(t == null ? '' : t).replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, max); };
+  var ids = {}, sections = m.sections.map(function (x) {
+    var id = String(x && x.id || '').replace(/[^\w-]/g, '').slice(0, 24); if (!id || ids[id]) fail_('Identifiant de section invalide.'); ids[id] = 1;
+    var titre = texte(x.titre, 60); if (!titre) fail_('Une section n\'a pas de titre.');
+    return { id: id, titre: titre, haut: !!x.haut };
+  });
+  var aid = {}, total = 0, apps = m.apps.map(function (a) {
+    var id = String(a && a.id || '').replace(/[^\w-]/g, '').slice(0, 40); if (!id || aid[id]) fail_('Identifiant d\'application invalide.'); aid[id] = 1;
+    if (!ids[a.section]) fail_('Section inconnue pour « ' + texte(a.nom, 40) + ' ».');
+    if (!portailUrlOk_(a.url)) fail_('Adresse invalide pour « ' + texte(a.nom, 40) + ' » (https:// ou chemin relatif seulement).');
+    if (!portailIconeOk_(a.icone)) fail_('Logo invalide pour « ' + texte(a.nom, 40) + ' » (PNG, JPEG ou WebP de 150 Ko au plus).');
+    total += String(a.icone).length;
+    var nom = texte(a.nom, 40); if (!nom) fail_('Une application n\'a pas de nom.');
+    return { id: id, section: a.section, nom: nom, desc: texte(a.desc, 140), url: a.url, icone: a.icone, crop: !!a.crop, featured: !!a.featured, masque: !!a.masque, local: !!a.local };
+  });
+  if (total > 1500000) fail_('Logos trop volumineux au total.');
+  return { v: 1, maj: new Date().toISOString(), sections: sections, apps: apps };
 }
 // Étapes visibles pour la personne (fil de raisonnement), aussi publiées au fur et à mesure pour l'interrogation « progression ».
 var _chatRid_ = '';

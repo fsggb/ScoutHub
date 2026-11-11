@@ -2,24 +2,28 @@
 # Fiche de connaissances ChatGDB (format : ScoutHub/docs/projet-chatgdb.md, §5).
 # ChatGDB lit ce fichier pour répondre aux questions sur les applications de ce dépôt.
 depot: fsggb/ScoutHub
-maj: 2026-11-10
+maj: 2026-11-11
 ---
 
 # ScoutHub : le portail FSGGB
 
 Page d'accueil unique des outils de la fédération : https://fsggb.github.io/ScoutHub/ . Toutes les applications sont accessibles **sans compte**. Un compte (Google, ou adresse e-mail + mot de passe) sert à ChatGDB, à Mon compte et, plus tard, aux espaces réservés.
 
-## Rubriques
-Mon espace (ScoutCloud), Assistant (ChatGDB, application à part entière : https://fsggb.github.io/ScoutHub/ChatGDB/), Boutique (Boutique GDB : https://boutique.fsggb.fr/), Ressources et aide (Bibliothèque : documents de la fédération ; Aide : page pour écrire au service informatique, avec l’aide de ChatGDB qui rédige un message que l’utilisateur valide avant l’envoi), Bureautique, Création, Conception et CAO (CathIA, SoLeadWorks, dépôt fsggb/SoLeadWorks, AutoCAD = ScoutDraft, SolidWorks = ScoutCAD), Cartographie (Cartes IGN = ScoutMap). La recherche filtre les applications.
+## Applications (toutes sur le domaine de ScoutHub, aux noms d'origine)
+Chaque application reste dans son propre dépôt, sans modification, et ScoutHub va chercher chaque jour (et dès qu'elle change) sa dernière version pour la servir sous https://fsggb.github.io/ScoutHub/<dossier>/ . Les noms affichés sur l'accueil sont ceux des logiciels connus ; l'application elle-même garde son nom d'origine (WordCraft, GridCraft, SolidCraft…). Les fichiers s'enregistrent sur l'ordinateur de l'utilisateur.
+- **Assistant** : ChatGDB (/ChatGDB/). **Boutique** : https://boutique.fsggb.fr/.
+- **Ressources et aide** : Bibliothèque (/ScoutBibliotheque/, documents de la fédération) ; Aide (/aide.html, écrire au service informatique avec l'aide de ChatGDB, message validé par l'utilisateur avant envoi).
+- **Bureautique** : Word = WordCraft (/Word/), Excel = GridCraft (/Excel/), PowerPoint = DeckCraft (/PowerPoint/), Acrobat = PDFCraft (/PDF/).
+- **Création** : Photoshop = PhotoCraft (/Photoshop/), Illustrator = VectorCraft (/Illustrator/), InDesign = DesignCraft (/InDesign/), Lightroom = LightCraft (/Lightroom/), Figma = FigCraft (/Figma/), Excalidraw (/Draw/), Premiere Pro = FilmCraft (/Premiere/), After Effects = EffectCraft (/AfterEffects/), Pro Tools = SoundCraft (/ProTools/), Substance Painter = TextureCraft (/SubstancePainter/).
+- **Conception et CAO** : CathIA (/CathIA/, froissartage 3D), SoLeadWorks (/SoLeadWorks/?lang=fr, meubles de camp), AutoCAD = CADCraft (/CADCraft/?lang=fr), SolidWorks = SolidCraft (/SolidCraft/?lang=fr).
+- **Cartographie** : Cartes IGN = ScoutMap (/ScoutMap/).
+L'administrateur peut réordonner, masquer ou renommer les applications de l'accueil (Administration, onglet « Affichage du portail ») : l'accueil affiché aux autres personnes peut donc différer de cette liste.
 
 ## Comptes et rôles
 Rôles, du plus au moins privilégié : administrateur, chef de groupe, chef d'unité, parent, membre. Seul l'administrateur change les rôles (page Administration). Mon compte permet de changer son mot de passe (sauf compte Google : pas de mot de passe).
 
 ## ChatGDB
 Assistant conversationnel de la fédération (pas encore ouvert). Limites de crédits par session de 5 heures et par semaine ; des crédits se gagnent en utilisant les applications.
-
-## ScoutCloud
-Espace de fichiers qui sera stocké dans le Google Drive de chaque utilisateur (compte Google requis). Pas encore ouvert : la page n'affiche qu'un aperçu. L'ancien stockage dans GitHub n'existe plus ; en attendant, les applications enregistrent sur l'ordinateur.
 
 ## La Fédération : repères tirés du site officiel https://www.fsggb.fr
 *(Source : fsggb.fr, consulté le 10 novembre 2026. En cas de doute ou de changement, le site fait foi.)*

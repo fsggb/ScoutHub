@@ -78,41 +78,37 @@
 
   // ---------- accueil ----------
   // « Mon compte » et « Administration » sont déjà dans la barre du haut : pas de tuile en plus (une seule ligne en tête).
-  function appList() { return [...(window.SCOUTHUB_APPS || [])]; }
-
   function tile(a) {
     const link = document.createElement("a");
-    link.className = "app-tile" + (a.featured ? " featured" : ""); link.href = a.url;
+    link.className = "app-tile" + (a.featured ? " featured" : "") + (a.masque ? " is-hidden" : ""); link.href = Portail.safeUrl(a.url) ? a.url : "#";
     if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
-    let badge;
-    if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${a.icon}")`; }
-    else { badge = document.createElement("img"); badge.className = "app-badge"; badge.src = a.icon; badge.alt = ""; }
+    let badge; const icon = Portail.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
+    if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${icon}")`; }
+    else { badge = document.createElement("img"); badge.className = "app-badge"; badge.src = icon; badge.alt = ""; badge.loading = "lazy"; }
     const text = document.createElement("span");
-    const strong = Object.assign(document.createElement("strong"), { textContent: a.name });
+    const strong = Object.assign(document.createElement("strong"), { textContent: a.nom });
     const small = Object.assign(document.createElement("small"), { textContent: a.desc });
     text.append(strong, small); link.append(badge, text);
+    if (a.masque) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: "Masquée pour les autres" }));
     return link;
   }
 
   function renderApps() {
     const q = $("search").value.trim().toLowerCase(), box = $("apps"); box.textContent = "";
-    const all = appList(), shown = all.filter(a => !q || (a.name + " " + a.desc + " " + a.group).toLowerCase().includes(q));
-    const groups = [];
-    shown.forEach(a => { let g = groups.find(x => x.name === a.group); if (!g) groups.push(g = { name: a.group, items: [] }); g.items.push(a); });
-    // « Mon espace », « Assistant » et « Boutique » partagent une même ligne pour gagner de la place en hauteur.
-    const TOP = ["Mon espace", "Assistant", "Boutique"];
-    const topGroups = groups.filter(g => TOP.includes(g.name)).sort((x, y) => TOP.indexOf(x.name) - TOP.indexOf(y.name));
-    const row = document.createElement("div"); row.className = "group-row";
-    groups.sort((x, y) => (TOP.includes(x.name) ? 0 : 1) - (TOP.includes(y.name) ? 0 : 1) || 0);
-    let rowAdded = false;
-    groups.forEach(g => {
+    const m = Portail.current(), shown = [];
+    let row = null, prevTop = false;
+    m.sections.forEach(s => {
+      const items = m.apps.filter(a => a.section === s.id && (!a.masque || Portail.isAdmin) && (!q || (a.nom + " " + a.desc + " " + s.titre).toLowerCase().includes(q)));
+      if (!items.length) return;
+      shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";
-      if (TOP.includes(g.name)) { if (g.items.length > 1) section.classList.add("wide"); }
+      if (s.haut && items.length > 1) section.classList.add("wide");
       const grid = document.createElement("div"); grid.className = "grid-apps";
-      // Les applications mises en avant restent dans leur section, en tête.
-      g.items.sort((x, y) => (y.featured ? 1 : 0) - (x.featured ? 1 : 0)).forEach(a => grid.append(tile(a)));
-      section.append(Object.assign(document.createElement("h2"), { textContent: g.name }), grid);
-      if (TOP.includes(g.name)) { if (!rowAdded) { box.append(row); rowAdded = true; } row.append(section); } else box.append(section);
+      items.forEach(a => grid.append(tile(a)));
+      section.append(Object.assign(document.createElement("h2"), { textContent: s.titre }), grid);
+      // Sections « ligne du haut » consécutives : une seule ligne, pour gagner de la place en hauteur.
+      if (s.haut) { if (!prevTop || !row) { row = document.createElement("div"); row.className = "group-row"; box.append(row); } row.append(section); prevTop = true; }
+      else { box.append(section); prevTop = false; }
     });
     $("none").hidden = shown.length > 0;
   }
@@ -124,7 +120,7 @@
     Hub.renderBar(Hub.user);
     $("hello").textContent = Hub.user ? "Bonjour, " + Hub.user.email.split("@")[0].replace(/[._-]+/g, " ") : "Vos applications";
     $("guest-note").hidden = !!Hub.user;
-    renderApps();
+    renderApps(); Portail.refresh(renderApps);
   }
   function enter() { if (!goNext()) showHome(); }
 

@@ -56,7 +56,9 @@
   <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
   <script src="config.js"></script>
   <script src="common.js"></script>
+  <script src="portail.js"></script>
   <script src="app.js"></script>
   <script src="scouthub-client.js" data-app="ScoutHub"></script>
+  <script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>
 </body>
 </html>

@@ -1,0 +1,29 @@
+# Applications assemblées sur le domaine de ScoutHub (https://fsggb.github.io/ScoutHub/<dossier>/).
+# Chaque application reste dans son dépôt d'origine, SANS modification (ni nom, ni icône, ni script ajouté) :
+# le déploiement va chercher la dernière version, chaque jour et dès qu'elle change (workflow « Synchroniser »).
+# Format : <type> <dossier> <dépôt> [paramètre]
+#   release : dernière version publiée du dépôt (archive web « <paramètre>-web-*.zip »), rapide, sans compilation
+#   trunk   : compilation Rust → WebAssembly depuis le dernier commit du dépôt (<paramètre> = dossier de l'application)
+#   excali  : compilation d'Excalidraw (Node) depuis le dernier commit
+#   static  : dépôt de site statique cloné tel quel
+release Word             storytold/wordcraft     wordcraft
+release Excel            storytold/gridcraft     gridcraft
+release PowerPoint       storytold/deckcraft     deckcraft
+release PDF              storytold/pdfcraft      pdfcraft
+release Photoshop        storytold/photocraft    photocraft
+release Premiere         storytold/filmcraft     filmcraft
+release Illustrator      storytold/vectorcraft   vectorcraft
+release InDesign         storytold/designcraft   designcraft
+release Lightroom        storytold/lightcraft    lightcraft
+release Figma            storytold/figcraft      figcraft
+release SubstancePainter storytold/texturecraft  texturecraft
+release AfterEffects     storytold/effectcraft   effectcraft
+release ProTools         storytold/soundcraft    soundcraft
+trunk   SolidCraft       tangency-labs/solidcraft apps/solidcraft-web
+trunk   CADCraft         storytold/cadcraft      apps/cadcraft-web
+trunk   SoLeadWorks      fsggb/SoLeadWorks       apps/solidcraft-web
+excali  Draw             excalidraw/excalidraw
+static  CathIA           fsggb/CathIA
+static  ScoutMap         fsggb/ScoutMap
+static  ChatGDB          fsggb/ChatGDB
+static  ScoutBibliotheque fsggb/ScoutBibliotheque

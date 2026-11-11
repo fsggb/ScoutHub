@@ -1,7 +1,7 @@
-name: Synchroniser les miroirs
+name: Synchroniser les applications
 
-# Toutes les 15 minutes : si l'un des dépôts d'applications listés dans mirrors.txt a changé depuis le dernier déploiement,
-# le site ScoutHub est redéployé (le déploiement reclone tous les miroirs). Rien ne change : aucun déploiement.
+# Toutes les 15 minutes : si une application d'apps.txt a une nouvelle version (nouvelle version publiée ou nouveau commit)
+# par rapport au site publié (mirrors.json), le site ScoutHub est redéployé. Rien ne change : aucun déploiement.
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -16,16 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Comparer les dépôts avec le site publié
+      - name: Comparer les versions avec le site publié
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           live=$(curl -fsSL "https://fsggb.github.io/ScoutHub/mirrors.json?t=$(date +%s)" || echo '{}')
-          changed=""
-          while read -r repo dir; do
-            sha=$(git ls-remote "https://github.com/fsggb/${repo}.git" HEAD | cut -f1)
-            old=$(echo "$live" | jq -r --arg r "$repo" '.[$r] // ""')
-            if [ -n "$sha" ] && [ "$sha" != "$old" ]; then changed="$changed $repo"; fi
-          done < <(grep -vE '^\s*(#|$)' mirrors.txt)
-          if [ -n "$changed" ]; then echo "Dépôts modifiés :$changed : redéploiement"; gh workflow run pages.yml --ref main
+          now=$(scripts/versions.sh)
+          changed=$(jq -rn --argjson a "$live" --argjson b "$now" '[$b | to_entries[] | select(.value != "inconnue" and .value != ($a[.key] // "")) | .key] | join(" ")')
+          if [ -n "$changed" ]; then echo "Applications modifiées : $changed : redéploiement"; gh workflow run pages.yml --ref main
           else echo "Aucun changement"; fi
