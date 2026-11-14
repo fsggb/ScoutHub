@@ -2,13 +2,13 @@
 *{box-sizing:border-box}body{margin:0;min-height:100vh}.topbar{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 max(20px,calc((100vw - 1060px)/2));background:#fff;border-bottom:1px solid #e1e6eb}.brand{display:flex;align-items:center;gap:10px;color:#17212b;text-decoration:none}.brand-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:7px;background:#1f5eff;color:#fff;font-weight:800}.repository-link,footer a{color:#536273;font-size:13px;text-decoration:none}.shell{width:min(1060px,calc(100% - 40px));margin:0 auto;padding:52px 0 70px}.login-panel{max-width:760px;padding:0 0 36px}.login-panel.compact{padding-bottom:30px}.label{margin:0 0 8px;color:#536273;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.login-panel h1{max-width:670px;margin:0;font-size:clamp(30px,5vw,48px);line-height:1.08;letter-spacing:-.04em;font-weight:750}.intro{margin:16px 0 25px;color:#536273}.login-form label{display:block;margin-bottom:7px;font-size:14px;font-weight:650}.login-row{display:flex;max-width:590px;gap:9px}.login-row input{min-width:0;flex:1;padding:12px 13px;border:1px solid #c8d0d9;border-radius:7px;background:#fff;font:inherit}.login-row input:focus{outline:2px solid #a9c1ff;border-color:#1f5eff}.login-row button,.secondary-button{padding:11px 17px;border:0;border-radius:7px;background:#1f5eff;color:#fff;font:inherit;font-weight:700;cursor:pointer}.status{min-height:20px;margin:9px 0 0;color:#536273;font-size:13px}.status.error{color:#b42318}.workspace{border-top:1px solid #dfe5eb;padding-top:28px}.workspace-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:17px}.workspace-heading h2{margin:0;font-size:25px;word-break:break-all}.secondary-button{background:#fff;color:#344454;border:1px solid #c8d0d9;font-size:13px}.workspace-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px}.files-panel,.apps-panel{min-width:0;padding:20px;background:#fff;border:1px solid #dfe5eb;border-radius:9px}.panel-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.panel-heading h3{margin:0;font-size:18px}.text-button{padding:0;border:0;background:none;color:#1f5eff;font:inherit;font-size:13px;cursor:pointer}.muted{margin:0;color:#697787;font-size:13px}.file-list{margin:13px 0 0;padding:0;list-style:none}.file-list li+li{border-top:1px solid #edf0f3}.file-list a{display:block;padding:10px 0;color:#1f5eff;text-decoration:none;font-size:14px}.file-list a:hover{text-decoration:underline}.app-link{display:flex;align-items:center;gap:12px;padding:12px 0;color:#17212b;text-decoration:none;border-top:1px solid #edf0f3}.app-link b{margin-left:auto;color:#697787}.app-symbol{display:grid;place-items:center;width:32px;height:32px;border-radius:7px;font-size:20px}.draft .app-symbol{background:#dcecf2}.cad .app-symbol{background:#e9e7d8}.cathia .app-symbol{background:#e7efd3}.app-link strong,.app-link small{display:block}.app-link small{margin-top:2px;color:#697787;font-size:12px}.privacy-note{margin:18px 0 0;color:#697787;font-size:12px}.login-panel+.workspace{scroll-margin-top:20px}footer{width:min(1060px,calc(100% - 40px));margin:0 auto;padding:0 0 25px;color:#697787;font-size:12px}@media(max-width:700px){.shell{padding-top:35px}.workspace-grid{grid-template-columns:1fr}.workspace-heading{align-items:start;flex-direction:column}.login-row{flex-direction:column}.login-row button{width:100%}.topbar{padding:0 20px}.repository-link{font-size:12px}}
 
 /* Charte FSGGB (identique à ScoutOffice et à la boutique) */
-:root{--navy:#000761;--navy-soft:#1e2472;--gold:#c6a24e;--gold-dark:#ab8b4e;--bg:#fafafc;--text:#0a0c25;--text-secondary:#4e505d;font-family:"Source Serif 4","Source Serif Pro",Georgia,"Noto Serif",serif;color:var(--text);background:var(--bg)}
+:root{--navy:#000761;--navy-soft:#1e2472;--gold:#c6a24e;--gold-dark:#ab8b4e;--gold-text:#7a5f1e;--bg:#fafafc;--text:#0a0c25;--text-secondary:#4e505d;font-family:"Source Serif 4","Source Serif Pro",Georgia,"Noto Serif",serif;color:var(--text);background:var(--bg)}
 .topbar{height:68px;background:var(--navy);border-bottom:1px solid var(--navy-soft);box-shadow:0 2px 10px rgba(0,7,97,.25)}
 .topbar a,.repository-link{color:#d9dbf0}.topbar a:hover{color:var(--gold)}
 .brand{color:#fff;font-size:17px}.brand strong{font-weight:600}
 .brand-logo{width:40px;height:40px;object-fit:contain}
 .login-panel h1,.workspace-heading h2,.panel-heading h3{color:var(--navy);font-weight:500}
-.label{color:var(--gold-dark)}.intro,.muted,.status{color:var(--text-secondary)}
+.label{color:var(--gold-text)}.intro,.muted,.status{color:var(--text-secondary)}
 .login-row button,.secondary-button:hover{background:var(--navy);color:#fff}
 .login-row button:hover{background:var(--navy-soft)}
 .login-row input:focus{outline-color:var(--gold);border-color:var(--gold-dark)}
@@ -27,17 +27,17 @@ body{background:linear-gradient(180deg,#f0e3c3 0,#fafafc 340px) no-repeat,var(--
 .tab{flex:1;padding:10px;border:0;border-bottom:3px solid transparent;background:none;font:inherit;font-weight:600;color:var(--text-secondary);cursor:pointer}
 .tab.active{color:var(--navy);border-bottom-color:var(--gold)}
 form label{display:block;margin:12px 0 6px;font-size:14px;font-weight:600}
-form input{width:100%;padding:11px 12px;border:1px solid #cfcabd;border-radius:8px;font:inherit;background:#fff}
+form input:not([type=checkbox]):not([type=radio]):not([type=file]){width:100%;padding:11px 12px;border:1px solid #cfcabd;border-radius:8px;font:inherit;background:#fff}
 form input:focus{outline:2px solid var(--gold);border-color:var(--gold-dark)}
 .primary{margin-top:18px;width:100%;padding:12px;border:0;border-radius:8px;background:var(--navy);color:#fff;font:inherit;font-weight:700;cursor:pointer}
-.primary:hover{background:var(--navy-soft)}.primary:disabled{opacity:.6;cursor:wait}
+.primary:hover{background:var(--navy-soft)}.primary:disabled{background:#c9cad6;opacity:1;cursor:not-allowed}.primary.busy{cursor:wait}
 .ghost{padding:8px 13px;border:1px solid #cfcabd;border-radius:8px;background:#fff;color:var(--navy);font:inherit;font-size:13px;cursor:pointer}
 .ghost:hover{border-color:var(--gold-dark)}
 .hint{margin:14px 0 0;color:#6a6c79;font-size:12px;text-align:center}
 .grid-apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-bottom:26px}
 .app-tile{display:flex;align-items:center;gap:13px;padding:16px;background:#fff;border:1px solid #e7e4dc;border-radius:12px;color:var(--text);text-decoration:none;box-shadow:0 1px 3px rgba(0,7,97,.08);transition:transform .15s,box-shadow .15s}
 .app-tile:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.14)}
-.app-tile strong,.app-tile small{display:block}.app-tile small{color:#6a6c79;font-size:12px;margin-top:2px}
+.app-tile strong,.app-tile small{display:block}.app-tile small{color:#5f616e;font-size:13px;margin-top:2px}
 .app-badge{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:10px;background:var(--navy);color:var(--gold);font-size:22px;font-weight:700;object-fit:contain}
 img.app-badge{background:#fff}
 .panel{background:#fff;border:1px solid #e7e4dc;border-radius:12px;padding:22px;box-shadow:0 1px 3px rgba(0,7,97,.08)}
@@ -54,7 +54,7 @@ dialog.wide{width:min(640px,calc(100% - 32px))}dialog::backdrop{background:rgba(
 dialog h2{margin:0 0 8px;color:var(--navy);font-weight:500}.dlg-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}.dlg-actions .primary{width:auto;margin:0;padding:9px 18px}
 .muted{color:#6a6c79;font-size:13px}.status{min-height:20px;margin:10px 0 0;font-size:13px;color:var(--text-secondary)}.status.error{color:#b42318}
 [hidden]{display:none!important}
-.app-group{margin-bottom:26px}.app-group h2{margin:0 0 12px;color:var(--gold-dark);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.app-group{margin-bottom:26px}.app-group h2{margin:0 0 12px;color:var(--gold-text);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .app-group .grid-apps{margin-bottom:0}
 .app-tile{min-height:80px}
 .app-tile small.equiv{color:var(--gold-dark);font-size:11px}

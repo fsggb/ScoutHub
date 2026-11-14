@@ -5,7 +5,12 @@
   <script>if (window.top !== window.self) document.documentElement.remove();</script>
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="ScoutHub : vos applications FSGGB.">
+  <meta name="description" content="ScoutHub : les outils numériques de la Fédération des Scouts et Guides Godefroy de Bouillon, réunis au même endroit.">
+  <meta name="theme-color" content="#000761">
+  <meta property="og:title" content="ScoutHub">
+  <meta property="og:description" content="Les outils numériques de la Fédération des Scouts et Guides Godefroy de Bouillon.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://fsggb.github.io/ScoutHub/assets/fsggb.png">
   <title>ScoutHub</title>
   <link rel="icon" type="image/png" href="assets/fsggb.png">
   <link rel="stylesheet" href="styles.css">
@@ -16,7 +21,7 @@
 
   <main class="shell">
     <section id="auth" class="auth-split" aria-labelledby="auth-title" hidden>
-      <aside class="auth-aside" aria-hidden="false">
+      <aside class="auth-aside">
         <img src="assets/fsggb.png" alt="" width="72" height="72">
         <h2>ScoutHub</h2>
         <p>Les outils numériques de la fédération, réunis au même endroit.</p>
@@ -44,14 +49,14 @@
             <button id="auth-submit" class="primary" type="submit">Recevoir un code par e-mail</button>
           </div>
           <div id="step-code" hidden>
-            <p class="hint left">Un code à 6 chiffres vient d’être envoyé à <b id="sent-to"></b>. Il est valable 10 minutes.</p>
+            <p class="hint left code-info" id="code-info">Un code à 6 chiffres vient d’être envoyé à <b id="sent-to"></b>. Il est valable 10 minutes.</p>
             <label for="code">Code reçu</label>
-            <input id="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="······" aria-describedby="sent-to">
+            <input id="code" class="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="······" aria-describedby="code-info">
             <button id="code-submit" class="primary" type="submit">Se connecter</button>
             <p class="code-links"><button id="code-resend" class="text-button" type="button">Renvoyer un code</button><button id="code-back" class="text-button" type="button">Changer d’adresse</button></p>
           </div>
           <p id="auth-status" class="status" role="status" aria-live="polite"></p>
-          <p class="auth-trust">Pas d’inscription ni de mot de passe : un code à usage unique prouve votre adresse. Essais limités.</p>
+          <p class="auth-trust">Pas d’inscription ni de mot de passe : un code à usage unique prouve votre adresse (5 essais par code).</p>
         </form>
       </div>
     </section>

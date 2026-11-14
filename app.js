@@ -6,6 +6,7 @@
   const DOMAINE = /^[^@\s]+@fsggb\.fr$/i;
   function step(n) {
     $("step-mail").hidden = n !== 1; $("step-code").hidden = n !== 2; say($("auth-status"), "");
+    document.querySelector(".auth-main").classList.toggle("etape-code", n === 2);
     setTimeout(() => $(n === 1 ? "email" : "code").focus(), 0);
   }
   function cooldown(sec) {
@@ -38,8 +39,13 @@
 
   // Retour vers l'application ou la page qui a demandé la connexion (adresses relatives du site uniquement).
   function goNext() {
-    const next = new URLSearchParams(location.search).get("next");
-    if (next && /^[\w\-\/.?=&%]+$/.test(next) && !next.startsWith("//") && !/^[a-z]+:/i.test(next)) { location.replace(next); return true; }
+    let next = new URLSearchParams(location.search).get("next");
+    if (next && /^[\w\-\/.?=&%]+$/.test(next) && !next.startsWith("//") && !/^[a-z]+:/i.test(next)) {
+      // « /ChatGDB/ » envoyé par une application : adresse relative au portail, pas à la racine du site
+      const root = new URL(Hub.root).pathname;
+      if (next.startsWith("/") && !next.startsWith(root)) next = root + next.slice(1);
+      location.replace(next); return true;
+    }
     return false;
   }
 
@@ -62,8 +68,8 @@
           } catch (e) { say($("auth-status"), e.message, true); }
         }
       });
-      google.accounts.id.renderButton($("g-btn"), { theme: "outline", size: "large", shape: "pill", text: "continue_with", locale: "fr", width: 340 });
-      $("g-block").hidden = false;
+      $("g-block").hidden = false;      // affiché d'abord : la largeur disponible devient mesurable (téléphone)
+      google.accounts.id.renderButton($("g-btn"), { theme: "outline", size: "large", shape: "pill", text: "continue_with", locale: "fr", width: Math.max(200, Math.min(340, $("auth-form").clientWidth || 340)) });
     };
     document.head.append(s);
   }
@@ -98,11 +104,12 @@
   }
 
   function renderApps() {
-    const q = $("search").value.trim().toLowerCase(), box = $("apps"); box.textContent = "";
+    const plat = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();      // « creation » trouve « Création »
+    const q = plat($("search").value.trim()), box = $("apps"); box.textContent = "";
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || (a.nom + " " + a.desc + " " + s.titre).toLowerCase().includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";
@@ -122,7 +129,8 @@
   function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
     Hub.renderBar(Hub.user);
-    $("hello").textContent = Hub.user ? "Bonjour, " + Hub.user.email.split("@")[0].replace(/[._-]+/g, " ") : "Vos applications";
+    const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
+    $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "Vos applications";
     $("guest-note").hidden = !!Hub.user;
     renderApps(); Portail.refresh(renderApps);
   }

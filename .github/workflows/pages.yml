@@ -140,7 +140,7 @@ jobs:
               release)
                 tmp="$RUNNER_TEMP/rel/${dir}"; mkdir -p "$tmp"
                 if gh release download --repo "$repo" --pattern "${arg}-web-*.zip" --dir "$tmp" --clobber && unzip -q "$tmp"/*.zip -d "$tmp/u"; then
-                  root=$(find "$tmp/u" -mindepth 1 -maxdepth 1 -type d -print -quit); mkdir -p "$dest"; cp -a "${root:-$tmp/u}"/. "$dest"/
+                  root=$(find "$tmp/u" -mindepth 1 -maxdepth 1 -type d -print -quit); mkdir -p "$dest"; cp -aL "${root:-$tmp/u}"/. "$dest"/      # -L : les liens internes à l'archive deviennent de vrais fichiers
                 else echo "::warning::${dir} : version publiée introuvable"; fi ;;
               trunk|excali)
                 if [ -d "artifacts/app-${dir}" ]; then mkdir -p "$dest"; cp -a "artifacts/app-${dir}"/. "$dest"/; else echo "::warning::${dir} : compilation indisponible"; fi ;;
@@ -157,6 +157,10 @@ jobs:
           # rien d'autre que des fichiers ordinaires : ni lien symbolique (qui pourrait pointer hors du site), ni dépôt git, ni fichier caché
           find build -type l -print -delete
           find build -name '.git*' -prune -exec rm -rf {} + 2>/dev/null || true
+          # contrôle : chaque application doit trouver les fichiers que sa page d'accueil référence
+          for d in build/*/; do f="${d}index.html"; [ -f "$f" ] || continue
+            grep -oE "(href|src)=\"\./[^\" >]+\.(js|wasm)\"" "$f" | grep -oE "\./[^\" >]+" | while read -r p; do [ -e "${d}${p}" ] || echo "::warning::${d} : ${p} manquant"; done
+          done
           du -sh build; du -sh build/* | sort -h | tail -8
       - uses: actions/upload-pages-artifact@v3
         with:

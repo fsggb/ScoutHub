@@ -71,7 +71,8 @@
       bar.append(brand);
       if (!user) {
         const nav = Object.assign(document.createElement("nav"), { className: "topnav" });
-        nav.append(Object.assign(document.createElement("a"), { className: "nav-btn", href: "index.html?connexion=1", textContent: "Se connecter" }));
+        const q = new URLSearchParams(location.search);
+        if (!(Hub.here() === "index.html" && (q.has("connexion") || q.has("next")))) nav.append(Object.assign(document.createElement("a"), { className: "nav-btn", href: "index.html?connexion=1", textContent: "Se connecter" }));
         bar.append(nav); return;
       }
       const nav = Object.assign(document.createElement("nav"), { className: "topnav" });
