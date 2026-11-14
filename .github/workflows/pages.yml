@@ -141,6 +141,9 @@ jobs:
                 tmp="$RUNNER_TEMP/rel/${dir}"; mkdir -p "$tmp"
                 if gh release download --repo "$repo" --pattern "${arg}-web-*.zip" --dir "$tmp" --clobber && unzip -q "$tmp"/*.zip -d "$tmp/u"; then
                   root=$(find "$tmp/u" -mindepth 1 -maxdepth 1 -type d -print -quit); mkdir -p "$dest"; cp -aL "${root:-$tmp/u}"/. "$dest"/      # -L : les liens internes à l'archive deviennent de vrais fichiers
+                  # Certaines versions rangent le chargeur de l'application dans app/ alors qu'il importe ./snippets/ livré à la racine :
+                  # on en met une copie à côté de lui (aucun fichier de l'application n'est modifié).
+                  if [ -d "$dest/app" ] && [ -d "$dest/snippets" ] && [ ! -e "$dest/app/snippets" ] && grep -qs "from './snippets/" "$dest"/app/*.js; then cp -a "$dest/snippets" "$dest/app/snippets"; fi
                 else echo "::warning::${dir} : version publiée introuvable"; fi ;;
               trunk|excali)
                 if [ -d "artifacts/app-${dir}" ]; then mkdir -p "$dest"; cp -a "artifacts/app-${dir}"/. "$dest"/; else echo "::warning::${dir} : compilation indisponible"; fi ;;
