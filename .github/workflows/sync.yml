@@ -23,5 +23,7 @@ jobs:
           live=$(curl -fsSL "https://fsggb.github.io/ScoutHub/mirrors.json?t=$(date +%s)" || echo '{}')
           now=$(scripts/versions.sh)
           changed=$(jq -rn --argjson a "$live" --argjson b "$now" '[$b | to_entries[] | select(.value != "inconnue" and .value != ($a[.key] // "")) | .key] | join(" ")')
-          if [ -n "$changed" ]; then echo "Applications modifiées : $changed : redéploiement"; gh workflow run pages.yml --ref main
+          busy=$(gh run list --workflow pages.yml --limit 5 --json status --jq '[.[] | select(.status != "completed")] | length' || echo 0)
+          if [ -n "$changed" ] && [ "$busy" != "0" ]; then echo "Applications modifiées : $changed ; un déploiement est déjà en cours, il les prendra"
+          elif [ -n "$changed" ]; then echo "Applications modifiées : $changed : redéploiement"; gh workflow run pages.yml --ref main
           else echo "Aucun changement"; fi

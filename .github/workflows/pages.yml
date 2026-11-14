@@ -15,7 +15,8 @@ permissions: {}
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # ne jamais annuler un déploiement en cours (une compilation Rust dure plus que l'intervalle de synchro)
+  cancel-in-progress: false
 
 jobs:
   plan:
