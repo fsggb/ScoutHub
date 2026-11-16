@@ -1006,3 +1006,46 @@ function chatAppeler_(r, admin) {
   etape_(etapes, 'fin', 'Réponse rédigée');
   return { texte: texte.trim(), sources: sources.slice(0, 20), recherches: recherches, nbRecherches: nbRecherches, propositions: sortie.propositions, aides: sortie.aides, depots: sortie.depots, etapes: etapes, usage: usage, modele: modele };
 }
+
+// Tuiles SCAN 25 par lots (jusqu'à 20 tuiles par appel, demandées à l'IGN en parallèle) : beaucoup plus rapide que tuile par tuile.
+ACTIONS.scan25b = function (r) {
+  var T = (r.t || []).slice(0, 20), cache = CacheService.getScriptCache(), out = [], keys = [], tiles = [], i;
+  var k = props_().getProperty('SCAN25_KEY');
+  if (!k) fail_('SCAN 25 non configuré (propriété SCAN25_KEY).');
+  var L = 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR', ek = encodeURIComponent(k);
+  for (i = 0; i < T.length; i++) {
+    var z = parseInt(T[i][0], 10), x = parseInt(T[i][1], 10), y = parseInt(T[i][2], 10), n = Math.pow(2, z);
+    out.push(null);
+    if (z >= 0 && z <= 17 && x >= 0 && y >= 0 && x < n && y < n) { tiles.push([z, x, y]); keys.push('s25_' + z + '_' + x + '_' + y); }
+    else { tiles.push(null); keys.push(null); }
+  }
+  var wanted = keys.filter(function (q) { return q; }), hits = wanted.length ? cache.getAll(wanted) : {}, todo = [];
+  for (i = 0; i < tiles.length; i++) {
+    if (!tiles[i]) continue;
+    if (hits[keys[i]]) out[i] = hits[keys[i]]; else todo.push(i);
+  }
+  var err = '';
+  if (todo.length) {
+    var day = 'n25_' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMdd'), cnt = parseInt(cache.get(day) || '0', 10);
+    if (cnt + todo.length > 30000) fail_('Limite quotidienne de tuiles SCAN 25 atteinte, réessayez demain.');
+    cache.put(day, String(cnt + todo.length), 21600);
+    var put = {}, round = function (list, mk) {
+      var rs = UrlFetchApp.fetchAll(list.map(function (ix) { var t = tiles[ix]; return { url: mk(t[0], t[1], t[2]), muteHttpExceptions: true }; })), again = [];
+      for (var j = 0; j < rs.length; j++) {
+        var code = rs[j].getResponseCode();
+        if (code === 200) { var d = Utilities.base64Encode(rs[j].getBlob().getBytes()); out[list[j]] = d; if (d.length < 95000) put[keys[list[j]]] = d; }
+        else { err = 'IGN : HTTP ' + code; again.push(list[j]); }
+      }
+      return again;
+    };
+    var left = round(todo, function (z, x, y) {
+      return 'https://data.geopf.fr/private/wmts?apikey=' + ek + '&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + L + '&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=' + z + '&TILEROW=' + y + '&TILECOL=' + x;
+    });
+    if (left.length) {
+      left = round(left, function (z, x, y) { return 'https://data.geopf.fr/private/tms/1.0.0/' + L + '/' + z + '/' + x + '/' + y + '.jpeg?apikey=' + ek; });
+      if (!left.length) err = '';
+    }
+    try { cache.putAll(put, 21600); } catch (er) { /* trop gros : ignoré */ }
+  }
+  return { ok: true, t: out, e: err };
+};
