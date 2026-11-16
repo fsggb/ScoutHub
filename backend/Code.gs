@@ -277,13 +277,15 @@ var ACTIONS = {
   me: function (r) {
     return { ok: true, user: publicUser_(session_(r.token)) };
   },
-  // Tuiles SCAN 25 (IGN) pour ScoutMap : réservé aux membres connectés ; la clé IGN reste dans la propriété de script SCAN25_KEY.
+  // Tuiles SCAN 25 (IGN) pour ScoutMap : ouvert à tous (pas de connexion), la clé IGN reste dans la propriété de script SCAN25_KEY ; plafond quotidien.
   scan25: function (r) {
-    session_(r.token);
     var z = parseInt(r.z, 10), x = parseInt(r.x, 10), y = parseInt(r.y, 10), n = Math.pow(2, z);
     if (!(z >= 0 && z <= 17 && x >= 0 && y >= 0 && x < n && y < n)) fail_('Tuile invalide.');
     var cache = CacheService.getScriptCache(), key = 's25_' + z + '_' + x + '_' + y, hit = cache.get(key);
     if (hit) return { ok: true, d: hit };
+    var day = 'n25_' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMdd'), cnt = parseInt(cache.get(day) || '0', 10);
+    if (cnt > 30000) fail_('Limite quotidienne de tuiles SCAN 25 atteinte, réessayez demain.');
+    cache.put(day, String(cnt + 1), 21600);
     var k = props_().getProperty('SCAN25_KEY');
     if (!k) fail_('SCAN 25 non configuré (propriété SCAN25_KEY).');
     var L = 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR', ek = encodeURIComponent(k);
