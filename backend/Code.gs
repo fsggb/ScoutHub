@@ -286,10 +286,17 @@ var ACTIONS = {
     if (hit) return { ok: true, d: hit };
     var k = props_().getProperty('SCAN25_KEY');
     if (!k) fail_('SCAN 25 non configuré (propriété SCAN25_KEY).');
-    var res = UrlFetchApp.fetch('https://data.geopf.fr/private/wmts?apikey=' + encodeURIComponent(k) +
-      '&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM' +
-      '&TILEMATRIX=' + z + '&TILEROW=' + y + '&TILECOL=' + x, { muteHttpExceptions: true });
-    if (res.getResponseCode() !== 200) fail_('IGN : HTTP ' + res.getResponseCode());
+    var L = 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR', ek = encodeURIComponent(k);
+    var urls = [
+      'https://data.geopf.fr/private/wmts?apikey=' + ek + '&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + L + '&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=' + z + '&TILEROW=' + y + '&TILECOL=' + x,
+      'https://data.geopf.fr/private/tms/1.0.0/' + L + '/' + z + '/' + x + '/' + y + '.jpeg?apikey=' + ek
+    ], res = null, code = 0;
+    for (var u = 0; u < urls.length; u++) {
+      res = UrlFetchApp.fetch(urls[u], { muteHttpExceptions: true });
+      code = res.getResponseCode();
+      if (code === 200) break;
+    }
+    if (code !== 200) fail_('IGN : HTTP ' + code);
     var d = Utilities.base64Encode(res.getBlob().getBytes());
     if (d.length < 95000) { try { cache.put(key, d, 21600); } catch (er) { /* trop gros : ignoré */ } }
     return { ok: true, d: d };
