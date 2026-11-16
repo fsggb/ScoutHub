@@ -1049,3 +1049,29 @@ ACTIONS.scan25b = function (r) {
   }
   return { ok: true, t: out, e: err };
 };
+
+// Points d'eau potable (OpenStreetMap) pour ScoutMap : le serveur interroge Overpass et garde le résultat 6 h en mémoire.
+ACTIONS.eau = function (r) {
+  var b = (r.b || []).map(Number);
+  if (b.length !== 4 || b.some(function (v) { return !isFinite(v); }) || b[2] - b[0] > 0.2 || b[3] - b[1] > 0.2 || b[0] < -90 || b[2] > 90) fail_('Zone invalide.');
+  var cache = CacheService.getScriptCache(), key = 'eau_' + b.map(function (v) { return v.toFixed(4); }).join('_'), hit = cache.get(key);
+  if (hit) return { ok: true, el: JSON.parse(hit) };
+  var bb = '(' + b.map(function (v) { return v.toFixed(5); }).join(',') + ')';
+  var q = '[out:json][timeout:25];(node["amenity"="drinking_water"]' + bb + ';node["man_made"="water_tap"]["drinking_water"!="no"]' + bb +
+    ';node["amenity"="fountain"]["drinking_water"="yes"]' + bb + ';node["natural"="spring"]["drinking_water"="yes"]' + bb +
+    ';node["man_made"="water_well"]["drinking_water"="yes"]' + bb + ';node["amenity"="water_point"]["drinking_water"!="no"]' + bb + ';);out;';
+  var ends = ['https://overpass-api.de/api/interpreter', 'https://lz4.overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'], lastErr = 'indisponible';
+  for (var i = 0; i < ends.length; i++) {
+    try {
+      var res = UrlFetchApp.fetch(ends[i], { method: 'post', payload: { data: q }, muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) { lastErr = 'HTTP ' + res.getResponseCode(); continue; }
+      var j = JSON.parse(res.getContentText()), el = (j.elements || []).filter(function (e) { return e.lat != null; }).map(function (e) {
+        var t = e.tags || {};
+        return { lat: e.lat, lon: e.lon, tags: { amenity: t.amenity, man_made: t.man_made, natural: t.natural, drinking_water: t.drinking_water, name: t.name } };
+      });
+      try { cache.put(key, JSON.stringify(el), 21600); } catch (er) { /* trop gros : ignoré */ }
+      return { ok: true, el: el };
+    } catch (er2) { lastErr = String(er2).slice(0, 80); }
+  }
+  fail_('OpenStreetMap indisponible (' + lastErr + ').');
+};
