@@ -277,6 +277,23 @@ var ACTIONS = {
   me: function (r) {
     return { ok: true, user: publicUser_(session_(r.token)) };
   },
+  // Tuiles SCAN 25 (IGN) pour ScoutMap : réservé aux membres connectés ; la clé IGN reste dans la propriété de script SCAN25_KEY.
+  scan25: function (r) {
+    session_(r.token);
+    var z = parseInt(r.z, 10), x = parseInt(r.x, 10), y = parseInt(r.y, 10), n = Math.pow(2, z);
+    if (!(z >= 0 && z <= 17 && x >= 0 && y >= 0 && x < n && y < n)) fail_('Tuile invalide.');
+    var cache = CacheService.getScriptCache(), key = 's25_' + z + '_' + x + '_' + y, hit = cache.get(key);
+    if (hit) return { ok: true, d: hit };
+    var k = props_().getProperty('SCAN25_KEY');
+    if (!k) fail_('SCAN 25 non configuré (propriété SCAN25_KEY).');
+    var res = UrlFetchApp.fetch('https://data.geopf.fr/private/wmts?apikey=' + encodeURIComponent(k) +
+      '&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM' +
+      '&TILEMATRIX=' + z + '&TILEROW=' + y + '&TILECOL=' + x, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) fail_('IGN : HTTP ' + res.getResponseCode());
+    var d = Utilities.base64Encode(res.getBlob().getBytes());
+    if (d.length < 95000) { try { cache.put(key, d, 21600); } catch (er) { /* trop gros : ignoré */ } }
+    return { ok: true, d: d };
+  },
   adminList: function (r) {
     requireAdmin_(r.token);
     return { ok: true, users: allUsers_() };
