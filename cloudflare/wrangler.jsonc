@@ -8,6 +8,9 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "scouthub", "database_id": "1fbba344-d555-438e-b948-7bffefe30e5b" }
   ],
+  // Partage en direct de ScoutMap : un Durable Object par partage (stockage SQLite, offre gratuite)
+  "durable_objects": { "bindings": [{ "name": "PARTAGE", "class_name": "Partage" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Partage"] }],
   // Secrets du compte (Secrets Store « default_secrets_store »), lus avec await env.NOM.get()
   "secrets_store_secrets": [
     { "binding": "ANTHROPIC_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "ANTHROPIC_KEY" },

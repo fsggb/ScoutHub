@@ -3,6 +3,8 @@
 //                   de crédits, transmet la requête à Claude et renvoie la réponse au fil de l'eau ; la consommation
 //                   est enregistrée dans D1 une fois la réponse terminée.
 //  POST /credits  : crédits restants de la personne.
+//  GET  /direct/{id} (WebSocket) : partage en direct de ScoutMap (itinéraire, azimuts, grand jeu) : positions, discussion,
+//                   carte ; tout arrive déjà chiffré par le navigateur (la clé n'est que dans le lien), le serveur ne lit rien.
 //  GET  /ign/{z}/{x}/{y}.jpg (ou /scan25/…, adresse attendue par ScoutMap) : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
 // Secrets : ANTHROPIC_KEY (clé Claude, jamais visible du navigateur), RELAIS_SECRET (partagé avec le serveur ScoutHub).
 const MODELES = { "claude-haiku-5-5": [0.10, 0.50], "claude-sonnet-5-5": [2, 10] };   // $ par million de jetons (entrée, sortie)
@@ -113,10 +115,69 @@ async function tuileIgn(req, env, ctx, url) {
   return res;
 }
 
+// ---------- Partage en direct (Durable Object : un objet par partage, connexions WebSocket en hibernation) ----------
+const sha = async t => hex(await crypto.subtle.digest("SHA-256", enc.encode(String(t))));
+const MAX_CHAT = 80, MAX_CARTE = 1500000, DUREE_VIE = 3 * 86400000;
+export class Partage {
+  constructor(state, env) { this.state = state; this.env = env; }
+  async fetch(req) {
+    if (req.headers.get("Upgrade") !== "websocket") return new Response("WebSocket attendu.", { status: 426 });
+    const paire = new WebSocketPair(); this.state.acceptWebSocket(paire[1]);
+    return new Response(null, { status: 101, webSocket: paire[0] });
+  }
+  async lire() {
+    const s = this.state.storage, v = await s.get(["owner", "admtok", "carte", "carteT", "chat", "pos", "closed"]);
+    return { owner: v.get("owner") || null, admtok: v.get("admtok") || null, carte: v.get("carte") || null, carteT: v.get("carteT") || 0, chat: v.get("chat") || [], pos: v.get("pos") || {}, closed: !!v.get("closed") };
+  }
+  envoyer(ws, o) { try { ws.send(JSON.stringify(o)); } catch { /* fermé */ } }
+  diffuser(o, sauf) { const t = JSON.stringify(o); for (const ws of this.state.getWebSockets()) if (ws !== sauf) { try { ws.send(t); } catch { /* fermé */ } } }
+  async vivant() { await this.state.storage.setAlarm(Date.now() + DUREE_VIE); }       // effacé 3 jours après la dernière activité
+  async alarm() { await this.state.storage.deleteAll(); }
+  async webSocketMessage(ws, brut) {
+    let m; try { m = JSON.parse(typeof brut === "string" ? brut : new TextDecoder().decode(brut)); } catch { return; }
+    if (!m || typeof m.t !== "string" || String(brut).length > MAX_CARTE + 4000) return;
+    const s = this.state.storage, moi = ws.deserializeAttachment() || {}, maintenant = Date.now();
+    const d = await this.lire(), chaine = (x, n) => typeof x === "string" && x.length <= n;
+    if (m.t === "bonjour") {
+      // uid : identifiant aléatoire de l'appareil ; proprio : secret du créateur ; adm : lien administrateur
+      if (!chaine(m.uid, 40) || !m.uid) return this.envoyer(ws, { t: "erreur", m: "Identifiant manquant." });
+      const info = { uid: m.uid, proprio: false, admin: false };
+      if (m.creer && !d.owner && chaine(m.proprio, 80)) { await s.put("owner", await sha(m.proprio)); await s.delete("closed"); await this.vivant(); info.proprio = info.admin = true; }
+      else if (d.owner && chaine(m.proprio, 80) && await sha(m.proprio) === d.owner) info.proprio = info.admin = true;
+      else if (!d.owner || d.closed) return this.envoyer(ws, { t: "absent" });
+      if (!info.admin && chaine(m.adm, 60) && d.admtok && m.adm === d.admtok) info.admin = true;
+      ws.serializeAttachment(info);
+      const etat = await this.lire();
+      return this.envoyer(ws, { t: "etat", proprio: info.proprio, admin: info.admin, admRefuse: !!(m.adm && !info.admin), maintenant, carte: etat.carte, carteT: etat.carteT, chat: etat.chat, pos: etat.pos });
+    }
+    if (!moi.uid) return;
+    if (m.t === "carte" && moi.admin && chaine(m.d, MAX_CARTE)) { await s.put({ carte: m.d, carteT: maintenant }); await this.vivant(); return this.diffuser({ t: "carte", d: m.d, at: maintenant }, ws); }
+    if (m.t === "pos" && chaine(m.d, 4000)) { d.pos[moi.uid] = { d: m.d, at: maintenant }; await s.put("pos", d.pos); return this.diffuser({ t: "pos", u: moi.uid, d: m.d, at: maintenant }); }
+    if (m.t === "sanspos") { delete d.pos[moi.uid]; await s.put("pos", d.pos); return this.diffuser({ t: "sanspos", u: moi.uid }); }
+    if (m.t === "msg" && chaine(m.d, 4000)) { const k = maintenant.toString(36) + Math.random().toString(36).slice(2, 6); d.chat.push({ k, d: m.d, at: maintenant }); await s.put("chat", d.chat.slice(-MAX_CHAT)); await this.vivant(); return this.diffuser({ t: "msg", k, d: m.d, at: maintenant }); }
+    if (m.t === "admtok" && moi.proprio && chaine(m.tk, 60) && m.tk.length >= 12) { await s.put("admtok", m.tk); return this.envoyer(ws, { t: "ok", r: "admtok" }); }
+    if (m.t === "revoquer" && moi.proprio) {
+      await s.delete("admtok");
+      for (const w of this.state.getWebSockets()) { const i = w.deserializeAttachment() || {}; if (i.admin && !i.proprio) { i.admin = false; w.serializeAttachment(i); this.envoyer(w, { t: "revoque" }); } }
+      return this.envoyer(ws, { t: "ok", r: "revoquer" });
+    }
+    if (m.t === "fin" && moi.proprio) { this.diffuser({ t: "fin" }, ws); await s.deleteAll(); await s.put("closed", true); await s.setAlarm(Date.now() + 86400000); return this.envoyer(ws, { t: "ok", r: "fin" }); }
+  }
+  async webSocketClose(ws) { try { ws.close(); } catch { /* déjà fermé */ } }
+}
+async function direct(req, env, url) {
+  const id = url.pathname.slice(8);
+  if (!/^[a-z0-9]{12,32}$/.test(id)) return new Response("Partage inconnu.", { status: 404 });
+  const ok = String(env.ORIGINES || "").split(",").map(s => s.trim()).concat(["http://localhost", "http://127.0.0.1"]), o = req.headers.get("Origin") || "";
+  if (!ok.some(x => o === x || o.startsWith(x + ":"))) return new Response("Origine refusée.", { status: 403 });
+  return env.PARTAGE.get(env.PARTAGE.idFromName(id)).fetch(req);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: entetes });
+    if (req.method === "GET" && url.pathname.startsWith("/direct/")) return direct(req, env, url);
     if (req.method === "GET" && (url.pathname.startsWith("/ign/") || url.pathname.startsWith("/scan25/"))) return tuileIgn(req, env, ctx, url);
     const json = (status, o) => new Response(JSON.stringify(o), { status, headers: { ...entetes, "content-type": "application/json", "cache-control": "no-store" } });
     const erreur = (status, message) => json(status, { type: "error", error: { message } });
