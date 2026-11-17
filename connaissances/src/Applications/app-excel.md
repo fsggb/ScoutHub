@@ -54,9 +54,12 @@ Le navigateur peut réserver Alt/F10 pour ses propres menus.
 - ChatGDB ouvre Excel dans son volet et y travaille réellement, avec une souris visible : il voit l'écran (captures avec repères), clique sur les onglets, menus et cellules, tape au clavier (Tab passe à la cellule de droite, Entrée à la ligne suivante).
 - Pour les données, il crée directement le **classeur** (feuilles, lignes, formules comme =SUM(B2:B9), largeurs de colonnes) : Excel l'ouvre et calcule les formules. Il peut ensuite **relire le contenu exact** de toutes les cellules.
 - Il passe ensuite par l'interface pour les graphiques, le tableau croisé dynamique (onglet Insert, PivotTable) et la mise en forme, en vérifiant chaque étape par une capture.
+- **Mise en forme et outils :** il sélectionne (clic, Maj+clic, glisser, en-têtes de colonne ou de ligne), clique les boutons du ruban (gras, bordures, alignements, formats), choisit les couleurs dans la palette (flèche à côté du pot de peinture pour le fond, du A pour le texte) et change d'onglet (Insertion, Mise en page, Formules, Données…). Pour toute autre commande, il utilise la loupe « Rechercher les commandes » en haut à droite : il tape le nom de la commande, puis Entrée.
+- **Le fichier reste dans la conversation :** à la fin de chaque réponse, le classeur est enregistré dans la conversation (carte « Ouvrir » / « Télécharger » sous le message). L'application reste ouverte d'une demande à l'autre sans être rechargée, et si la page est rechargée ou la conversation rouverte plus tard, le dernier classeur est rechargé tout seul. Les modifications faites à la main sont reprises avant la demande suivante.
 - Quand ChatGDB a ouvert Excel, « Enregistrer » télécharge toujours le fichier .xlsx comme d'habitude.
 
 ## Questions auxquelles la fiche répond
+- ChatGDB peut-il mettre en forme et colorer un tableur ? Où est conservé le fichier qu'il a fait ?
 - ChatGDB peut-il remplir un tableur Excel et faire un tableau croisé ?
 - Est-ce le vrai Excel ? Puis-je ouvrir un .xlsx ou un .csv ?
 - Comment enregistrer mon classeur ?
