@@ -77,21 +77,24 @@ async function tuileIgn(req, env, ctx, url) {
   if (!m) return refus(404, "Tuile inconnue.");
   const z = +m[1], x = +m[2], y = +m[3];
   if (z < 6 || z > 18 || x >= 2 ** z || y >= 2 ** z) return refus(400, "Niveau de zoom hors limites.");
-  // France métropolitaine et Corse, avec une marge (longitude -6 à 10, latitude 41 à 52)
-  const lon = x / 2 ** z * 360 - 180, lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 2 ** z))) * 180 / Math.PI;
-  if (lon < -6.5 || lon > 10.5 || lat < 40.5 || lat > 52) return refus(204, "");
-  const ref = req.headers.get("Referer") || "", ok = String(env.ORIGINES || "").split(",").map(s => s.trim()).filter(Boolean);
-  if (!ok.some(o => ref.startsWith(o + "/"))) return refus(403, "Carte réservée aux applications de ScoutHub.");
+  // Pages autorisées : le site, et le poste de développement (localhost) pour les essais
+  const ref = req.headers.get("Referer") || req.headers.get("Origin") || "", ok = String(env.ORIGINES || "").split(",").map(s => s.trim()).filter(Boolean).concat(["http://localhost", "http://127.0.0.1"]);
+  if (!ok.some(o => ref === o || ref.startsWith(o + "/") || ref.startsWith(o + ":"))) return refus(403, "Carte réservée aux applications de ScoutHub.");
   const couche = COUCHES_IGN.includes(url.searchParams.get("couche")) ? url.searchParams.get("couche") : "";
   const cache = caches.default, cleCache = new Request("https://cache.scouthub/ign/" + (couche ? couche + "/" : "") + z + "/" + x + "/" + y + ".jpg");
   let res = await cache.match(cleCache);
   if (!res) {
     const cle = env.IGN_SCAN25_KEY && typeof env.IGN_SCAN25_KEY.get === "function" ? await env.IGN_SCAN25_KEY.get() : env.IGN_SCAN25_KEY;
     if (!cle) return refus(503, "Clé IGN absente.");
-    const src = "https://data.geopf.fr/private/wmts?apikey=" + encodeURIComponent(cle) + "&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=" +
-      encodeURIComponent(COUCHES_IGN.includes(url.searchParams.get("couche")) ? url.searchParams.get("couche") : env.IGN_COUCHE || "GEOGRAPHICALGRIDSYSTEMS.MAPS") + "&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=" + z + "&TILEROW=" + y + "&TILECOL=" + x;
-    // une clé IGN est souvent limitée à un site : on transmet l'adresse de la page qui affiche la carte
-    const amont = await fetch(src, { headers: { "User-Agent": "ScoutHub-FSGGB", "Referer": ref, "Origin": new URL(ref).origin } });
+    const nom = couche || env.IGN_COUCHE || "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR", k = encodeURIComponent(cle);
+    // Deux adresses IGN (WMTS puis TMS) : si la première est en panne, la seconde prend le relais
+    const sources = [
+      "https://data.geopf.fr/private/wmts?apikey=" + k + "&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=" + encodeURIComponent(nom) + "&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=" + z + "&TILEROW=" + y + "&TILECOL=" + x,
+      "https://data.geopf.fr/private/tms/1.0.0/" + encodeURIComponent(nom) + "/" + z + "/" + x + "/" + y + ".jpeg?apikey=" + k
+    ];
+    let amont = null;
+    for (const src of sources) { try { amont = await fetch(src, { headers: { "User-Agent": "ScoutHub-FSGGB" } }); if (amont.ok) break; } catch { amont = null; } }
+    if (!amont) return refus(502, "IGN injoignable.");
     if (!amont.ok) { const detail = (await amont.text()).replace(/<[^>]+>/g, " ").replace(/apikey=[^&\s]*/gi, "apikey=…").replace(/\s+/g, " ").trim().slice(0, 160); return refus(amont.status === 404 ? 404 : 502, "Tuile IGN indisponible (" + amont.status + ") : " + detail); }
     res = new Response(amont.body, { status: 200, headers: { "content-type": amont.headers.get("content-type") || "image/jpeg", "cache-control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*" } });
     ctx.waitUntil(cache.put(cleCache, res.clone()));
