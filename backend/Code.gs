@@ -9,8 +9,15 @@
  *                      « organisation/depot ») ; jeton fine-grained limité à ce dépôt, « Contents : lecture/écriture ».
  *   GEMINI_IA        : (facultatif) clé Gemini, pour la dictée vocale de ChatGDB (le navigateur enregistre, le serveur transcrit ; la
  *                      dictée intégrée aux navigateurs ne fonctionne pas partout, par exemple dans Brave). Même nom que dans la boutique si TOKEN_IA y sert.
- *   BIBLIO_API, BIBLIO_CLE : (facultatif) adresse /exec du serveur de la Bibliothèque et clé partagée : ChatGDB peut alors chercher et lire
- *                      les documents du dossier Drive de la bibliothèque.
+ *   BIBLIO_DOSSIER   : (facultatif) dossier Drive racine de la Bibliothèque (module Bibliotheque.gs) : ChatGDB peut alors chercher
+ *                      et lire ses documents, et l'application Bibliothèque fonctionne.
+ *   LIEN_SECRET, BOUTIQUE_API : lien avec la boutique (voir « lien avec la boutique » plus bas).
+ *
+ * UN SEUL SERVEUR POUR TOUTES LES APPLICATIONS (sauf la boutique) : chaque application est un MODULE, dans son propre fichier
+ * (CathIA.gs, Bibliotheque.gs…), appelé par { action: 'app', app: '<nom>', … } avec la session ScoutHub. Un module reçoit la
+ * requête et rend un objet { ok: true, … } ; il utilise HUB.email(token), HUB.user(token), HUB.fail(message).
+ * Pour une NOUVELLE application : copier le gabarit MODULES.exemple plus bas dans un nouveau fichier, et c'est tout. Les données
+ * d'une application par personne (préférences, brouillons…) n'ont même pas besoin d'un module : action « donnees ».
  *   CHAT_PUBLIC      : ChatGDB est OUVERT à tous les comptes dès que la clé est posée. Mettre « 0 » pour le réserver aux administrateurs.
  *   CHAT_TESTEURS    : avec CHAT_PUBLIC=0, adresses (séparées par des virgules) qui peuvent quand même l'utiliser.
  *   AIDE_DESTINATAIRES : adresses (séparées par des virgules) qui reçoivent les demandes d'aide préparées par ChatGDB (service informatique).
@@ -28,6 +35,31 @@
  * Les requêtes sont des POST JSON envoyés en text/plain (pas de pré-vol CORS).
  */
 var ADMIN_EMAIL = 'jb.combet@fsggb.fr';
+var MODULES = MODULES || {};
+// Ce que les modules (CathIA.gs, Bibliotheque.gs…) ont le droit d'utiliser de ScoutHub : rien d'autre.
+var HUB = {
+  email: function (token) { return session_(token); },                                        // l'adresse de la session, sinon erreur « Session expirée »
+  user: function (token) { return publicUser_(session_(token)); },                             // { email, role, name, google }
+  session: function (email, nom, google) {                                                      // ouvre une session ScoutHub (adresse @fsggb.fr déjà prouvée)
+    email = String(email || '').trim().toLowerCase();
+    if (!estFsggb_(email) || (adminGoogleSeul_(email) && !google)) return '';      // les administrateurs : par Google seulement
+    return provisionner_(email, nom || '', !!google);
+  },
+  fail: function (msg) { fail_(msg); }
+};
+/* Gabarit d'un module (à copier dans un nouveau fichier « MonAppli.gs ») :
+var MODULES = MODULES || {};
+MODULES.monappli = (function () {
+  var ACTIONS = {
+    bonjour: function (r, u) { return { ok: true, texte: 'Bonjour ' + u.email }; }
+  };
+  return function (r) {
+    var u = HUB.user(r.token);                      // retirer pour des actions publiques
+    var f = ACTIONS[r.fn]; if (!f) HUB.fail('Action inconnue.');
+    return f(r, u);
+  };
+})();
+   Côté navigateur : ScoutHub.api('monappli', 'bonjour', { … }) (scouthub-client.js). */
 // Autres administrateurs : adresses RÉSERVÉES à la connexion Google. Un mot de passe n'ouvre jamais ces comptes (créer un compte
 // sous une adresse sans la vérifier permettrait de s'en emparer) ; le compte n'existe qu'une fois l'adresse prouvée par Google,
 // et seulement pour un compte du domaine de la fédération (champ « hd » du jeton).
@@ -161,6 +193,32 @@ var ACTIONS = {
     if (adminGoogleSeul_(email)) fail_('Les comptes administrateur se connectent uniquement avec Google.');
     return { ok: true, token: provisionner_(email, '', false), user: publicUser_(email) };
   },
+  // ---------- une application = un module (CathIA.gs, Bibliotheque.gs…), même serveur, même session ----------
+  app: function (r) {
+    var m = Object.prototype.hasOwnProperty.call(MODULES, String(r.app)) ? MODULES[r.app] : null;
+    if (typeof m !== 'function') fail_('Application inconnue.');
+    return m(r);
+  },
+  // ---------- données d'une application, propres à chaque personne (préférences, brouillons, favoris…) ----------
+  // { app, fn: 'lire' | 'ecrire' | 'effacer' | 'liste', cle, valeur } : rangées dans le Drive du serveur, un fichier par
+  // application et par personne (200 Ko au plus). Aucune autre personne ne peut les lire.
+  donnees: function (r) {
+    var email = session_(r.token), app = String(r.app || ''), cle = String(r.cle || '');
+    if (!/^[a-z0-9_-]{2,40}$/.test(app)) fail_('Nom d\'application invalide.');
+    if (r.fn !== 'liste' && !/^[\w.\-]{1,80}$/.test(cle)) fail_('Clé invalide.');
+    var f = fichierDonnees_(app, email), tout = {};
+    try { tout = JSON.parse(f.getBlob().getDataAsString() || '{}') || {}; } catch (e) { tout = {}; }
+    if (r.fn === 'lire') return { ok: true, valeur: Object.prototype.hasOwnProperty.call(tout, cle) ? tout[cle] : null };
+    if (r.fn === 'liste') return { ok: true, cles: Object.keys(tout) };
+    if (r.fn === 'effacer') delete tout[cle];
+    else if (r.fn === 'ecrire') tout[cle] = r.valeur === undefined ? null : r.valeur;
+    else fail_('Opération inconnue (lire, ecrire, effacer, liste).');
+    var texte = JSON.stringify(tout);
+    if (texte.length > 200000) fail_('Trop de données pour cette application (200 Ko au plus).');
+    if (Object.keys(tout).length > 200) fail_('Trop de clés (200 au plus).');
+    f.setContent(texte);
+    return { ok: true };
+  },
   // Configuration publique pour le navigateur (la connexion Google est-elle prête ?).
   config: function () {
     return { ok: true, google: !!props_().getProperty('GOOGLE_CLIENT_ID') };
@@ -168,7 +226,7 @@ var ACTIONS = {
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
-    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? props_().getProperty('BIBLIO_API') : undefined };
+    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
   },
   // Dictée vocale : le navigateur envoie un enregistrement (WAV 16 kHz mono), Gemini le transcrit.
   transcrire: function (r) {
@@ -699,15 +757,22 @@ var CHAT_OUTILS_BIBLIO = [
   { name: 'chercher_bibliotheque', description: "Cherche dans la bibliothèque de la fédération (documents PDF, textes, procédures, ressources scoutes) par mots-clés dans les titres et le contenu. Renvoie identifiant, titre, dossier et type.", input_schema: { type: 'object', properties: { requete: { type: 'string', description: 'Quelques mots-clés.' } }, required: ['requete'] } },
   { name: 'lire_document', description: "Lit un document de la bibliothèque (identifiant donné par chercher_bibliotheque) : texte pour les documents Google et fichiers texte, document complet pour les PDF.", input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }
 ];
-function biblioActive_() { var p = props_(); return !!(p.getProperty('BIBLIO_API') && p.getProperty('BIBLIO_CLE')); }
+function biblioActive_() { return typeof MODULES.bibliotheque === 'function' && !!props_().getProperty('BIBLIO_DOSSIER'); }
 var _chatRole_ = 'membre';      // rôle du compte qui pose la question : la bibliothèque filtre ses rubriques en conséquence
+// ChatGDB appelle la bibliothèque directement (même serveur), avec le rôle de la personne qui pose la question
 function biblioAppel_(action, donnees) {
-  var p = props_(), corps = { action: action, cle: p.getProperty('BIBLIO_CLE'), role: _chatRole_ };
+  var corps = { fn: action };
   Object.keys(donnees).forEach(function (k) { corps[k] = donnees[k]; });
-  var res = UrlFetchApp.fetch(p.getProperty('BIBLIO_API'), { method: 'post', contentType: 'text/plain;charset=utf-8', muteHttpExceptions: true, payload: JSON.stringify(corps) });
-  var j; try { j = JSON.parse(res.getContentText()); } catch (e) { throw new Error('Bibliothèque injoignable.'); }
-  if (!j.ok) throw new Error(j.error || 'Erreur de la bibliothèque.');
-  return j;
+  try { return MODULES.bibliotheque(corps, { role: _chatRole_ }); }
+  catch (e) { throw new Error(e && (e.userMessage || e.message) || 'Erreur de la bibliothèque.'); }
+}
+// le fichier des données d'une application pour une personne (dossier « ScoutHub - données des applications », créé au besoin)
+function fichierDonnees_(app, email) {
+  var p = props_(), id = p.getProperty('DONNEES_DOSSIER'), dossier = null;
+  if (id) { try { dossier = DriveApp.getFolderById(id); } catch (e) { dossier = null; } }
+  if (!dossier) { dossier = DriveApp.createFolder('ScoutHub - données des applications'); p.setProperty('DONNEES_DOSSIER', dossier.getId()); }
+  var nom = app + '__' + sha_('donnees|' + email).slice(0, 32) + '.json', it = dossier.getFilesByName(nom);
+  return it.hasNext() ? it.next() : dossier.createFile(nom, '{}', 'application/json');
 }
 
 // ---------- dictée vocale (Gemini) ----------
@@ -807,7 +872,7 @@ function chatOutil_(b, admin, sortie, permis) {
     }
     if (b.name === 'proposer_depot_bibliotheque') {
       if (!admin) return 'Refusé : réservé à l\'administrateur.';
-      if (!biblioActive_()) return 'Bibliothèque non configurée (BIBLIO_API et BIBLIO_CLE).';
+      if (!biblioActive_()) return 'Bibliothèque non configurée (BIBLIO_DOSSIER).';
       if (sortie.depots.length >= 3) return 'Trop de dépôts dans une même réponse.';
       var gen = e.source === 'genere';
       if (gen && !String(e.contenu || '').trim()) return 'Source « genere » : le contenu est obligatoire.';
