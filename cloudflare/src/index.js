@@ -3,7 +3,7 @@
 //                   de crédits, transmet la requête à Claude et renvoie la réponse au fil de l'eau ; la consommation
 //                   est enregistrée dans D1 une fois la réponse terminée.
 //  POST /credits  : crédits restants de la personne.
-//  GET  /ign/{z}/{x}/{y}.jpg : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
+//  GET  /ign/{z}/{x}/{y}.jpg (ou /scan25/…, adresse attendue par ScoutMap) : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
 // Secrets : ANTHROPIC_KEY (clé Claude, jamais visible du navigateur), RELAIS_SECRET (partagé avec le serveur ScoutHub).
 const MODELES = { "claude-haiku-5-5": [0.10, 0.50], "claude-sonnet-5-5": [2, 10] };   // $ par million de jetons (entrée, sortie)
 const MAX_JETONS = 16000, CREDIT_DOLLARS = 0.001;
@@ -72,7 +72,7 @@ const COUCHES_IGN = ["GEOGRAPHICALGRIDSYSTEMS.MAPS", "GEOGRAPHICALGRIDSYSTEMS.MA
 // Les images de carte ne peuvent pas porter de jeton : l'accès est limité aux pages du site (en-tête Referer),
 // aux niveaux de zoom utiles et à la France (large) ; chaque tuile est gardée 30 jours dans le cache de Cloudflare.
 async function tuileIgn(req, env, ctx, url) {
-  const m = url.pathname.match(/^\/ign\/(\d{1,2})\/(\d{1,7})\/(\d{1,7})\.jpg$/);
+  const m = url.pathname.match(/^\/(?:ign|scan25)\/(\d{1,2})\/(\d{1,7})\/(\d{1,7})(?:\.jpg)?$/);
   const refus = (s, t) => new Response(t, { status: s, headers: { "content-type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
   if (!m) return refus(404, "Tuile inconnue.");
   const z = +m[1], x = +m[2], y = +m[3];
@@ -103,7 +103,7 @@ export default {
   async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: entetes });
-    if (req.method === "GET" && url.pathname.startsWith("/ign/")) return tuileIgn(req, env, ctx, url);
+    if (req.method === "GET" && (url.pathname.startsWith("/ign/") || url.pathname.startsWith("/scan25/"))) return tuileIgn(req, env, ctx, url);
     const json = (status, o) => new Response(JSON.stringify(o), { status, headers: { ...entetes, "content-type": "application/json", "cache-control": "no-store" } });
     const erreur = (status, message) => json(status, { type: "error", error: { message } });
     if (req.method !== "POST") return erreur(405, "Méthode refusée.");
