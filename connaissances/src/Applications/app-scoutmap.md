@@ -72,7 +72,7 @@ Créer > Simulation du parcours… : un curseur parcourt le tracé en suivant le
 Base : `https://fsggb.github.io/ScoutHub/ScoutMap/` (ou `https://fsggb.github.io/ScoutMap/`) suivi de paramètres, tous optionnels, encodés pour une URL (espace = %20) :
 - `lieu=Lyon` : cherche le lieu et centre la carte ; `zoom=14` (2 à 19).
 - `centre=45.76,4.83` : centre sur des coordonnées (latitude,longitude).
-- `fond=plan|ortho|otm|osm|osmfr|cyclosm|etat`.
+- `fond=plan|ortho|scan25|otm|osm|osmfr|cyclosm|etat` (`scan25` : carte IGN au 1:25 000, SCAN 25 Touristique, jusqu’au zoom 16).
 - `couches=contour,shade,slope,cadastre,hiking,lidar` (courbes, ombrage, pentes, cadastre, sentiers, relief LiDAR).
 - `itineraire=Lyon|Villeurbanne|45.7,4.9` : itinéraire de 2 à 12 étapes séparées par `|` ; `boucle=1` revient au départ ; `titre=Sortie%20du%20samedi` nomme le projet.
 Exemple : `https://fsggb.github.io/ScoutMap/?itineraire=Annecy|Talloires|Menthon-Saint-Bernard&boucle=1&titre=Sortie%20du%20lac&fond=plan`. Expérimental : si un lieu est introuvable, la carte l'indique et l'utilisateur corrige à la main.

@@ -3,6 +3,7 @@
 //                   de crédits, transmet la requête à Claude et renvoie la réponse au fil de l'eau ; la consommation
 //                   est enregistrée dans D1 une fois la réponse terminée.
 //  POST /credits  : crédits restants de la personne.
+//  GET  /ign/{z}/{x}/{y}.jpg : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
 // Secrets : ANTHROPIC_KEY (clé Claude, jamais visible du navigateur), RELAIS_SECRET (partagé avec le serveur ScoutHub).
 const MODELES = { "claude-haiku-5-5": [0.10, 0.50], "claude-sonnet-5-5": [2, 10] };   // $ par million de jetons (entrée, sortie)
 const MAX_JETONS = 16000, CREDIT_DOLLARS = 0.001;
@@ -66,10 +67,43 @@ async function enregistrer(env, email, modele, flux) {
     .bind(email, Date.now(), modele, (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), u.output_tokens || 0, recherches, c.dollars, c.credits).run();
 }
 
+// ---------- Relais des cartes IGN ----------
+const COUCHES_IGN = ["GEOGRAPHICALGRIDSYSTEMS.MAPS", "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR", "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR.CV", "GEOGRAPHICALGRIDSYSTEMS.MAPS.BDUNI.J1"];
+// Les images de carte ne peuvent pas porter de jeton : l'accès est limité aux pages du site (en-tête Referer),
+// aux niveaux de zoom utiles et à la France (large) ; chaque tuile est gardée 30 jours dans le cache de Cloudflare.
+async function tuileIgn(req, env, ctx, url) {
+  const m = url.pathname.match(/^\/ign\/(\d{1,2})\/(\d{1,7})\/(\d{1,7})\.jpg$/);
+  const refus = (s, t) => new Response(t, { status: s, headers: { "content-type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+  if (!m) return refus(404, "Tuile inconnue.");
+  const z = +m[1], x = +m[2], y = +m[3];
+  if (z < 6 || z > 18 || x >= 2 ** z || y >= 2 ** z) return refus(400, "Niveau de zoom hors limites.");
+  // France métropolitaine et Corse, avec une marge (longitude -6 à 10, latitude 41 à 52)
+  const lon = x / 2 ** z * 360 - 180, lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 2 ** z))) * 180 / Math.PI;
+  if (lon < -6.5 || lon > 10.5 || lat < 40.5 || lat > 52) return refus(204, "");
+  const ref = req.headers.get("Referer") || "", ok = String(env.ORIGINES || "").split(",").map(s => s.trim()).filter(Boolean);
+  if (!ok.some(o => ref.startsWith(o + "/"))) return refus(403, "Carte réservée aux applications de ScoutHub.");
+  const couche = COUCHES_IGN.includes(url.searchParams.get("couche")) ? url.searchParams.get("couche") : "";
+  const cache = caches.default, cleCache = new Request("https://cache.scouthub/ign/" + (couche ? couche + "/" : "") + z + "/" + x + "/" + y + ".jpg");
+  let res = await cache.match(cleCache);
+  if (!res) {
+    const cle = env.IGN_SCAN25_KEY && typeof env.IGN_SCAN25_KEY.get === "function" ? await env.IGN_SCAN25_KEY.get() : env.IGN_SCAN25_KEY;
+    if (!cle) return refus(503, "Clé IGN absente.");
+    const src = "https://data.geopf.fr/private/wmts?apikey=" + encodeURIComponent(cle) + "&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=" +
+      encodeURIComponent(COUCHES_IGN.includes(url.searchParams.get("couche")) ? url.searchParams.get("couche") : env.IGN_COUCHE || "GEOGRAPHICALGRIDSYSTEMS.MAPS") + "&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=" + z + "&TILEROW=" + y + "&TILECOL=" + x;
+    // une clé IGN est souvent limitée à un site : on transmet l'adresse de la page qui affiche la carte
+    const amont = await fetch(src, { headers: { "User-Agent": "ScoutHub-FSGGB", "Referer": ref, "Origin": new URL(ref).origin } });
+    if (!amont.ok) { const detail = (await amont.text()).replace(/<[^>]+>/g, " ").replace(/apikey=[^&\s]*/gi, "apikey=…").replace(/\s+/g, " ").trim().slice(0, 160); return refus(amont.status === 404 ? 404 : 502, "Tuile IGN indisponible (" + amont.status + ") : " + detail); }
+    res = new Response(amont.body, { status: 200, headers: { "content-type": amont.headers.get("content-type") || "image/jpeg", "cache-control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*" } });
+    ctx.waitUntil(cache.put(cleCache, res.clone()));
+  }
+  return res;
+}
+
 export default {
   async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: entetes });
+    if (req.method === "GET" && url.pathname.startsWith("/ign/")) return tuileIgn(req, env, ctx, url);
     const json = (status, o) => new Response(JSON.stringify(o), { status, headers: { ...entetes, "content-type": "application/json", "cache-control": "no-store" } });
     const erreur = (status, message) => json(status, { type: "error", error: { message } });
     if (req.method !== "POST") return erreur(405, "Méthode refusée.");

@@ -1,5 +1,5 @@
 {
-  // Serveur Cloudflare de ScoutHub (plan gratuit) : relais ChatGDB et crédits.
+  // Serveur Cloudflare de ScoutHub (plan gratuit) : relais ChatGDB et crédits, relais des cartes IGN (SCAN 25).
   // Déploiement : npx wrangler deploy   (jeton CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID dans l'environnement)
   "name": "scouthub",
   "main": "src/index.js",
@@ -16,6 +16,8 @@
   ],
   "vars": {
     "ORIGINES": "https://fsggb.github.io",
+    "ANTHROPIC_WORKSPACE_ID": "wrkspc_0119AE1DuVBLZoxQXQhqT3rB",
+    "IGN_COUCHE": "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR",
     "CREDITS_FENETRE": "30",
     "FENETRE_HEURES": "5",
     "CREDITS_SEMAINE": "60"
