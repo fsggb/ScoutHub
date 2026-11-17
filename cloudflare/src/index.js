@@ -96,7 +96,7 @@ export default {
       if (!cleClaude) return erreur(503, "Clé Claude absente du serveur Cloudflare.");
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": cleClaude, "anthropic-version": "2023-06-01" },
+        headers: { "content-type": "application/json", "x-api-key": cleClaude, "anthropic-version": "2023-06-01", ...(env.ANTHROPIC_WORKSPACE_ID ? { "anthropic-workspace-id": String(env.ANTHROPIC_WORKSPACE_ID).trim() } : {}) },
         body: JSON.stringify(corps)
       });
       if (!res.ok || !res.body) return new Response(res.body, { status: res.status, headers: { ...entetes, "content-type": res.headers.get("content-type") || "application/json" } });

@@ -229,7 +229,7 @@ var ACTIONS = {
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
-    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(props_().getProperty('RELAIS_URL') && props_().getProperty('RELAIS_SECRET')) || role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
+    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(relaisUrl_() && relaisSecret_()) || role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
   },
   // Dictée vocale : le navigateur envoie un enregistrement (WAV 16 kHz mono), Gemini le transcrit.
   transcrire: function (r) {
@@ -252,12 +252,12 @@ var ACTIONS = {
     return { ok: true, gained: gained };
   },
   // MODE RAPIDE (administrateur seulement) : réponse au fil de l'eau.
-  // Recommandé : relais Cloudflare (dossier cloudflare/ du dépôt, propriétés RELAIS_URL et RELAIS_SECRET) : la clé Claude reste
+  // Recommandé : relais Cloudflare (dossier cloudflare/ du dépôt, propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET) : la clé Claude reste
   // dans le relais, le navigateur ne reçoit qu'un jeton signé de 15 minutes. Sinon, clé DÉDIÉE et plafonnée CHAT_CLE_RAPIDE,
   // donnée au seul administrateur connecté par Google et gardée en mémoire par la page.
   rapide: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role), estAdmin = role === 'admin' && adminGoogleSeul_(email);
-    var p = props_(), relais = p.getProperty('RELAIS_URL'), secret = p.getProperty('RELAIS_SECRET'), cle = null, jeton = null;
+    var p = props_(), relais = relaisUrl_(), secret = relaisSecret_(), cle = null, jeton = null;
     // Avec le relais Cloudflare (crédits comptés par lui), le mode rapide est ouvert à toute personne qui a accès à ChatGDB ;
     // sans relais, il reste réservé à l'administrateur.
     if (relais && secret ? !chatOuvert_(role, email) : !estAdmin) fail_('Mode rapide non disponible pour ce compte.');
@@ -267,7 +267,7 @@ var ACTIONS = {
       jeton = charge + '.' + Utilities.computeHmacSha256Signature(charge, secret).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
     } else {
       cle = p.getProperty('CHAT_CLE_RAPIDE');
-      if (!cle) fail_('Mode rapide non configuré : propriétés RELAIS_URL et RELAIS_SECRET (relais Cloudflare, recommandé) ou CHAT_CLE_RAPIDE.');
+      if (!cle) fail_('Mode rapide non configuré : propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET (relais Cloudflare, recommandé) ou CHAT_CLE_RAPIDE.');
     }
     var modele = CHAT_MODELES[r.modele] ? r.modele : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
     var memoire = []; try { if (memBase_()) memoire = memIndex_(); } catch (e) { memoire = []; }
@@ -758,6 +758,9 @@ function baseLire_(id, section) {
     return '# ' + f.titre + ' [' + f.theme + ']\n' + (f.resume ? f.resume + '\n\n' : '') + corps.slice(0, 40000) + (src ? '\n\nSources :\n' + src : '') + ((f.liens || []).length ? '\nFiches liées : ' + f.liens.join(', ') : '');
   } catch (e) { return 'Lecture impossible pour le moment.'; }
 }
+// Relais Cloudflare (propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET ; anciens noms RELAIS_URL / RELAIS_SECRET acceptés)
+function relaisUrl_() { var p = props_(); return p.getProperty('RELAIS_CLOUDFLARE_URL') || p.getProperty('RELAIS_URL') || ''; }
+function relaisSecret_() { var p = props_(); return p.getProperty('RELAIS_CLOUDFLARE_SECRET') || p.getProperty('RELAIS_CLOUFLARE_SECRET') || p.getProperty('RELAIS_SECRET') || ''; }
 function chatConnaissances_() {
   var cache = CacheService.getScriptCache(), hit = cache.get('kb');
   if (hit !== null) return hit;

@@ -8,11 +8,18 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "scouthub", "database_id": "1fbba344-d555-438e-b948-7bffefe30e5b" }
   ],
+  // Secrets du compte (Secrets Store « default_secrets_store »), lus avec await env.NOM.get()
+  "secrets_store_secrets": [
+    { "binding": "ANTHROPIC_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "ANTHROPIC_KEY" },
+    { "binding": "IGN_SCAN25_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "IGN_SCAN25_KEY" },
+    { "binding": "GITHUB_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GITHUB_KEY" }
+  ],
   "vars": {
     "ORIGINES": "https://fsggb.github.io",
     "CREDITS_FENETRE": "30",
     "FENETRE_HEURES": "5",
     "CREDITS_SEMAINE": "60"
   }
-  // Secrets (npx wrangler secret put …) : ANTHROPIC_KEY, RELAIS_SECRET (le même que la propriété du serveur ScoutHub)
+  // Secret propre au Worker (npx wrangler secret put RELAIS_SECRET) : le même que la propriété RELAIS_CLOUDFLARE_SECRET
+  // du serveur ScoutHub (Apps Script). Variable facultative : ANTHROPIC_WORKSPACE_ID (identifiant, pas un secret).
 }
