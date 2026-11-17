@@ -14,7 +14,7 @@ sources:
     drive: 1U4shZaZGnxpX-TQGltqIYfrRQvXyq3u1
     pages: 15, 28-29, 53-56
 mots_cles: équarrissage, épointage, fendre, coins, merlin, cingler, martyr, battre un pieu, champignon, fourche, ancrage, piquets à 45 degrés, corps mort, étayage, calage, levage, poulie, moufle, palan, corde entre deux arbres
-liens: froissartage-techniques-de-base, froissartage-etabli-froissart, froissartage-mecanique-forces, matelotage-halage-levage, froissartage-outillage-detaille, froissartage-securite-chantier
+liens: froissartage-techniques-de-base, froissartage-etabli-froissart, froissartage-mecanique-forces, matelotage-coulants-halage-levage, froissartage-outillage-detaille, froissartage-securite-chantier
 resume: Les gestes de base avant d'assembler : rendre carré ou pointu un rondin, fendre un tronc aux coins (9 étapes), planter un pieu avec un martyr, battre un pieu en sol dur, enfoncer une fourche, réaliser les trois ancrages pour constructions lourdes, étayer, caler, lever une charge (poulies, moufle) et tendre une corde entre deux arbres.
 ---
 

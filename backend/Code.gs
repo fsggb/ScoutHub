@@ -1056,8 +1056,10 @@ function chatAppeler_(r, admin) {
   var corps = {
     model: modele, max_tokens: prof.jetons,
     system: [{ type: 'text', text: sys[0], cache_control: { type: 'ephemeral' } }, { type: 'text', text: sys[1] }],
-    messages: messages, output_config: { effort: effort }, thinking: { type: 'adaptive', display: 'summarized' }
+    messages: messages, output_config: { effort: effort }
   };
+  // Réflexion seulement quand elle sert (réponse détaillée ou approfondie) : en mode rapide, la réponse arrive plus vite
+  if (effort !== 'low' || r.profondeur === 'approfondie') corps.thinking = { type: 'adaptive', display: 'summarized' };
   function outils() {
     var o = [];
     if (web) {
