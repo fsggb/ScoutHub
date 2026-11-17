@@ -54,6 +54,7 @@ var MAX_FAILS = 5;
 var LOCK_SECONDS = 600;
 var SESSION_CACHE_SECONDS = 600;
 
+var BOUTIQUE_API = 'https://script.google.com/macros/s/AKfycbwW5GeOkiFxzGFXulOqIjNqGaZEMEk8QnHiHujMLhS59MN09ECAXTZITMmCuFcn3aLD/exec';
 function doGet() {
   return json_({ ok: true, service: 'ScoutHub' });
 }
@@ -125,6 +126,39 @@ var ACTIONS = {
     if (c.n >= 5) { cache.remove('cd:' + id); fail_('Trop d\'essais : demandez un nouveau code.'); }
     if (!egal_(sha_(c.s + ':' + email + ':' + code), c.h)) { c.n++; cache.put('cd:' + id, JSON.stringify(c), 600); fail_('Code incorrect.'); }
     cache.remove('cd:' + id);
+    return { ok: true, token: provisionner_(email, '', false), user: publicUser_(email) };
+  },
+  // ---------- lien avec la boutique : deux connexions séparées mais complémentaires ----------
+  // Un CODE À USAGE UNIQUE (2 minutes) passe d'un site à l'autre, jamais la session. Propriété facultative LIEN_SECRET (la même
+  // dans la boutique) : si elle existe, seul l'autre serveur peut lire un code. BOUTIQUE_API : adresse du script de la boutique.
+  // ScoutHub → boutique : la tuile « Boutique GDB » demande un code pour la personne connectée…
+  passe: function (r) {
+    var email = session_(r.token), code = sha_(Utilities.getUuid() + Utilities.getUuid() + Date.now()).slice(0, 48);
+    CacheService.getScriptCache().put('pa:' + sha_(code), email, 120);
+    return { ok: true, code: code };
+  },
+  // … que le serveur de la boutique vient lire, une seule fois.
+  passeLire: function (r) {
+    var sec = props_().getProperty('LIEN_SECRET');
+    if (sec && !egal_(String(r.secret || ''), sec)) fail_('Refusé.');
+    var code = String(r.code || '');
+    if (!/^[0-9a-f]{48}$/.test(code)) fail_('Code invalide.');
+    var c = CacheService.getScriptCache(), k = 'pa:' + sha_(code), email = c.get(k);
+    if (!email) fail_('Code expiré.');
+    c.remove(k);
+    return { ok: true, email: email };
+  },
+  // Boutique → ScoutHub : la boutique renvoie ici avec un code ; ScoutHub le fait lire par la boutique et ouvre sa propre session.
+  boutique: function (r) {
+    var code = String(r.code || '');
+    if (!/^[0-9a-f]{48}$/.test(code)) fail_('Code invalide.');
+    var sec = props_().getProperty('LIEN_SECRET') || '';
+    var url = (props_().getProperty('BOUTIQUE_API') || BOUTIQUE_API) + '?passeBoutique=' + code + (sec ? '&secret=' + encodeURIComponent(sec) : '');
+    var j = {};
+    try { j = JSON.parse(UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true }).getContentText()); } catch (e) { j = {}; }
+    var email = j && j.ok ? String(j.email || '').trim().toLowerCase() : '';
+    if (!estFsggb_(email)) fail_('Connexion par la boutique impossible : recommencez, ou connectez-vous ici.');
+    if (adminGoogleSeul_(email)) fail_('Les comptes administrateur se connectent uniquement avec Google.');
     return { ok: true, token: provisionner_(email, '', false), user: publicUser_(email) };
   },
   // Configuration publique pour le navigateur (la connexion Google est-elle prête ?).

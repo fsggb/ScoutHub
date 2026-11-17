@@ -76,6 +76,8 @@
 
   function showAuth() {
     setupGoogle();
+    // « Avec mon compte Boutique GDB » : la boutique renverra ici (même page, même « next »), connecté
+    const bq = $("bq-login"); if (bq) bq.href = "https://boutique.fsggb.fr/?sso=scouthub&retour=" + encodeURIComponent(location.origin + location.pathname + location.search);
     if (new URLSearchParams(location.search).has("diag")) {   // ?diag=1 : montre ce que la page envoie à Google
       const id = window.SCOUTHUB_GOOGLE_CLIENT_ID || "(aucun)";
       $("g-diag").hidden = false; $("g-diag").textContent = "Diagnostic Google — identifiant : " + id + " · origine du site : " + location.origin + " (à déclarer dans « Origines JavaScript autorisées »)";
@@ -92,6 +94,15 @@
     const link = document.createElement("a");
     link.className = "app-tile" + (a.featured ? " featured" : "") + (a.masque ? " is-hidden" : ""); link.href = Portail.safeUrl(a.url) ? a.url : "#";
     if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
+    // La boutique : la personne connectée à ScoutHub y arrive connectée (code à usage unique, jamais la session).
+    let hote = ""; try { hote = new URL(a.url, location.href).host; } catch {}
+    if (hote === "boutique.fsggb.fr") link.addEventListener("click", ev => {
+      if (!store.get() || !window.SCOUTHUB_API) return;
+      ev.preventDefault();
+      const w = window.open("about:blank", "_blank");
+      const aller = u => { if (w) w.location.href = u; else location.href = u; };
+      Hub.call("passe").then(o => { const u = new URL(a.url); u.searchParams.set("sh", o.code); aller(u.href); }).catch(() => aller(a.url));
+    });
     let badge; const icon = Portail.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
     if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${icon}")`; }
     else { badge = document.createElement("img"); badge.className = "app-badge"; badge.src = icon; badge.alt = ""; badge.loading = "lazy"; }
@@ -137,6 +148,16 @@
   function enter() { if (!goNext()) showHome(); }
 
   // ---------- démarrage ----------
+  // Retour de la boutique (« Avec mon compte Boutique ») : un code à usage unique ouvre la session ScoutHub.
+  const retourBoutique = new URLSearchParams(location.search).get("boutique");
+  if (retourBoutique && /^[0-9a-f]{48}$/.test(retourBoutique) && window.SCOUTHUB_API) {
+    const q = new URLSearchParams(location.search); q.delete("boutique");
+    history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
+    Hub.call("boutique", { code: retourBoutique })
+      .then(out => { store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); enter(); })
+      .catch(e => { showAuth(); say($("auth-status"), e.message, true); });
+    return;
+  }
   const wantLogin = new URLSearchParams(location.search).has("connexion") || new URLSearchParams(location.search).has("next");
   if (store.get() && window.SCOUTHUB_API) {
     // Affichage immédiat avec l'utilisateur mémorisé, vérification de la session en arrière-plan.
