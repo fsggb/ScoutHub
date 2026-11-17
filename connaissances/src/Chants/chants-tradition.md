@@ -29,7 +29,7 @@ resume: Liste des 47 chants de la section « Chants de Tradition » du carnet de
 | 119 | Pelot d'Hennebont | « Ma chère maman, je vous écris / Que nous sommes entrés dans Paris » | Lettre naïve d'un soldat breton (humour) | Veillée |
 | 120 | Malbrough s'en va-t-en guerre (trad.) | « Malbrough s'en va-t-en guerre, / Mironton ton ton, mirontaine » | Mort de Malbrough annoncée à sa dame | Veillée, marche |
 | 121 | Frédéri | « Trois jolies demoiselles, ô Frédéri » | Le galant noyé en cherchant l'anneau d'or | Veillée |
-| 122 | Le vieux Joe | « Ils ne sont plus / Les beaux jours de l'amitié » | Vieil esclave des champs de coton qui pense à ses amis morts | Veillée calme |
+| 122 | Le vieux Joe | « Ils ne sont plus / Les beaux jours de l'amitié » | Vieil homme « brisé par les travaux » des cotonniers, qui pense à ses amis disparus | Veillée calme |
 | 123 | Le vieux chalet | « Là-haut sur la montagne, / L'était un vieux chalet » | Chalet détruit puis rebâti par Jean | Veillée |
 | 124 | La bataille de Fontenoy | « J'ons vu le poème fringant, / Fait par ce maître Voltaire » | Victoire de Fontenoy sous Louis XV | Veillée historique |
 | 125 | Fleur d'épine | « Ma mère qui m'a nourrie / N'a jamais connu mon nom » | Chanson de fille moqueuse (« Fleur d'Épine, Fleur de Rose ») | Veillée |
@@ -64,8 +64,8 @@ resume: Liste des 47 chants de la section « Chants de Tradition » du carnet de
 | 154 | La mort de Saint François | « Ô frère, gentil frère, quand mourut-il ? » | Mort de saint François d'Assise | Veillée de prière |
 | 155 | La légende de Saint Nicolas | Refrain « Ils étaient trois petits enfants / Qui s'en allaient glaner aux champs » | Légende de saint Nicolas et des trois enfants | Veillée, Saint-Nicolas |
 | 156 | Cadet Rousselle (trad.) | « Cadet Rousselle a trois maisons » | Personnage farfelu (humour) | Veillée, jeunes |
-| 157 | La laine des moutons | « La laine des moutons / C'est nous qui la tondaine » | Métier de la laine (tondre, laver, carder…) | Veillée, jeu de mime |
-| 158 | Le sire de Framboisy | « C'était l'histoire du sire de Framboisy » | Mari trompé et vengeance (complainte comique) | Veillée |
+| 157 | La laine des moutons | « La laine des moutons / C'est nous qui la tondaine » | Métier de la laine (tondre, laver, carder, filer, vendre) | Veillée, jeu de mime |
+| 158 | Le sire de Framboisy | « C'était l'histoire du sire de Framboisy » | Le sire parti en guerre retrouve sa femme dansant à Paris et l'empoisonne (complainte comique) | Veillée |
 | 159 | Kergariou | « Il s'appelait Kergariou » | Gentilhomme breton pauvre à la cour | Veillée |
 
 ## Questions auxquelles la fiche répond
