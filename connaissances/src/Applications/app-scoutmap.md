@@ -61,6 +61,12 @@ Accueil > **Grand jeu** : zone (polygone), rectangle, cercle, ligne, flèche, cr
 ### Simulation et vidéo
 Créer > Simulation du parcours… : un curseur parcourt le tracé en suivant le relief (durée 3 à 10 s), avec altitude, pente et temps de marche en direct. *Exporter en vidéo…* enregistre la simulation (WebM ou MP4 selon le navigateur), sans envoi.
 
+## Partage en direct
+- Bouton **Partager en direct** (itinéraire, azimuts ou grand jeu ouvert) : prénom, puis un QR code et un lien `?direct=…` à envoyer aux autres chefs.
+- Les autres voient **l'itinéraire, les azimuts ou le grand jeu** en lecture seule, les positions de chacun (case « Je partage ma position ») et une discussion ; « Appel vocal » envoie un lien Google Meet.
+- **Lien administrateur** (Inviter) : un autre chef peut modifier la carte ; « Révoquer » annule ces liens. « Terminer le partage » déconnecte tout le monde et efface tout ; un partage inactif est effacé au bout de 3 jours.
+- Tout est chiffré dans le navigateur avec une clé qui n'est que dans le lien ; le serveur (Cloudflare, ScoutHub) ne lit rien. Reconnexion automatique après une coupure de réseau.
+
 ## Fichiers
 - **GPX** : import (bouton, `Ctrl+O` ou glisser-déposer sur la carte) et export (`Ctrl+S`) des itinéraires, azimuts, mesures et traces. Le nom du projet sert de nom de fichier.
 - **PDF** par l'impression du navigateur ; **vidéo** WebM/MP4.
@@ -78,7 +84,7 @@ Base : `https://fsggb.github.io/ScoutHub/ScoutMap/` (ou `https://fsggb.github.io
 Exemple : `https://fsggb.github.io/ScoutMap/?itineraire=Annecy|Talloires|Menthon-Saint-Bernard&boucle=1&titre=Sortie%20du%20lac&fond=plan`. Expérimental : si un lieu est introuvable, la carte l'indique et l'utilisateur corrige à la main.
 
 ## Limites connues
-- Pas de **SCAN 25** (carte IGN papier au 1 : 25 000, licence ou clé requise) : le Plan IGN le remplace, net à l'impression.
+- Le **SCAN 25** (carte IGN au 1 : 25 000, fond « Carte IGN 1:25 000 ») est servi par le serveur Cloudflare de ScoutHub, qui garde la clé IGN ; il va jusqu'au zoom 16 et ne s'affiche que dans les applications de ScoutHub.
 - Itinéraires à pied (ou voiture) seulement, pas de vélo/VTT ; les routes nationales sont seulement signalées, pas exclues.
 - Déclinaison magnétique à saisir à la main ; convergence des méridiens ignorée.
 - Dénivelé estimé (échantillons d'environ 40 m, lissés).
@@ -90,6 +96,6 @@ Exemple : `https://fsggb.github.io/ScoutMap/?itineraire=Annecy|Talloires|Menthon
 - Comment calculer des azimuts pour une course d'orientation, en degrés ou en millièmes ?
 - Comment imprimer une carte à l'échelle 1 : 25 000 sur plusieurs feuilles A4 ?
 - Comment importer ou exporter un fichier GPX ?
-- Pourquoi n'y a-t-il pas la carte SCAN 25 ?
+- Comment afficher la carte IGN au 1:25 000 (SCAN 25) ?
 - Comment dessiner une carte de grand jeu ?
 - Quels paramètres d'adresse permettent d'ouvrir une carte déjà préparée ?

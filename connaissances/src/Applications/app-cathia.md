@@ -24,7 +24,7 @@ CathIA (rubrique « Conception et CAO » de ScoutHub, tuile mise en avant) sert 
 
 ## Interface
 - **Onglets du ruban** : Fichier, Créer, Façonner et assembler (Opérations), Mise en plan, Nomenclature ; en **mode expert** s'ajoutent Édition, Formes et Esquisse (bouton « Passer en mode expert / simple » en haut à droite).
-- À droite des onglets : Annuler, Rétablir, Paramètres (roue), mode expert, Assistant IA (si disponible), Historique (revenir à une étape), Aide.
+- À droite des onglets : Annuler, Rétablir, Paramètres (roue), mode expert, Assistant IA, Historique (revenir à une étape), Aide.
 - **Panneau latéral** à gauche (liste des pièces, groupes, réglages de la pièce sélectionnée) et **vue 3D** ; les dimensions se règlent à gauche ou en cliquant sur les cotes orange.
 - Un bouton indisponible explique pourquoi (par exemple « Sélectionnez d'abord une seule pièce de bois »).
 - Unités : **centimètres** (millimètres au choix dans Paramètres).
@@ -65,6 +65,11 @@ Sélectionner deux supports parallèles (deux traverses), puis Créer > Plateau,
 
 ### Plan et liste de matériel
 Onglet **Mise en plan** : pages multiples, projections, disposition automatique, feuille d'installation avec détails, cotes, nomenclature déplaçable, cartouche modifiable en cliquant le texte, impression. Onglet **Nomenclature** : liste des pièces et des opérations, export CSV.
+
+## Assistant (ChatGDB)
+- Bouton **Assistant** en haut à droite. Pour une personne **connectée à ScoutHub**, l'assistant est **ChatGDB**, sans clé à fournir, dans la limite de ses crédits ChatGDB ; la réponse s'affiche au fil de l'eau.
+- Il connaît la base de connaissances de la fédération (froissartage, nœuds, outils…) et agit sur le projet ouvert : lister les pièces, ajouter une traverse, une courbe, une série, clayonner, assembler, modifier ou supprimer une pièce.
+- **IA et clé** : on peut aussi choisir sa propre IA (Gemini, Claude, ChatGPT, Grok, Mistral) avec sa clé personnelle, gardée dans le navigateur. Elle sert de **secours** quand ChatGDB n'est pas disponible (crédits épuisés, réseau) ; sans connexion à ScoutHub, c'est elle qui répond.
 
 ## Fichiers et enregistrement
 - **Enregistrer** : projet dans le Google Drive de l'utilisateur (dossier CathIA, fichier `nom.cathia` : modèle 3D en .html lisible dans tout navigateur, plan en .svg et vignette), privé, accès limité aux fichiers créés par CathIA.
