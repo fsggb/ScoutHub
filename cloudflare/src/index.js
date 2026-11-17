@@ -40,13 +40,24 @@ function cout(modele, u, recherches) {
   const dollars = (entree * p[0] + (u.output_tokens || 0) * p[1]) / 1e6 + recherches * 0.01;
   return { dollars, credits: Math.max(1, Math.ceil(dollars / CREDIT_DOLLARS - 1e-9)) };
 }
-async function etatCredits(env, email) {
-  const maintenant = Date.now(), h = (+env.FENETRE_HEURES || 5) * 3600000;
+async function etatCredits(env, qui) {
+  const email = qui.e, maintenant = Date.now(), h = (+env.FENETRE_HEURES || 5) * 3600000, sem = 7 * 86400000;
   const r = await env.DB.prepare(
-    "SELECT COALESCE(SUM(CASE WHEN ts > ?2 THEN credits END), 0) AS fenetre, COALESCE(SUM(credits), 0) AS semaine FROM usage WHERE email = ?1 AND ts > ?3"
-  ).bind(email, maintenant - h, maintenant - 7 * 86400000).first();
-  const maxF = +env.CREDITS_FENETRE || 30, maxS = +env.CREDITS_SEMAINE || 60;
-  return { fenetre: { max: maxF, utilise: r.fenetre, reste: Math.max(0, maxF - r.fenetre) }, semaine: { max: maxS, utilise: r.semaine, reste: Math.max(0, maxS - r.semaine) } };
+    "SELECT COALESCE(SUM(CASE WHEN ts > ?2 THEN credits END), 0) AS fenetre, MIN(CASE WHEN ts > ?2 THEN ts END) AS premierF, " +
+    "COALESCE(SUM(credits), 0) AS semaine, MIN(ts) AS premierS, COUNT(*) AS appels, COALESCE(SUM(entree), 0) AS entree, " +
+    "COALESCE(SUM(sortie), 0) AS sortie, COALESCE(SUM(recherches), 0) AS recherches, COALESCE(SUM(dollars), 0) AS dollars FROM usage WHERE email = ?1 AND ts > ?3"
+  ).bind(email, maintenant - h, maintenant - sem).first();
+  const t = await env.DB.prepare("SELECT COUNT(*) AS appels, COALESCE(SUM(entree), 0) AS entree, COALESCE(SUM(sortie), 0) AS sortie, COALESCE(SUM(recherches), 0) AS recherches, COALESCE(SUM(dollars), 0) AS dollars FROM usage WHERE email = ?1").bind(email).first();
+  const dans = ms => { const hh = Math.max(1, Math.round(ms / 3600000)); return hh >= 48 ? "dans " + Math.round(hh / 24) + " j" : "dans " + hh + " h"; };
+  const bonus = Math.max(0, Math.min(+qui.b || 0, +env.BONUS_MAX || 40)), maxF = +env.CREDITS_FENETRE || 30, maxS = (+env.CREDITS_SEMAINE || 60) + bonus;
+  const rond = x => Math.round(x * 10000) / 10000;
+  return {
+    illimite: qui.r === "admin",
+    fenetre: { max: maxF, utilise: r.fenetre, reste: Math.max(0, maxF - r.fenetre), renouvellement: r.premierF ? dans(r.premierF + h - maintenant) : "à votre première question" },
+    semaine: { max: maxS, utilise: r.semaine, reste: Math.max(0, maxS - r.semaine), bonus, renouvellement: r.premierS ? dans(r.premierS + sem - maintenant) : "à votre première question" },
+    usage: { semaine: { appels: r.appels, entree: r.entree, sortie: r.sortie, recherches: r.recherches, dollars: rond(r.dollars) }, total: { appels: t.appels, entree: t.entree, sortie: t.sortie, recherches: t.recherches, dollars: rond(t.dollars) } },
+    plafondDollars: rond(((+env.CREDITS_SEMAINE || 60) + (+env.BONUS_MAX || 40)) * CREDIT_DOLLARS)
+  };
 }
 // Lit une copie du flux SSE pour en tirer la consommation, puis l'enregistre
 async function enregistrer(env, email, modele, flux) {
@@ -115,11 +126,11 @@ export default {
     if (!qui) return erreur(401, "Session ScoutHub invalide ou expirée : rechargez la page.");
     const admin = qui.r === "admin";
 
-    if (url.pathname === "/credits") return json(200, { ok: true, illimite: admin, ...(await etatCredits(env, qui.e)) });
+    if (url.pathname === "/credits") return json(200, { ok: true, ...(await etatCredits(env, qui)) });
 
     if (url.pathname === "/chat" || url.pathname === "/") {
       if (!admin) {
-        const etat = await etatCredits(env, qui.e);
+        const etat = await etatCredits(env, qui);
         if (etat.fenetre.reste <= 0) return erreur(429, "Limite de crédits des " + (env.FENETRE_HEURES || 5) + " dernières heures atteinte : réessayez plus tard.");
         if (etat.semaine.reste <= 0) return erreur(429, "Limite de crédits de la semaine atteinte.");
       }

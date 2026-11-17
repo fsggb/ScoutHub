@@ -20,7 +20,8 @@
     "IGN_COUCHE": "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR",
     "CREDITS_FENETRE": "30",
     "FENETRE_HEURES": "5",
-    "CREDITS_SEMAINE": "60"
+    "CREDITS_SEMAINE": "60",
+    "BONUS_MAX": "40"
   }
   // Secret propre au Worker (npx wrangler secret put RELAIS_SECRET) : le même que la propriété RELAIS_CLOUDFLARE_SECRET
   // du serveur ScoutHub (Apps Script). Variable facultative : ANTHROPIC_WORKSPACE_ID (identifiant, pas un secret).

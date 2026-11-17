@@ -229,7 +229,7 @@ var ACTIONS = {
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
-    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(relaisUrl_() && relaisSecret_()) || role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
+    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(relaisUrl_() && relaisSecret_()) || role === 'admin', credits: relaisCredits_(email, role === 'admin' && adminGoogleSeul_(email) ? 'admin' : role) || creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
   },
   // Dictée vocale : le navigateur envoie un enregistrement (WAV 16 kHz mono), Gemini le transcrit.
   transcrire: function (r) {
@@ -251,31 +251,46 @@ var ACTIONS = {
     creditsEcrire_(email, c);
     return { ok: true, gained: gained };
   },
-  // MODE RAPIDE (administrateur seulement) : réponse au fil de l'eau.
-  // Recommandé : relais Cloudflare (dossier cloudflare/ du dépôt, propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET) : la clé Claude reste
-  // dans le relais, le navigateur ne reçoit qu'un jeton signé de 15 minutes. Sinon, clé DÉDIÉE et plafonnée CHAT_CLE_RAPIDE,
-  // donnée au seul administrateur connecté par Google et gardée en mémoire par la page.
+  // MODE RAPIDE (pour tout le monde) : le navigateur appelle Claude par le relais Cloudflare et reçoit la réponse au fil de l'eau.
+  // Ce serveur ne fait plus que : préparer les instructions et la liste des outils, signer un jeton de 15 minutes pour le relais
+  // (propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET ; le relais garde la clé Claude et compte les crédits),
+  // et exécuter les outils qui ont besoin de lui (action « outil » : mémoire, bibliothèque, dépôts, images, propositions).
+  // Sans relais : clé dédiée CHAT_CLE_RAPIDE remise au seul administrateur connecté par Google (secours).
   rapide: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role), estAdmin = role === 'admin' && adminGoogleSeul_(email);
     var p = props_(), relais = relaisUrl_(), secret = relaisSecret_(), cle = null, jeton = null;
-    // Avec le relais Cloudflare (crédits comptés par lui), le mode rapide est ouvert à toute personne qui a accès à ChatGDB ;
-    // sans relais, il reste réservé à l'administrateur.
-    if (relais && secret ? !chatOuvert_(role, email) : !estAdmin) fail_('Mode rapide non disponible pour ce compte.');
-    if (relais && secret) {
-      // Relais Cloudflare : le navigateur ne reçoit qu'un jeton signé valable 15 minutes, jamais la clé Claude
-      var charge = Utilities.base64EncodeWebSafe(JSON.stringify({ e: email, r: estAdmin ? 'admin' : role, x: Date.now() + 15 * 60 * 1000 })).replace(/=+$/, '');
-      jeton = charge + '.' + Utilities.computeHmacSha256Signature(charge, secret).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
-    } else {
+    if (relais && secret ? !chatOuvert_(role, email) : !estAdmin) fail_(chatOuvert_(role, email) ? 'Le relais de ChatGDB n\'est pas configuré.' : 'ChatGDB n\'est pas ouvert à votre compte.');
+    if (relais && secret) jeton = relaisJeton_(email, estAdmin ? 'admin' : role);
+    else {
       cle = p.getProperty('CHAT_CLE_RAPIDE');
-      if (!cle) fail_('Mode rapide non configuré : propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET (relais Cloudflare, recommandé) ou CHAT_CLE_RAPIDE.');
+      if (!cle) fail_('ChatGDB : propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET absentes du serveur.');
     }
+    var admin = role === 'admin';
     var modele = CHAT_MODELES[r.modele] ? r.modele : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
     var memoire = []; try { if (memBase_()) memoire = memIndex_(); } catch (e) { memoire = []; }
-    var sys = chatSysteme_(r, memoire, r.profondeur === 'approfondie', false, depotsLisibles_());
+    var biblio = biblioActive_(), sys = chatSysteme_(r, memoire, r.profondeur === 'approfondie', biblio, depotsLisibles_());
     var version = CHAT_MODELES[modele].web, prof = r.profondeur === 'approfondie' ? CHAT_RECHERCHE.approfondie : CHAT_RECHERCHE.standard;
-    var outils = [{ type: 'web_search_' + version, name: 'web_search', max_uses: prof.recherches, user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } }].concat(CHAT_OUTILS_BASE);
-    var noms = appsNoms_(r.apps); if (noms.length) outils.push(outilApp_(noms));
-    return { ok: true, cle: cle || undefined, relais: jeton ? relais : undefined, jeton: jeton || undefined, modele: modele, jetons: prof.jetons, systeme: [sys[0], sys[1] + "\n\nMODE RAPIDE : la base de connaissances (chercher_connaissances, lire_fiche) et les applications sont disponibles ; la mémoire, la bibliothèque, les dépôts et les demandes d'aide ne le sont pas dans ce mode (dis-le si on te les demande)."], outils: outils, version: '2023-06-01' };
+    var o = [];
+    if (r.web !== false) {
+      o.push({ type: 'web_search_' + version, name: 'web_search', max_uses: prof.recherches, user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } });
+      o.push({ type: 'web_fetch_' + (version === '20260209' ? '20260209' : '20250910'), name: 'web_fetch', max_uses: prof.pages });
+      o.push(CHAT_OUTIL_IMAGE);
+    }
+    o = o.concat(CHAT_OUTILS_BASE);
+    if (memBase_()) { o = o.concat(CHAT_OUTILS_MEMOIRE); if (admin) o.push(CHAT_OUTIL_PROPOSER); }
+    if (biblio) { o = o.concat(CHAT_OUTILS_BIBLIO); if (admin) o.push(CHAT_OUTIL_DEPOT); }
+    o = o.concat(CHAT_OUTILS_DEPOTS); o.push(CHAT_OUTIL_AIDE);
+    var noms = appsNoms_(r.apps); if (noms.length) o.push(outilApp_(noms));
+    return { ok: true, cle: cle || undefined, relais: jeton ? relais : undefined, jeton: jeton || undefined, modele: modele, jetons: prof.jetons, systeme: sys, outils: o, version: '2023-06-01', espace: cle ? (p.getProperty('ANTHROPIC_WORKSPACE_ID') || undefined) : undefined };
+  },
+  // Exécute pour le navigateur un outil qui a besoin du serveur (mémoire, bibliothèque, dépôts GitHub, image distante, propositions)
+  outil: function (r) {
+    var email = session_(r.token), role = normRole_(getUser_(email).role);
+    if (!chatOuvert_(role, email)) fail_('ChatGDB n\'est pas ouvert à votre compte.');
+    var urls = {}; (Array.isArray(r.urls) ? r.urls : []).slice(0, 300).forEach(function (u) { if (typeof u === 'string' && /^https:\/\//.test(u)) urls[u.slice(0, 2000)] = 1; });
+    var sortie = { propositions: [], aides: [], depots: [] };
+    var res = chatOutil_({ name: String(r.nom || ''), input: r.input && typeof r.input === 'object' ? r.input : {} }, role === 'admin', sortie, function (u) { return !!urls[u]; });
+    return { ok: true, resultat: res, propositions: sortie.propositions, aides: sortie.aides, depots: sortie.depots };
   },
   chat: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role), admin = role === 'admin';
@@ -760,6 +775,21 @@ function baseLire_(id, section) {
 }
 // Relais Cloudflare (propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET ; anciens noms RELAIS_URL / RELAIS_SECRET acceptés)
 function relaisUrl_() { var p = props_(); return p.getProperty('RELAIS_CLOUDFLARE_URL') || p.getProperty('RELAIS_URL') || ''; }
+// Jeton pour le relais : adresse, rôle, crédits gagnés (bonus), expiration dans 15 minutes ; signé HMAC-SHA256
+function relaisJeton_(email, role) {
+  var bonus = 0; try { bonus = creditsLire_(email).bonus || 0; } catch (e) { bonus = 0; }
+  var charge = Utilities.base64EncodeWebSafe(JSON.stringify({ e: email, r: role, b: bonus, x: Date.now() + 15 * 60 * 1000 })).replace(/=+$/, '');
+  return charge + '.' + Utilities.computeHmacSha256Signature(charge, relaisSecret_()).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+}
+// Crédits tenus par le relais (même forme que creditsEtat_), ou null s'il ne répond pas
+function relaisCredits_(email, role) {
+  if (!relaisUrl_() || !relaisSecret_()) return null;
+  try {
+    var res = UrlFetchApp.fetch(relaisUrl_().replace(/\/chat\/?$/, '') + '/credits', { method: 'post', muteHttpExceptions: true, headers: { Origin: 'https://fsggb.github.io', 'x-scouthub-jeton': relaisJeton_(email, role) }, payload: '{}', contentType: 'application/json' });
+    if (res.getResponseCode() !== 200) return null;
+    var j = JSON.parse(res.getContentText()); delete j.ok; return j;
+  } catch (e) { return null; }
+}
 function relaisSecret_() { var p = props_(); return p.getProperty('RELAIS_CLOUDFLARE_SECRET') || p.getProperty('RELAIS_CLOUFLARE_SECRET') || p.getProperty('RELAIS_SECRET') || ''; }
 function chatConnaissances_() {
   var cache = CacheService.getScriptCache(), hit = cache.get('kb');
