@@ -6,7 +6,7 @@
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
   "d1_databases": [
-    { "binding": "DB", "database_name": "scouthub", "database_id": "A_REMPLIR_APRES_wrangler_d1_create" }
+    { "binding": "DB", "database_name": "scouthub", "database_id": "1fbba344-d555-438e-b948-7bffefe30e5b" }
   ],
   "vars": {
     "ORIGINES": "https://fsggb.github.io",
