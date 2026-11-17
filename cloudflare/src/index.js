@@ -91,9 +91,12 @@ export default {
       corps.max_tokens = Math.min(+corps.max_tokens || 2000, MAX_JETONS);
       corps.stream = true;
       corps.metadata = { user_id: hex(await crypto.subtle.digest("SHA-256", enc.encode(String(qui.e)))).slice(0, 32) };   // identifiant opaque
+      // La clé vient du Secrets Store du compte (liaison avec .get()) ou d'un secret propre au Worker (texte)
+      const cleClaude = env.ANTHROPIC_KEY && typeof env.ANTHROPIC_KEY.get === "function" ? await env.ANTHROPIC_KEY.get() : env.ANTHROPIC_KEY;
+      if (!cleClaude) return erreur(503, "Clé Claude absente du serveur Cloudflare.");
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": env.ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+        headers: { "content-type": "application/json", "x-api-key": cleClaude, "anthropic-version": "2023-06-01" },
         body: JSON.stringify(corps)
       });
       if (!res.ok || !res.body) return new Response(res.body, { status: res.status, headers: { ...entetes, "content-type": res.headers.get("content-type") || "application/json" } });
