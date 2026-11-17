@@ -251,21 +251,29 @@ var ACTIONS = {
     creditsEcrire_(email, c);
     return { ok: true, gained: gained };
   },
-  // MODE RAPIDE (administrateur seulement) : le navigateur appelle Claude lui-même, la réponse s'affiche au fil de l'eau.
-  // La clé est une clé DÉDIÉE (propriété CHAT_CLE_RAPIDE), plafonnée dans la console Claude ; elle n'est donnée qu'au
-  // compte administrateur connecté par Google, et n'est gardée qu'en mémoire par la page (jamais enregistrée).
+  // MODE RAPIDE (administrateur seulement) : réponse au fil de l'eau.
+  // Recommandé : relais Cloudflare (dossier relais/ du dépôt, propriétés RELAIS_URL et RELAIS_SECRET) : la clé Claude reste
+  // dans le relais, le navigateur ne reçoit qu'un jeton signé de 15 minutes. Sinon, clé DÉDIÉE et plafonnée CHAT_CLE_RAPIDE,
+  // donnée au seul administrateur connecté par Google et gardée en mémoire par la page.
   rapide: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
     if (role !== 'admin' || !adminGoogleSeul_(email)) fail_('Mode rapide réservé à l\'administrateur.');
-    var p = props_(), cle = p.getProperty('CHAT_CLE_RAPIDE');
-    if (!cle) fail_('Mode rapide non configuré : ajoutez la propriété CHAT_CLE_RAPIDE (clé dédiée, plafonnée).');
+    var p = props_(), relais = p.getProperty('RELAIS_URL'), secret = p.getProperty('RELAIS_SECRET'), cle = null, jeton = null;
+    if (relais && secret) {
+      // Relais Cloudflare : le navigateur ne reçoit qu'un jeton signé valable 15 minutes, jamais la clé Claude
+      var charge = Utilities.base64EncodeWebSafe(JSON.stringify({ e: email, x: Date.now() + 15 * 60 * 1000 })).replace(/=+$/, '');
+      jeton = charge + '.' + Utilities.computeHmacSha256Signature(charge, secret).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+    } else {
+      cle = p.getProperty('CHAT_CLE_RAPIDE');
+      if (!cle) fail_('Mode rapide non configuré : propriétés RELAIS_URL et RELAIS_SECRET (relais Cloudflare, recommandé) ou CHAT_CLE_RAPIDE.');
+    }
     var modele = CHAT_MODELES[r.modele] ? r.modele : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
     var memoire = []; try { if (memBase_()) memoire = memIndex_(); } catch (e) { memoire = []; }
     var sys = chatSysteme_(r, memoire, r.profondeur === 'approfondie', false, depotsLisibles_());
     var version = CHAT_MODELES[modele].web, prof = r.profondeur === 'approfondie' ? CHAT_RECHERCHE.approfondie : CHAT_RECHERCHE.standard;
     var outils = [{ type: 'web_search_' + version, name: 'web_search', max_uses: prof.recherches, user_location: { type: 'approximate', country: 'FR', timezone: 'Europe/Paris' } }].concat(CHAT_OUTILS_BASE);
     var noms = appsNoms_(r.apps); if (noms.length) outils.push(outilApp_(noms));
-    return { ok: true, cle: cle, modele: modele, jetons: prof.jetons, systeme: [sys[0], sys[1] + "\n\nMODE RAPIDE : la base de connaissances (chercher_connaissances, lire_fiche) et les applications sont disponibles ; la mémoire, la bibliothèque, les dépôts et les demandes d'aide ne le sont pas dans ce mode (dis-le si on te les demande)."], outils: outils, version: '2023-06-01' };
+    return { ok: true, cle: cle || undefined, relais: jeton ? relais : undefined, jeton: jeton || undefined, modele: modele, jetons: prof.jetons, systeme: [sys[0], sys[1] + "\n\nMODE RAPIDE : la base de connaissances (chercher_connaissances, lire_fiche) et les applications sont disponibles ; la mémoire, la bibliothèque, les dépôts et les demandes d'aide ne le sont pas dans ce mode (dis-le si on te les demande)."], outils: outils, version: '2023-06-01' };
   },
   chat: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role), admin = role === 'admin';
