@@ -1,0 +1,83 @@
+name: Compiler une application
+
+# Compilation en arrière-plan d'une nouvelle version d'application (Rust → WebAssembly, Excalidraw), lancée par
+# « Deploy ScoutHub » quand elle n'est pas encore en cache : le site reste publié avec la version précédente pendant ce temps,
+# puis ce workflow relance le déploiement, qui trouve alors la nouvelle version en cache.
+on:
+  workflow_dispatch:
+    inputs:
+      kind: { description: "trunk ou excali", required: true }
+      dir: { description: "dossier de l'application", required: true }
+      repo: { description: "dépôt", required: true }
+      workdir: { description: "dossier de l'application dans le dépôt (trunk)", required: false, default: "" }
+      sha: { description: "commit à compiler", required: true }
+
+permissions: {}
+
+concurrency:
+  group: compiler-${{ inputs.dir }}-${{ inputs.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: out
+          key: dist-${{ inputs.dir }}-${{ inputs.sha }}-v1
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.sha }}
+          path: src
+          persist-credentials: false
+      - if: steps.cache.outputs.cache-hit != 'true' && inputs.kind == 'trunk'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - if: steps.cache.outputs.cache-hit != 'true' && inputs.kind == 'trunk'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: src
+          shared-key: ${{ inputs.dir }}
+      - if: steps.cache.outputs.cache-hit != 'true' && inputs.kind == 'trunk'
+        name: Compiler (Trunk)
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C "$HOME/.local/bin"
+          export PATH="$HOME/.local/bin:$PATH"
+          cd "src/$WORKDIR"
+          trunk build --release --public-url ./
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p out && cp -a src/dist/web/. out/
+      - if: steps.cache.outputs.cache-hit != 'true' && inputs.kind == 'excali'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.cache.outputs.cache-hit != 'true' && inputs.kind == 'excali'
+        name: Compiler (Excalidraw)
+        run: |
+          npm install --global yarn@1.22.22
+          cd src && yarn install --frozen-lockfile && yarn --cwd excalidraw-app vite build --base=./
+          cd "$GITHUB_WORKSPACE"; mkdir -p out && cp -a src/excalidraw-app/build/. out/
+      - name: Taille du résultat
+        run: du -sh out
+  # Une fois la compilation en cache, on republie le site avec la nouvelle version
+  redeployer:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main

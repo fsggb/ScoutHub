@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: write        # lire les caches de compilation, lancer « Compiler » en arrière-plan
     outputs:
       versions: ${{ steps.v.outputs.versions }}
       matrix: ${{ steps.v.outputs.matrix }}
@@ -34,11 +35,27 @@ jobs:
         run: |
           versions=$(scripts/versions.sh)
           echo "$versions"
-          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+          # Une application dont la nouvelle version n'est pas encore compilée ne bloque plus le site : on publie tout de suite
+          # sa version précédente (déjà en cache) et la nouvelle se compile en arrière-plan (workflow « Compiler »), qui
+          # relance ce déploiement une fois fini. Sans version précédente en cache, on compile ici comme avant.
           matrix='[]'
           while read -r type dir repo arg; do
-            case "$type" in trunk|excali) matrix=$(jq -c --arg t "$type" --arg d "$dir" --arg r "$repo" --arg a "${arg:-}" --argjson v "$versions" '. + [{kind:$t, dir:$d, repo:$r, workdir:$a, sha:$v[$d]}]' <<<"$matrix") ;; esac
+            case "$type" in trunk|excali) ;; *) continue ;; esac
+            sha=$(jq -r --arg d "$dir" '.[$d]' <<<"$versions")
+            use="$sha"
+            caches=$(gh api "repos/${GITHUB_REPOSITORY}/actions/caches?key=dist-${dir}-&per_page=100" --jq '[.actions_caches[] | select(.ref == "refs/heads/main") | .key]' 2>/dev/null || echo '[]')
+            if ! jq -e --arg k "dist-${dir}-${sha}-v1" 'index($k) != null' <<<"$caches" >/dev/null; then
+              prev=$(jq -r --arg d "dist-${dir}-" '[.[] | select(startswith($d) and endswith("-v1"))][0] // ""' <<<"$caches")
+              if [ -n "$prev" ]; then
+                use=${prev#dist-${dir}-}; use=${use%-v1}
+                echo "::notice::${dir} : nouvelle version ${sha:0:8} compilée en arrière-plan ; le site garde ${use:0:8} en attendant"
+                gh workflow run compiler.yml --ref main -f kind="$type" -f dir="$dir" -f repo="$repo" -f workdir="${arg:-}" -f sha="$sha" || echo "::warning::lancement de la compilation de ${dir} impossible"
+                versions=$(jq -c --arg d "$dir" --arg s "$use" '.[$d] = $s' <<<"$versions")
+              fi
+            fi
+            matrix=$(jq -c --arg t "$type" --arg d "$dir" --arg r "$repo" --arg a "${arg:-}" --arg s "$use" '. + [{kind:$t, dir:$d, repo:$r, workdir:$a, sha:$s}]' <<<"$matrix")
           done < <(grep -vE '^\s*(#|$)' apps.txt)
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
           echo "matrix={\"include\":$matrix}" >> "$GITHUB_OUTPUT"
 
   # Compilations lourdes (Rust → WebAssembly, Excalidraw) : une par application, en parallèle, mises en cache par version
