@@ -229,7 +229,7 @@ var ACTIONS = {
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
-    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
+    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(props_().getProperty('RELAIS_URL') && props_().getProperty('RELAIS_SECRET')) || role === 'admin', credits: creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
   },
   // Dictée vocale : le navigateur envoie un enregistrement (WAV 16 kHz mono), Gemini le transcrit.
   transcrire: function (r) {
@@ -252,16 +252,18 @@ var ACTIONS = {
     return { ok: true, gained: gained };
   },
   // MODE RAPIDE (administrateur seulement) : réponse au fil de l'eau.
-  // Recommandé : relais Cloudflare (dossier relais/ du dépôt, propriétés RELAIS_URL et RELAIS_SECRET) : la clé Claude reste
+  // Recommandé : relais Cloudflare (dossier cloudflare/ du dépôt, propriétés RELAIS_URL et RELAIS_SECRET) : la clé Claude reste
   // dans le relais, le navigateur ne reçoit qu'un jeton signé de 15 minutes. Sinon, clé DÉDIÉE et plafonnée CHAT_CLE_RAPIDE,
   // donnée au seul administrateur connecté par Google et gardée en mémoire par la page.
   rapide: function (r) {
-    var email = session_(r.token), role = normRole_(getUser_(email).role);
-    if (role !== 'admin' || !adminGoogleSeul_(email)) fail_('Mode rapide réservé à l\'administrateur.');
+    var email = session_(r.token), role = normRole_(getUser_(email).role), estAdmin = role === 'admin' && adminGoogleSeul_(email);
     var p = props_(), relais = p.getProperty('RELAIS_URL'), secret = p.getProperty('RELAIS_SECRET'), cle = null, jeton = null;
+    // Avec le relais Cloudflare (crédits comptés par lui), le mode rapide est ouvert à toute personne qui a accès à ChatGDB ;
+    // sans relais, il reste réservé à l'administrateur.
+    if (relais && secret ? !chatOuvert_(role, email) : !estAdmin) fail_('Mode rapide non disponible pour ce compte.');
     if (relais && secret) {
       // Relais Cloudflare : le navigateur ne reçoit qu'un jeton signé valable 15 minutes, jamais la clé Claude
-      var charge = Utilities.base64EncodeWebSafe(JSON.stringify({ e: email, x: Date.now() + 15 * 60 * 1000 })).replace(/=+$/, '');
+      var charge = Utilities.base64EncodeWebSafe(JSON.stringify({ e: email, r: estAdmin ? 'admin' : role, x: Date.now() + 15 * 60 * 1000 })).replace(/=+$/, '');
       jeton = charge + '.' + Utilities.computeHmacSha256Signature(charge, secret).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
     } else {
       cle = p.getProperty('CHAT_CLE_RAPIDE');

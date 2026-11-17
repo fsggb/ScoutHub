@@ -32,6 +32,6 @@ Les sessions cloud repartent d'un conteneur neuf : ces outils disparaissent et s
   publié dans un artefact « Serveur unique ScoutHub ».
 - Base de connaissances de ChatGDB : `connaissances/src/**.md` (format : `connaissances/FORMAT.md`),
   construite par `node scripts/connaissances.mjs` lors du déploiement Pages.
-- Relais Cloudflare du mode rapide de ChatGDB : `relais/worker.js` (propriétés RELAIS_URL, RELAIS_SECRET).
+- Relais Cloudflare du mode rapide de ChatGDB : `cloudflare/` (Worker + D1, `wrangler.jsonc`) (propriétés RELAIS_URL, RELAIS_SECRET).
 - Projet en cours : migrer le serveur vers Cloudflare (Workers + D1 + Durable Objects), Apps Script ne gardant que
   le Drive (bibliothèque, CathIA) et la boutique.

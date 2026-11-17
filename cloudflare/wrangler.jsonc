@@ -1,0 +1,18 @@
+{
+  // Serveur Cloudflare de ScoutHub (plan gratuit) : relais ChatGDB et crédits.
+  // Déploiement : npx wrangler deploy   (jeton CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID dans l'environnement)
+  "name": "scouthub",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "scouthub", "database_id": "A_REMPLIR_APRES_wrangler_d1_create" }
+  ],
+  "vars": {
+    "ORIGINES": "https://fsggb.github.io",
+    "CREDITS_FENETRE": "30",
+    "FENETRE_HEURES": "5",
+    "CREDITS_SEMAINE": "60"
+  }
+  // Secrets (npx wrangler secret put …) : ANTHROPIC_KEY, RELAIS_SECRET (le même que la propriété du serveur ScoutHub)
+}

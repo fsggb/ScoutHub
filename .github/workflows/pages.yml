@@ -133,7 +133,7 @@ jobs:
           # Base de connaissances de ChatGDB : fiches Markdown -> carte index.json + fiches/*.json
           node scripts/connaissances.mjs
           # Le portail (sans le serveur, les docs ni la configuration du dépôt)
-          tar -c --exclude='./.git' --exclude='./.github' --exclude='./backend' --exclude='./docs' --exclude='./build' --exclude='./artifacts' --exclude='./scripts' --exclude='*.md' --exclude='./apps.txt' --exclude='./knowledge-repos.txt' --exclude='./connaissances/src' . | tar -x -C build
+          tar -c --exclude='./.git' --exclude='./.github' --exclude='./backend' --exclude='./docs' --exclude='./build' --exclude='./artifacts' --exclude='./scripts' --exclude='*.md' --exclude='./apps.txt' --exclude='./knowledge-repos.txt' --exclude='./connaissances/src' --exclude='./cloudflare' --exclude='./CLAUDE.md' . | tar -x -C build
           # Les applications, telles quelles
           while read -r type dir repo arg; do
             dest="build/${dir}"
