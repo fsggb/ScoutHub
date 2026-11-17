@@ -50,7 +50,14 @@ Le navigateur peut réserver Alt/F10 pour ses propres menus.
 - Alpha : environ 50 % prêt pour un usage réel ; fidélité XLSX sur des fichiers réels, très gros classeurs et graphiques encore perfectibles.
 - Les touches d'accès ne couvrent que quelques commandes de l'onglet Accueil.
 
+## Ce que ChatGDB fait dans Excel
+- ChatGDB ouvre Excel dans son volet et y travaille réellement, avec une souris visible : il voit l'écran (captures avec repères), clique sur les onglets, menus et cellules, tape au clavier (Tab passe à la cellule de droite, Entrée à la ligne suivante).
+- Pour les données, il crée directement le **classeur** (feuilles, lignes, formules comme =SUM(B2:B9), largeurs de colonnes) : Excel l'ouvre et calcule les formules. Il peut ensuite **relire le contenu exact** de toutes les cellules.
+- Il passe ensuite par l'interface pour les graphiques, le tableau croisé dynamique (onglet Insert, PivotTable) et la mise en forme, en vérifiant chaque étape par une capture.
+- Quand ChatGDB a ouvert Excel, « Enregistrer » télécharge toujours le fichier .xlsx comme d'habitude.
+
 ## Questions auxquelles la fiche répond
+- ChatGDB peut-il remplir un tableur Excel et faire un tableau croisé ?
 - Est-ce le vrai Excel ? Puis-je ouvrir un .xlsx ou un .csv ?
 - Comment enregistrer mon classeur ?
 - Comment faire un budget de camp avec des totaux automatiques ?
