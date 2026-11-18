@@ -40,13 +40,13 @@ jobs:
           # relance ce déploiement une fois fini. Sans version précédente en cache, on compile ici comme avant.
           matrix='[]'
           while read -r type dir repo arg; do
-            case "$type" in trunk|excali) ;; *) continue ;; esac
+            case "$type" in trunk|excali|perl) ;; *) continue ;; esac
             sha=$(jq -r --arg d "$dir" '.[$d]' <<<"$versions")
             use="$sha"
             caches=$(gh api "repos/${GITHUB_REPOSITORY}/actions/caches?key=dist-${dir}-&per_page=100" --jq '[.actions_caches[] | select(.ref == "refs/heads/main") | .key]' 2>/dev/null || echo '[]')
             if ! jq -e --arg k "dist-${dir}-${sha}-v1" 'index($k) != null' <<<"$caches" >/dev/null; then
               prev=$(jq -r --arg d "dist-${dir}-" '[.[] | select(startswith($d) and endswith("-v1"))][0] // ""' <<<"$caches")
-              if [ -n "$prev" ]; then
+              if [ -n "$prev" ] && [ "$type" != perl ]; then          # un site « perl » se génère en une minute : jamais en arrière-plan
                 use=${prev#dist-${dir}-}; use=${use%-v1}
                 echo "::notice::${dir} : nouvelle version ${sha:0:8} compilée en arrière-plan ; le site garde ${use:0:8} en attendant"
                 gh workflow run compiler.yml --ref main -f kind="$type" -f dir="$dir" -f repo="$repo" -f workdir="${arg:-}" -f sha="$sha" || echo "::warning::lancement de la compilation de ${dir} impossible"
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ matrix.repo }}
-          ref: ${{ matrix.sha }}
+          ref: ${{ substring(matrix.sha, 0, 40) }}      # (« perl » : la version porte aussi la date après le commit)
           path: src
           persist-credentials: false
       - if: steps.cache.outputs.cache-hit != 'true' && matrix.kind == 'trunk'
@@ -102,6 +102,15 @@ jobs:
           trunk build --release --public-url ./
           cd "$GITHUB_WORKSPACE"
           mkdir -p out && cp -a src/dist/web/. out/
+      - if: steps.cache.outputs.cache-hit != 'true' && matrix.kind == 'perl'
+        name: "Générer (Perl, offices pré-calculés)"
+        env:
+          SCRIPT: ${{ matrix.workdir }}
+          VERSION: ${{ matrix.sha }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq perl libcgi-pm-perl libcgi-session-perl libalgorithm-diff-perl libdate-calc-perl libtimedate-perl liburi-perl liburl-encode-perl
+          mkdir -p out && python3 "src/$SCRIPT" --sortie out --amont "${VERSION:0:7}"
       - if: steps.cache.outputs.cache-hit != 'true' && matrix.kind == 'excali'
         uses: actions/setup-node@v4
         with:
@@ -152,6 +161,9 @@ jobs:
           mkdir build
           # Le portail (sans le serveur, les docs ni la configuration du dépôt)
           tar -c --exclude='./.git' --exclude='./.github' --exclude='./backend' --exclude='./docs' --exclude='./build' --exclude='./artifacts' --exclude='./scripts' --exclude='*.md' --exclude='./apps.txt' --exclude='./cloudflare' --exclude='./CLAUDE.md' . | tar -x -C build
+          # Versions dans les pages du portail : un navigateur ne garde plus une ancienne version des scripts et feuilles de style
+          v="${GITHUB_SHA::8}"
+          for f in build/*.html; do sed -i -E "s#(src|href)=\"(config|common|portail|app|admin|admin-portail|aide|compte|scouthub-client)\.js\"#\1=\"\2.js?v=${v}\"#g; s#href=\"(styles|hub)\.css\"#href=\"\1.css?v=${v}\"#g" "$f"; done
           # Les applications, telles quelles
           while read -r type dir repo arg; do
             dest="build/${dir}"
@@ -166,7 +178,7 @@ jobs:
                   # on en met une copie à côté de lui (aucun fichier de l'application n'est modifié).
                   if [ -d "$dest/app" ] && [ -d "$dest/snippets" ] && [ ! -e "$dest/app/snippets" ] && grep -qs "from './snippets/" "$dest"/app/*.js; then cp -a "$dest/snippets" "$dest/app/snippets"; fi
                 else echo "::warning::${dir} : version publiée introuvable"; fi ;;
-              trunk|excali)
+              trunk|excali|perl)
                 if [ -d "artifacts/app-${dir}" ]; then mkdir -p "$dest"; cp -a "artifacts/app-${dir}"/. "$dest"/; else echo "::warning::${dir} : compilation indisponible"; fi ;;
             esac
           done < <(grep -vE '^\s*(#|$)' apps.txt)

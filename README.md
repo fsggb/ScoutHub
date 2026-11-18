@@ -9,6 +9,7 @@ Projet en cours (ChatGDB, rôles, crédits, connexion Google) : `fsggb/ChatGDB` 
 - `apps.txt` : **liste des applications assemblées sur le domaine de ScoutHub**. Chaque application reste dans son dépôt, sans modification (ni nom, ni icône, ni script ajouté) ; `.github/workflows/pages.yml` va chercher la dernière version (dernière version publiée, ou compilation Rust/WebAssembly du dernier commit, mise en cache par commit) et la sert sous `https://fsggb.github.io/ScoutHub/<dossier>/`. `.github/workflows/sync.yml` compare toutes les 15 minutes les versions (`scripts/versions.sh`) au site publié (`mirrors.json`) et redéploie s'il y a du nouveau ; un déploiement complet a aussi lieu chaque nuit.
 - `sw.js` : met en cache les gros fichiers compilés (WebAssembly) des applications, dont le nom change à chaque version : première ouverture normale, suivantes instantanées.
 - `ChatGDB/` (dépôt `fsggb/ChatGDB`) : assistant, intégré comme les autres. `ChatGDB/connaissances/depots.txt` : dépôts dont la fiche `CHATGDB.md` alimente l’assistant.
+- `DivinumOfficium/` (dépôt `fsggb/DivinumOfficium`) : offices du bréviaire en latin (rubriques de 1960), pré-calculés chaque jour par un script du dépôt (type `perl` d'`apps.txt`), publiés sous `/DivinumOfficium/`.
 - `admin.html`, `admin.js`, `admin-portail.js` : console d'administration (comptes, affichage du portail).
 - `backend/Code.gs` : serveur Google Apps Script (comptes, rôles, sessions, connexion Google, ChatGDB, portail).
 

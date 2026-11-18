@@ -6,6 +6,8 @@ cd "$(dirname "$0")/.."
 out='{}'
 while read -r type dir repo arg; do
   case "$type" in
+    # un site « perl » est calculé pour les jours autour d'aujourd'hui : sa version change chaque jour (nouveau déploiement quotidien)
+    perl) v=$(git ls-remote "https://github.com/${repo}.git" HEAD 2>/dev/null | cut -f1 || true); [ -n "$v" ] && v="${v}-$(date -u +%Y%m%d)" ;;
     release) v=$(gh release view --repo "$repo" --json tagName -q .tagName 2>/dev/null || true) ;;
     *) v=$(git ls-remote "https://github.com/${repo}.git" HEAD 2>/dev/null | cut -f1 || true) ;;
   esac

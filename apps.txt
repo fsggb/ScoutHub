@@ -6,6 +6,7 @@
 #   trunk   : compilation Rust → WebAssembly depuis le dernier commit du dépôt (<paramètre> = dossier de l'application)
 #   excali  : compilation d'Excalidraw (Node) depuis le dernier commit
 #   static  : dépôt de site statique cloné tel quel
+#   perl    : site pré-calculé par un script du dépôt (<paramètre> = chemin du script Python), régénéré chaque jour
 release Word             storytold/wordcraft     wordcraft
 release Excel            storytold/gridcraft     gridcraft
 release PowerPoint       storytold/deckcraft     deckcraft
@@ -27,3 +28,4 @@ static  CathIA           fsggb/CathIA
 static  ScoutMap         fsggb/ScoutMap
 static  ChatGDB          fsggb/ChatGDB
 static  ScoutBibliotheque fsggb/ScoutBibliotheque
+perl    DivinumOfficium   fsggb/DivinumOfficium scripts/generer_site.py
