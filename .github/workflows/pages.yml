@@ -53,7 +53,7 @@ jobs:
                 versions=$(jq -c --arg d "$dir" --arg s "$use" '.[$d] = $s' <<<"$versions")
               fi
             fi
-            matrix=$(jq -c --arg t "$type" --arg d "$dir" --arg r "$repo" --arg a "${arg:-}" --arg s "$use" '. + [{kind:$t, dir:$d, repo:$r, workdir:$a, sha:$s}]' <<<"$matrix")
+            matrix=$(jq -c --arg t "$type" --arg d "$dir" --arg r "$repo" --arg a "${arg:-}" --arg s "$use" '. + [{kind:$t, dir:$d, repo:$r, workdir:$a, sha:$s, ref:($s | split("-")[0])}]' <<<"$matrix")
           done < <(grep -vE '^\s*(#|$)' apps.txt)
           echo "versions=$versions" >> "$GITHUB_OUTPUT"
           echo "matrix={\"include\":$matrix}" >> "$GITHUB_OUTPUT"
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ matrix.repo }}
-          ref: ${{ substring(matrix.sha, 0, 40) }}      # (« perl » : la version porte aussi la date après le commit)
+          ref: ${{ matrix.ref }}      # commit seul (la version d'un site « perl » porte aussi la date)
           path: src
           persist-credentials: false
       - if: steps.cache.outputs.cache-hit != 'true' && matrix.kind == 'trunk'
@@ -106,7 +106,7 @@ jobs:
         name: "Générer (Perl, offices pré-calculés)"
         env:
           SCRIPT: ${{ matrix.workdir }}
-          VERSION: ${{ matrix.sha }}
+          VERSION: ${{ matrix.ref }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq perl libcgi-pm-perl libcgi-session-perl libalgorithm-diff-perl libdate-calc-perl libtimedate-perl liburi-perl liburl-encode-perl
