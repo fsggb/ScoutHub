@@ -43,6 +43,11 @@ Logiciel libre et gratuit de présentations (MIT/Apache, équipe ArtCraft / stor
 ## Limites
 - Alpha : environ 55 % prêt pour un usage réel ; certaines présentations complexes peuvent différer de PowerPoint.
 
+## Ce que ChatGDB fait dans PowerPoint
+- ChatGDB ouvre PowerPoint dans son volet et l'utilise comme une personne, avec une souris visible : il voit l'écran (captures avec repères, captures agrandies pour viser précisément), clique, tape au clavier, passe à la ligne avec Entrée.
+- Pour mettre en forme, il **sélectionne d'abord** le texte (double-clic sur un mot, triple-clic sur une ligne, clic puis Maj+clic, Maj+flèches, Ctrl+A), puis utilise le ruban ou les raccourcis (Ctrl+B gras, Ctrl+I italique, Ctrl+U souligné).
+- Tout le reste passe par le ruban ou la loupe « Rechercher les commandes » en haut à droite.
+
 ## Questions auxquelles la fiche répond
 - Est-ce le vrai PowerPoint ? Puis-je ouvrir un .pptx ?
 - Comment présenter en plein écran avec mes notes ?

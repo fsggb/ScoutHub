@@ -62,6 +62,11 @@ Ctrl/⌘+B gras (sur le mot sous le curseur), Entrée continue une liste, Tab de
 - Correcteur orthographique : anglais et polonais seulement (pas de français pour l'instant).
 - Garder une copie des documents importants.
 
+## Ce que ChatGDB fait dans Word
+- ChatGDB ouvre Word dans son volet et l'utilise comme une personne, avec une souris visible : il voit l'écran (captures avec repères, captures agrandies pour viser précisément), clique, tape au clavier, passe à la ligne avec Entrée.
+- Pour mettre en forme, il **sélectionne d'abord** le texte (double-clic sur un mot, triple-clic sur une ligne, clic puis Maj+clic, Maj+flèches, Ctrl+A), puis utilise le ruban ou les raccourcis (Ctrl+B gras, Ctrl+I italique, Ctrl+U souligné).
+- Tout le reste passe par le ruban ou la loupe « Rechercher les commandes » en haut à droite.
+
 ## Questions auxquelles la fiche répond
 - Est-ce le vrai Microsoft Word ? Est-ce gratuit ?
 - Puis-je ouvrir un .docx reçu par e-mail ? Un vieux .doc ?
