@@ -5,7 +5,7 @@
 //  POST /credits  : crédits restants de la personne.
 //  POST /ia/*     : laboratoire de l'administrateur (Workers AI : modèles, dictée, voix, vecteurs ; budget de Neurons tenu dans D1).
 //  POST /fiches/* : brouillons de fiches proposés par ChatGDB (branche « brouillons » du dépôt ChatGDB), validation par l'administrateur.
-//  GET  /direct/{id} (WebSocket) : partage en direct de ScoutMap (itinéraire, azimuts, grand jeu) : positions, discussion,
+//  GET  /direct/{id} (WebSocket) : partage en direct de ScoutMap (+ appels vocaux : relais des messages WebRTC et identifiants TURN) (itinéraire, azimuts, grand jeu) : positions, discussion,
 //                   carte ; tout arrive déjà chiffré par le navigateur (la clé n'est que dans le lien), le serveur ne lit rien.
 //  GET  /ign/{z}/{x}/{y}.jpg (ou /scan25/…, adresse attendue par ScoutMap) : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
 // Secrets : ANTHROPIC_KEY (clé Claude, jamais visible du navigateur), RELAIS_SECRET (partagé avec le serveur ScoutHub).
@@ -161,12 +161,33 @@ export class Partage {
   }
   envoyer(ws, o) { try { ws.send(JSON.stringify(o)); } catch { /* fermé */ } }
   diffuser(o, sauf) { const t = JSON.stringify(o); for (const ws of this.state.getWebSockets()) if (ws !== sauf) { try { ws.send(t); } catch { /* fermé */ } } }
+  // Serveurs STUN/TURN pour les appels : identifiants valables 24 h, gardés 6 h en mémoire ; à défaut, STUN seul (appel direct quand le réseau le permet)
+  async serveursIce() {
+    if (this.ice && Date.now() - this.ice.t < 6 * 3600e3) return this.ice.v;
+    const stun = [{ urls: ["stun:stun.cloudflare.com:3478"] }], e = this.env;
+    try {
+      const jeton = e.TURN_KEY_TOKEN && typeof e.TURN_KEY_TOKEN.get === "function" ? await e.TURN_KEY_TOKEN.get() : e.TURN_KEY_TOKEN;
+      if (!e.TURN_KEY_ID || !jeton) return stun;
+      const r = await fetch("https://rtc.live.cloudflare.com/v1/turn/keys/" + encodeURIComponent(e.TURN_KEY_ID) + "/credentials/generate-ice-servers", { method: "POST", headers: { authorization: "Bearer " + jeton, "content-type": "application/json" }, body: JSON.stringify({ ttl: 86400 }) });
+      if (!r.ok) return stun;
+      const o = await r.json(); if (!Array.isArray(o.iceServers) || !o.iceServers.length) return stun;
+      this.ice = { t: Date.now(), v: o.iceServers }; return o.iceServers;
+    } catch { return stun; }
+  }
   async vivant() { await this.state.storage.setAlarm(Date.now() + DUREE_VIE); }       // effacé 3 jours après la dernière activité
   async alarm() { await this.state.storage.deleteAll(); }
   async webSocketMessage(ws, brut) {
     let m; try { m = JSON.parse(typeof brut === "string" ? brut : new TextDecoder().decode(brut)); } catch { return; }
     if (!m || typeof m.t !== "string" || String(brut).length > MAX_CARTE + 4000) return;
     const s = this.state.storage, moi = ws.deserializeAttachment() || {}, maintenant = Date.now();
+    // Appels vocaux : messages de mise en relation (offres, réponses, candidats WebRTC) déjà chiffrés par le navigateur, simplement relayés ;
+    // et identifiants TURN (Cloudflare Realtime) remis aux seules personnes connectées au partage.
+    if (moi.uid && m.t === "sig" && typeof m.d === "string" && m.d.length <= 6000) return this.diffuser({ t: "sig", u: moi.uid, d: m.d }, ws);
+    if (moi.uid && m.t === "turn") {
+      if (maintenant - (moi.turnT || 0) < 15000) return this.envoyer(ws, { t: "turn", ice: [{ urls: ["stun:stun.cloudflare.com:3478"] }], limite: true });
+      moi.turnT = maintenant; ws.serializeAttachment(moi);
+      return this.envoyer(ws, { t: "turn", ice: await this.serveursIce() });
+    }
     const d = await this.lire(), chaine = (x, n) => typeof x === "string" && x.length <= n;
     if (m.t === "bonjour") {
       // uid : identifiant aléatoire de l'appareil ; proprio : secret du créateur ; adm : lien administrateur
