@@ -72,7 +72,16 @@ var SESSION_DAYS = 14;
 // ---- ChatGDB ----
 var CHAT_MODELE = 'claude-haiku-5-5';
 // Modèles autorisés (jamais plus gros que Sonnet) ; prix en $ par million de jetons [entrée, sortie].
-var CHAT_MODELES = { 'claude-haiku-5-5': { nom: 'Haiku 5.5', prix: [0.10, 0.50], web: '20250305' }, 'claude-sonnet-5-5': { nom: 'Sonnet 5.5', prix: [2, 10], web: '20260209' } };
+var CHAT_MODELES = { 'claude-haiku-5-5': { nom: 'Haiku 5.5', prix: [0.10, 0.50], web: '20250305' }, 'claude-sonnet-5-5': { nom: 'Sonnet 5.5', prix: [2, 10], web: '20260209' }, 'claude-opus-5-5': { nom: 'Opus 5.5', prix: [4, 20], web: '20260209', admin: true } };
+// Une version de Claude inconnue d'ici (plus récente) est ramenée à la version connue de sa famille ; le relais Cloudflare envoie ensuite
+// la requête à la dernière version disponible de cette famille : une nouvelle version de Claude ne bloque rien.
+function modeleDe_(id) {
+  if (CHAT_MODELES[id]) return id;
+  var m = /^claude-(haiku|sonnet|opus)-[a-z0-9.\-]+$/.exec(String(id || ''));
+  if (!m) return '';
+  for (var k in CHAT_MODELES) if (k.indexOf('claude-' + m[1] + '-') === 0) return k;
+  return '';
+}
 var CHAT_EFFORTS = ['low', 'medium', 'high'];
 // Recherche web : standard ou approfondie (plus de requêtes, lecture des pages en entier).
 var CHAT_RECHERCHE = { standard: { recherches: 5, pages: 2, jetons: 6000 }, approfondie: { recherches: 12, pages: 6, jetons: 12000 } };
@@ -229,7 +238,7 @@ var ACTIONS = {
   // ChatGDB ouvert pour ce compte ? + crédits restants (illimités pour l'administrateur).
   credits: function (r) {
     var email = session_(r.token), role = normRole_(getUser_(email).role);
-    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(relaisUrl_() && relaisSecret_()) || role === 'admin', credits: relaisCredits_(email, role === 'admin' && adminGoogleSeul_(email) ? 'admin' : role) || creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
+    return { ok: true, chat: chatOuvert_(role, email), raison: chatRaison_(role, email), voix: !!cleGemini_(), modeles: Object.keys(CHAT_MODELES).filter(function (id) { return !CHAT_MODELES[id].admin || role === 'admin'; }).map(function (id) { return { id: id, nom: CHAT_MODELES[id].nom }; }), role: role, email: email, admin: role === 'admin', rapide: !!(relaisUrl_() && relaisSecret_()) || role === 'admin', credits: relaisCredits_(email, role === 'admin' && adminGoogleSeul_(email) ? 'admin' : role) || creditsEtat_(email, role), memoire: role === 'admin' ? !!memBase_() : undefined, biblio: role === 'admin' && biblioActive_() ? 'scouthub' : undefined };
   },
   // Dictée vocale : le navigateur envoie un enregistrement (WAV 16 kHz mono), Gemini le transcrit.
   transcrire: function (r) {
@@ -266,7 +275,7 @@ var ACTIONS = {
       if (!cle) fail_('ChatGDB : propriétés RELAIS_CLOUDFLARE_URL et RELAIS_CLOUDFLARE_SECRET absentes du serveur.');
     }
     var admin = role === 'admin';
-    var modele = CHAT_MODELES[r.modele] ? r.modele : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
+    var modele = modeleDe_(r.modele) && (!CHAT_MODELES[modeleDe_(r.modele)].admin || role === 'admin') ? modeleDe_(r.modele) : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
     var memoire = []; try { if (memBase_()) memoire = memIndex_(); } catch (e) { memoire = []; }
     var biblio = biblioActive_(); r.estAdmin = estAdmin; var sys = chatSysteme_(r, memoire, r.profondeur === 'approfondie', biblio, depotsLisibles_());
     var version = CHAT_MODELES[modele].web, prof = r.profondeur === 'approfondie' ? CHAT_RECHERCHE.approfondie : CHAT_RECHERCHE.standard;
@@ -1102,7 +1111,7 @@ function repriseMessages_(rep) {
 }
 function chatAppeler_(r, admin) {
   var p = props_(), cle = p.getProperty('ANTHROPIC_IA');
-  var modele = CHAT_MODELES[r.modele] ? r.modele : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
+  var modele = modeleDe_(r.modele) && (!CHAT_MODELES[modeleDe_(r.modele)].admin || admin) ? modeleDe_(r.modele) : (CHAT_MODELES[p.getProperty('CHAT_MODELE')] ? p.getProperty('CHAT_MODELE') : CHAT_MODELE);
   var effort = CHAT_EFFORTS.indexOf(r.effort) >= 0 ? r.effort : (r.style === 'detail' ? 'medium' : 'low');
   var prof = r.profondeur === 'approfondie' ? CHAT_RECHERCHE.approfondie : CHAT_RECHERCHE.standard;
   var memoire = []; try { if (memBase_()) memoire = memIndex_(); } catch (e) { memoire = []; }

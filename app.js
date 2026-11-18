@@ -92,7 +92,7 @@
   // « Mon compte » et « Administration » sont déjà dans la barre du haut : pas de tuile en plus (une seule ligne en tête).
   function tile(a) {
     const link = document.createElement("a");
-    link.className = "app-tile" + (a.featured ? " featured" : "") + (a.masque ? " is-hidden" : ""); link.href = Portail.safeUrl(a.url) ? a.url : "#";
+    link.className = "app-tile" + (a.featured ? " featured" : "") + (a.masque ? " is-hidden" : "") + (a.admin && Portail.isAdmin ? " is-admin" : ""); link.href = Portail.safeUrl(a.url) ? a.url : "#";
     if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
     // La boutique : la personne connectée à ScoutHub y arrive connectée (code à usage unique, jamais la session).
     let hote = ""; try { hote = new URL(a.url, location.href).host; } catch {}
@@ -110,7 +110,7 @@
     const strong = Object.assign(document.createElement("strong"), { textContent: a.nom });
     const small = Object.assign(document.createElement("small"), { textContent: a.desc });
     text.append(strong, small); link.append(badge, text);
-    if (Portail.isAdmin && (a.masque || a.protege)) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: a.masque ? "Masquée pour les autres" : "Réservée aux @fsggb.fr" }));
+    if (Portail.isAdmin && (a.admin || a.masque || a.protege)) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: a.admin ? "Administrateur" : a.masque ? "Masquée pour les autres" : "Réservée aux @fsggb.fr" }));
     return link;
   }
 
@@ -120,7 +120,7 @@
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";

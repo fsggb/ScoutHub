@@ -4,11 +4,17 @@
 //                   est enregistrée dans D1 une fois la réponse terminée.
 //  POST /credits  : crédits restants de la personne.
 //  POST /ia/*     : laboratoire de l'administrateur (Workers AI : modèles, dictée, voix, vecteurs ; budget de Neurons tenu dans D1).
+//  POST /fiches/* : brouillons de fiches proposés par ChatGDB (branche « brouillons » du dépôt ChatGDB), validation par l'administrateur.
 //  GET  /direct/{id} (WebSocket) : partage en direct de ScoutMap (itinéraire, azimuts, grand jeu) : positions, discussion,
 //                   carte ; tout arrive déjà chiffré par le navigateur (la clé n'est que dans le lien), le serveur ne lit rien.
 //  GET  /ign/{z}/{x}/{y}.jpg (ou /scan25/…, adresse attendue par ScoutMap) : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
 // Secrets : ANTHROPIC_KEY (clé Claude, jamais visible du navigateur), RELAIS_SECRET (partagé avec le serveur ScoutHub).
-const MODELES = { "claude-haiku-5-5": [0.10, 0.50], "claude-sonnet-5-5": [2, 10] };   // $ par million de jetons (entrée, sortie)
+// Prix connus ($ par million de jetons : entrée, sortie), par version ; une version inconnue (plus récente) prend le prix de sa famille.
+const MODELES = { "claude-haiku-5-5": [0.10, 0.50], "claude-sonnet-5-5": [2, 10], "claude-opus-5-5": [4, 20] };
+const PRIX_FAMILLE = { haiku: [0.10, 0.50], sonnet: [2, 10], opus: [4, 20] };
+const ADMIN_SEUL = new Set(["opus"]);   // familles réservées à l'administrateur
+const famille = id => { const m = /^claude-(haiku|sonnet|opus)-/.exec(String(id || "")); return m ? m[1] : ""; };
+const prixDe = id => MODELES[id] || PRIX_FAMILLE[famille(id)] || PRIX_FAMILLE.haiku;   // $ par million de jetons (entrée, sortie)
 const MAX_JETONS = 128000, CREDIT_DOLLARS = 0.001;       // plafond de sécurité très large : la vraie limite est celle du modèle (Claude la signale)
 
 const enc = new TextEncoder();
@@ -38,7 +44,7 @@ async function verifierJeton(jeton, secret) {
   return p && p.e && p.x > Date.now() ? p : null;
 }
 function cout(modele, u, recherches) {
-  const p = MODELES[modele] || MODELES["claude-haiku-5-5"];
+  const p = prixDe(modele);
   const entree = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) * 1.25 + (u.cache_read_input_tokens || 0) * 0.1;
   const dollars = (entree * p[0] + (u.output_tokens || 0) * p[1]) / 1e6 + recherches * 0.01;
   return { dollars, credits: Math.max(1, Math.ceil(dollars / CREDIT_DOLLARS - 1e-9)) };
@@ -79,6 +85,29 @@ async function enregistrer(env, email, modele, flux) {
   const c = cout(modele, u, recherches);
   await env.DB.prepare("INSERT INTO usage (email, ts, modele, entree, sortie, recherches, dollars, credits) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
     .bind(email, Date.now(), modele, (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0), u.output_tokens || 0, recherches, c.dollars, c.credits).run();
+}
+
+// ---------- Dernières versions de Claude ----------
+// Le relais demande à l'API la liste des modèles (gardée 6 heures) et envoie chaque requête à la DERNIÈRE version de la famille demandée
+// (Haiku, Sonnet, Opus) : une nouvelle version de Claude n'impose aucune mise à jour du site. Si la liste est indisponible, ou si la
+// dernière version refuse la requête, la version demandée est utilisée telle quelle.
+let memoModeles = { t: 0, v: null };
+async function cleClaude(env) { return env.ANTHROPIC_KEY && typeof env.ANTHROPIC_KEY.get === "function" ? await env.ANTHROPIC_KEY.get() : env.ANTHROPIC_KEY; }
+function entetesClaude(env, cle) { return { "content-type": "application/json", "x-api-key": cle, "anthropic-version": "2023-06-01", ...(env.ANTHROPIC_WORKSPACE_ID ? { "anthropic-workspace-id": String(env.ANTHROPIC_WORKSPACE_ID).trim() } : {}) }; }
+async function dernieresVersions(env) {
+  if (memoModeles.v && Date.now() - memoModeles.t < 6 * 3600e3) return memoModeles.v;
+  try {
+    const cle = await cleClaude(env); if (!cle) return memoModeles.v;
+    const res = await fetch("https://api.anthropic.com/v1/models?limit=100", { headers: entetesClaude(env, cle) });
+    if (!res.ok) return memoModeles.v;
+    const liste = (await res.json()).data || [], v = {};
+    for (const m of liste) {
+      const f = famille(m.id); if (!f || /-\d{8}$/.test(m.id)) continue;         // les versions datées sont d'anciens instantanés
+      if (!v[f] || String(m.created_at) > String(v[f].created_at)) v[f] = { id: m.id, nom: m.display_name || m.id, created_at: m.created_at };
+    }
+    if (Object.keys(v).length) memoModeles = { t: Date.now(), v };
+  } catch { /* garde la dernière liste connue */ }
+  return memoModeles.v;
 }
 
 // ---------- Relais des cartes IGN ----------
@@ -207,7 +236,7 @@ async function neuronsAjouter(env, n) {
 }
 async function laboratoire(req, env, url, json, erreur) {
   const etat = await neuronsJour(env);
-  const chemin = url.pathname.slice(4);
+  const chemin = url.pathname.slice(3);
   if (chemin === "/modeles") return json(200, { ok: true, etat, modeles: Object.entries(TEXTE_IA).map(([id, [nom, e, so]]) => ({ id, nom, entree: e, sortie: so })), dictee: "@cf/openai/whisper-large-v3-turbo", voix: "@cf/myshell-ai/melotts", vecteurs: "@cf/baai/bge-m3" });
   let c; try { c = await req.json(); } catch { return erreur(400, "Requête invalide."); }
   if (!c.force && etat.utilises >= etat.budget * etat.coupure) return erreur(429, "Budget gratuit du jour entamé à plus de 80 % (" + etat.utilises + " / " + etat.budget + " Neurons) : réessayez demain (00 h UTC) ou forcez l'essai.");
@@ -252,6 +281,89 @@ async function laboratoire(req, env, url, json, erreur) {
   return erreur(404, "Adresse inconnue.");
 }
 
+// ---------- FICHES DE CONNAISSANCES : brouillons proposés par ChatGDB, validés par l'administrateur ----------
+// ChatGDB propose une fiche (/fiches/brouillon) : elle est écrite dans le dépôt ChatGDB, sur la branche « brouillons » uniquement, dans
+// connaissances/brouillons/. Elle n'est publiée (branche main, connaissances/src/) que quand l'administrateur la valide (/fiches/valider).
+// Garde-fous fixes, vérifiés ici et non par une IA : administrateur seul, un seul dépôt, deux dossiers, identifiant en minuscules-tirets,
+// taille et nombre par jour plafonnés, jamais d'écrasement par un brouillon, journal = historique git.
+const FICHES = { branche: "brouillons", dossierBrouillons: "connaissances/brouillons/", dossierFiches: "connaissances/src/", maxCar: 6000, maxLignes: 120, parJour: 20 };
+const idFiche = v => /^[a-z0-9][a-z0-9-]{2,63}$/.test(v) ? v : "";
+const uneLigne = (v, max) => String(v == null ? "" : v).replace(/[\r\n\t#]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+const b64texte = t => { const o = enc.encode(t); let b = ""; for (const x of o) b += String.fromCharCode(x); return btoa(b); };
+const texteB64 = c => new TextDecoder().decode(Uint8Array.from(atob(String(c).replace(/\s/g, "")), ch => ch.charCodeAt(0)));
+async function gh(env, chemin, init = {}) {
+  const cle = env.GITHUB_KEY && typeof env.GITHUB_KEY.get === "function" ? await env.GITHUB_KEY.get() : env.GITHUB_KEY;
+  if (!cle) throw new Error("Clé GitHub absente du serveur Cloudflare.");
+  return fetch("https://api.github.com/repos/" + (env.FICHES_DEPOT || "fsggb/ChatGDB") + chemin, { ...init, headers: { authorization: "Bearer " + cle, accept: "application/vnd.github+json", "user-agent": "scouthub-fiches", "x-github-api-version": "2022-11-28", "content-type": "application/json" } });
+}
+async function ghJson(env, chemin, init) { const r = await gh(env, chemin, init); const t = await r.text(); let o = null; try { o = JSON.parse(t); } catch { /* ignoré */ } if (!r.ok && r.status !== 404) throw new Error("GitHub " + r.status + " : " + String(o && o.message || t).slice(0, 160)); return { ok: r.ok, status: r.status, o }; }
+async function brancheBrouillons(env) {
+  const ref = await ghJson(env, "/git/ref/heads/" + FICHES.branche); if (ref.ok) return;
+  const main = await ghJson(env, "/git/ref/heads/main"); if (!main.ok) throw new Error("Branche main introuvable.");
+  const c = await ghJson(env, "/git/refs", { method: "POST", body: JSON.stringify({ ref: "refs/heads/" + FICHES.branche, sha: main.o.object.sha }) }); if (!c.ok) throw new Error("Création de la branche impossible.");
+}
+async function lireFichier(env, chemin, branche) { const r = await ghJson(env, "/contents/" + chemin.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(branche)); return r.ok && r.o && r.o.content != null ? { texte: texteB64(r.o.content), sha: r.o.sha } : null; }
+async function ecrireFichier(env, chemin, branche, texte, message, sha) { const r = await ghJson(env, "/contents/" + chemin.split("/").map(encodeURIComponent).join("/"), { method: "PUT", body: JSON.stringify({ message, content: b64texte(texte), branch: branche, ...(sha ? { sha } : {}) }) }); if (!r.ok) throw new Error("Écriture refusée par GitHub (" + r.status + ")."); }
+async function supprimerFichier(env, chemin, branche, sha, message) { const r = await ghJson(env, "/contents/" + chemin.split("/").map(encodeURIComponent).join("/"), { method: "DELETE", body: JSON.stringify({ message, sha, branch: branche }) }); if (!r.ok) throw new Error("Suppression refusée par GitHub (" + r.status + ")."); }
+const invalide = m => Object.assign(new Error(m), { valide: true });
+function construireFiche(c) {
+  const id = idFiche(String(c.id || "")); if (!id) throw invalide("Identifiant invalide (minuscules, chiffres et tirets, 3 à 64 caractères).");
+  const titre = uneLigne(c.titre, 140), resume = uneLigne(c.resume, 400), theme = uneLigne(c.theme, 40).replace(/[^\p{L}\p{N} _-]/gu, "") || "Divers";
+  const mots = (Array.isArray(c.mots_cles) ? c.mots_cles : []).map(m => uneLigne(m, 40).replace(/,/g, " ")).filter(Boolean).slice(0, 14);
+  const contenu = String(c.contenu || "").replace(/\r\n/g, "\n").trim();
+  if (!titre || !resume || !mots.length) throw invalide("Titre, résumé et mots-clés sont obligatoires.");
+  if (!contenu || contenu.length > FICHES.maxCar || contenu.split("\n").length > FICHES.maxLignes) throw invalide("Contenu vide ou trop long (" + FICHES.maxCar + " caractères et " + FICHES.maxLignes + " lignes au plus).");
+  if (/^---\s*$/m.test(contenu)) throw invalide("Le contenu ne peut pas contenir de ligne « --- ».");
+  const j = new Date().toISOString().slice(0, 10);
+  return { id, theme, texte: "---\nid: " + id + "\ntitre: " + titre + "\ntheme: " + theme + "\ntype: synthese\nbrouillon: oui\nsources:\n  - titre: Proposée par ChatGDB le " + j + " (à relire avant publication)\nmots_cles: " + mots.join(", ") + "\nresume: " + resume + "\n---\n\n" + contenu + "\n" };
+}
+async function fiches(req, env, url, qui, json, erreur) {
+  const chemin = url.pathname.slice(7);
+  let c = {}; try { c = await req.json(); } catch { /* corps vide accepté pour la liste */ }
+  try {
+    if (chemin === "/liste") {
+      const r = await ghJson(env, "/contents/" + FICHES.dossierBrouillons.replace(/\/$/, "") + "?ref=" + FICHES.branche);
+      const noms = r.ok && Array.isArray(r.o) ? r.o.filter(f => /\.md$/.test(f.name)).map(f => f.name.slice(0, -3)) : [];
+      const sortie = []; for (const id of noms.slice(0, 40)) { const f = await lireFichier(env, FICHES.dossierBrouillons + id + ".md", FICHES.branche); if (f) { const t = (/^titre: (.*)$/m.exec(f.texte) || [])[1] || id; sortie.push({ id, titre: t, resume: (/^resume: (.*)$/m.exec(f.texte) || [])[1] || "", theme: (/^theme: (.*)$/m.exec(f.texte) || [])[1] || "" }); } }
+      return json(200, { ok: true, brouillons: sortie });
+    }
+    if (chemin === "/lire") { const id = idFiche(String(c.id || "")); if (!id) return erreur(400, "Identifiant invalide."); const f = await lireFichier(env, FICHES.dossierBrouillons + id + ".md", FICHES.branche); return f ? json(200, { ok: true, id, texte: f.texte }) : erreur(404, "Brouillon introuvable."); }
+    if (chemin === "/brouillon") {
+      const f = construireFiche(c);
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS fiches_jour (jour TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0)").run();
+      const j = jourUtc(), deja = (await env.DB.prepare("SELECT n FROM fiches_jour WHERE jour = ?").bind(j).first() || {}).n || 0;
+      if (deja >= FICHES.parJour) return erreur(429, "Limite de " + FICHES.parJour + " brouillons par jour atteinte.");
+      await brancheBrouillons(env);
+      const existant = await lireFichier(env, FICHES.dossierBrouillons + f.id + ".md", FICHES.branche);
+      await ecrireFichier(env, FICHES.dossierBrouillons + f.id + ".md", FICHES.branche, f.texte, "Brouillon de fiche : " + f.id + (existant ? " (mise à jour)" : ""), existant && existant.sha);
+      await env.DB.prepare("INSERT INTO fiches_jour (jour, n) VALUES (?, 1) ON CONFLICT(jour) DO UPDATE SET n = n + 1").bind(j).run();
+      return json(200, { ok: true, id: f.id, message: "Brouillon enregistré sur la branche « " + FICHES.branche + " » : l'administrateur doit le valider (Laboratoire, onglet Fiches)." });
+    }
+    if (chemin === "/refuser") {
+      const id = idFiche(String(c.id || "")); if (!id) return erreur(400, "Identifiant invalide.");
+      const f = await lireFichier(env, FICHES.dossierBrouillons + id + ".md", FICHES.branche); if (!f) return erreur(404, "Brouillon introuvable.");
+      await supprimerFichier(env, FICHES.dossierBrouillons + id + ".md", FICHES.branche, f.sha, "Brouillon refusé : " + id);
+      return json(200, { ok: true, id });
+    }
+    if (chemin === "/valider") {
+      const id = idFiche(String(c.id || "")); if (!id) return erreur(400, "Identifiant invalide.");
+      const f = await lireFichier(env, FICHES.dossierBrouillons + id + ".md", FICHES.branche); if (!f) return erreur(404, "Brouillon introuvable.");
+      const texte = f.texte.replace(/^brouillon: oui\n/m, "").replace(/^  - titre: Proposée par ChatGDB le ([\d-]+) \(à relire avant publication\)$/m, "  - titre: Proposée par ChatGDB le $1, validée par l'administrateur");
+      if (!/^---\nid: /.test(texte)) return erreur(422, "Format de fiche invalide.");
+      // fiche déjà publiée sous cet identifiant : on la met à jour à sa place, sinon dossier du thème
+      const arbre = await ghJson(env, "/git/trees/main?recursive=1");
+      const trouve = arbre.ok && arbre.o && Array.isArray(arbre.o.tree) ? arbre.o.tree.find(t => t.path.startsWith(FICHES.dossierFiches) && t.path.endsWith("/" + id + ".md")) : null;
+      const theme = (/^theme: (.*)$/m.exec(texte) || [])[1] || "Divers";
+      const dest = trouve ? trouve.path : FICHES.dossierFiches + theme.replace(/[^\p{L}\p{N}_-]/gu, "-") + "/" + id + ".md";
+      const actuel = trouve ? await lireFichier(env, dest, "main") : null;
+      await ecrireFichier(env, dest, "main", texte, "Fiche validée : " + id + (trouve ? " (mise à jour)" : ""), actuel && actuel.sha);
+      await supprimerFichier(env, FICHES.dossierBrouillons + id + ".md", FICHES.branche, f.sha, "Brouillon publié : " + id);
+      return json(200, { ok: true, id, chemin: dest, message: "Fiche publiée dans " + dest + " ; le site se met à jour dans quelques minutes." });
+    }
+  } catch (e) { return erreur(e && e.valide ? 400 : 502, String(e && e.message || e).slice(0, 300)); }
+  return erreur(404, "Adresse inconnue.");
+}
+
 export default {
   async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
@@ -267,6 +379,8 @@ export default {
     const admin = qui.r === "admin";
 
     if (url.pathname.startsWith("/ia/")) return admin ? laboratoire(req, env, url, json, erreur) : erreur(403, "Réservé à l'administrateur.");
+    if (url.pathname.startsWith("/fiches/")) return admin ? fiches(req, env, url, qui, json, erreur) : erreur(403, "Réservé à l'administrateur.");
+    if (url.pathname === "/claude/modeles") { const d = await dernieresVersions(env) || {}; return json(200, { ok: true, modeles: Object.entries(d).filter(([f]) => admin || !ADMIN_SEUL.has(f)).map(([f, m]) => ({ famille: f, id: m.id, nom: m.nom, prix: PRIX_FAMILLE[f] })) }); }
     if (url.pathname === "/credits") return json(200, { ok: true, ...(await etatCredits(env, qui)) });
 
     if (url.pathname === "/chat" || url.pathname === "/") {
@@ -276,22 +390,24 @@ export default {
         if (etat.semaine.reste <= 0) return erreur(429, "Limite de crédits de la semaine atteinte.");
       }
       let corps; try { corps = await req.json(); } catch { return erreur(400, "Requête invalide."); }
-      if (!MODELES[corps.model]) return erreur(400, "Modèle non autorisé.");
+      const fam = famille(corps.model);
+      if (!fam || !/^claude-[a-z]+-[0-9][0-9a-z.\-]*$/.test(corps.model)) return erreur(400, "Modèle non autorisé.");
+      if (ADMIN_SEUL.has(fam) && !admin) return erreur(403, "Ce modèle est réservé à l'administrateur.");
+      const demande = corps.model, derniere = await dernieresVersions(env);
+      if (derniere && derniere[fam]) corps.model = derniere[fam].id;
       corps.max_tokens = Math.min(+corps.max_tokens || 2000, MAX_JETONS);
       corps.stream = true;
       corps.metadata = { user_id: hex(await crypto.subtle.digest("SHA-256", enc.encode(String(qui.e)))).slice(0, 32) };   // identifiant opaque
       // La clé vient du Secrets Store du compte (liaison avec .get()) ou d'un secret propre au Worker (texte)
-      const cleClaude = env.ANTHROPIC_KEY && typeof env.ANTHROPIC_KEY.get === "function" ? await env.ANTHROPIC_KEY.get() : env.ANTHROPIC_KEY;
-      if (!cleClaude) return erreur(503, "Clé Claude absente du serveur Cloudflare.");
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": cleClaude, "anthropic-version": "2023-06-01", ...(env.ANTHROPIC_WORKSPACE_ID ? { "anthropic-workspace-id": String(env.ANTHROPIC_WORKSPACE_ID).trim() } : {}) },
-        body: JSON.stringify(corps)
-      });
+      const cle = await cleClaude(env);
+      if (!cle) return erreur(503, "Clé Claude absente du serveur Cloudflare.");
+      const appelerClaude = () => fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: entetesClaude(env, cle), body: JSON.stringify(corps) });
+      let res = await appelerClaude();
+      if ((res.status === 400 || res.status === 404) && corps.model !== demande) { corps.model = demande; res = await appelerClaude(); }   // la dernière version refuse : version demandée
       if (!res.ok || !res.body) return new Response(res.body, { status: res.status, headers: { ...entetes, "content-type": res.headers.get("content-type") || "application/json" } });
       const [pourNavigateur, pourCompte] = res.body.tee();
       ctx.waitUntil(enregistrer(env, qui.e, corps.model, pourCompte).catch(() => {}));
-      return new Response(pourNavigateur, { status: 200, headers: { ...entetes, "content-type": "text/event-stream", "cache-control": "no-store" } });
+      return new Response(pourNavigateur, { status: 200, headers: { ...entetes, "content-type": "text/event-stream", "cache-control": "no-store", "x-modele": corps.model, "Access-Control-Expose-Headers": "x-modele" } });
     }
     return erreur(404, "Adresse inconnue.");
   }

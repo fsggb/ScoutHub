@@ -15,13 +15,15 @@
     (window.SCOUTHUB_APPS || []).forEach(a => {
       let s = sections.find(x => x.titre === a.group);
       if (!s) sections.push(s = { id: slug(a.group), titre: a.group, haut: TOP.includes(a.group) });
-      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, local: !!a.local });
+      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, local: !!a.local, admin: !!a.admin });
     });
     return { v: 1, sections, apps };
   }
   // Applications ajoutées à config.js après l'enregistrement de la mise en page : elles apparaissent en fin de section.
   function merge(m) {
     const d = defaults(), out = { ...m, sections: m.sections.map(s => ({ ...s })), apps: m.apps.map(a => ({ ...a })) };
+    // Le caractère « réservée à l'administrateur » vient toujours de config.js, même pour une mise en page déjà enregistrée
+    out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) x.admin = o.admin; });
     d.apps.forEach(a => {
       if (out.apps.some(x => x.id === a.id)) return;
       const ds = d.sections.find(s => s.id === a.section);

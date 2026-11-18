@@ -61,6 +61,8 @@
 /* applications masquées (visibles seulement par l'administrateur) */
 .app-tile{position:relative}
 .app-tile.is-hidden{opacity:.62;outline:2px dashed var(--gold,#c6a24e);outline-offset:-2px}
+.app-tile.is-admin{outline:1.5px solid #c0392b;outline-offset:-1.5px}
+.app-tile.is-admin .hidden-flag{background:#c0392b}
 .app-tile .hidden-flag{position:absolute;top:6px;right:8px;font:600 10.5px/1 var(--sans,system-ui);font-style:normal;background:var(--navy,#000761);color:#fff;padding:3px 7px;border-radius:99px}
 
 /* administration : onglets et éditeur de mise en page */
