@@ -3,6 +3,7 @@
 //                   de crédits, transmet la requête à Claude et renvoie la réponse au fil de l'eau ; la consommation
 //                   est enregistrée dans D1 une fois la réponse terminée.
 //  POST /credits  : crédits restants de la personne.
+//  POST /ia/*     : laboratoire de l'administrateur (Workers AI : modèles, dictée, voix, vecteurs ; budget de Neurons tenu dans D1).
 //  GET  /direct/{id} (WebSocket) : partage en direct de ScoutMap (itinéraire, azimuts, grand jeu) : positions, discussion,
 //                   carte ; tout arrive déjà chiffré par le navigateur (la clé n'est que dans le lien), le serveur ne lit rien.
 //  GET  /ign/{z}/{x}/{y}.jpg (ou /scan25/…, adresse attendue par ScoutMap) : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
@@ -173,6 +174,84 @@ async function direct(req, env, url) {
   return env.PARTAGE.get(env.PARTAGE.idFromName(id)).fetch(req);
 }
 
+// ---------- LABORATOIRE (administrateur) : modèles Workers AI gratuits, dictée, voix, recherche par le sens ----------
+// /ia/modeles  catalogue (prix en Neurons par million de jetons) et compteur du jour
+// /ia/chat     un modèle de texte (messages, outils, température) : réponse complète + durée + Neurons
+// /ia/dictee   audio (base64) -> texte (Whisper)      /ia/voix  texte -> audio (MeloTTS)      /ia/vecteurs  textes -> vecteurs (bge-m3)
+// Le budget gratuit est de 10 000 Neurons par jour pour tout le compte (remise à zéro à 00 h UTC) : au-delà de 80 %, les essais sont
+// refusés sauf demande explicite (force) de l'administrateur ; le décompte est tenu dans D1 (table neurons).
+const TEXTE_IA = {
+  "@cf/meta/llama-3.1-8b-instruct-fp8-fast": ["Llama 3.1 8B (rapide)", 4119, 34868],
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast": ["Llama 3.3 70B (rapide)", 26668, 204805],
+  "@cf/meta/llama-4-scout-17b-16e-instruct": ["Llama 4 Scout 17B", 24545, 77273],
+  "@cf/qwen/qwen3-30b-a3b-fp8": ["Qwen3 30B-A3B", 4625, 30475],
+  "@cf/openai/gpt-oss-120b": ["GPT-OSS 120B", 31818, 68182],
+  "@cf/openai/gpt-oss-20b": ["GPT-OSS 20B", 18182, 27273],
+  "@cf/mistralai/mistral-small-3.1-24b-instruct": ["Mistral Small 3.1 24B", 31876, 50488],
+  "@cf/google/gemma-4-26b-a4b-it": ["Gemma 4 26B-A4B", 9091, 27273],
+  "@cf/zai-org/glm-4.7-flash": ["GLM-4.7-Flash", 5500, 36400],
+  "@cf/nvidia/nemotron-3-120b-a12b": ["Nemotron 3 120B", 45455, 136364],
+  "@cf/qwen/qwen3.8-27b": ["Qwen3.8 27B", 40909, 290909],
+  "@cf/ibm-granite/granite-4.0-h-micro": ["Granite 4.0 micro", 1542, 10158]
+};
+const NEURONS_PAR_MINUTE = { dictee: 46.6, voix: 18.6 }, NEURONS_VECTEUR_PAR_JETON = 0.001075;
+const MAX_AUDIO = 6e6, MAX_TEXTE_IA = 60000;
+const jourUtc = () => new Date().toISOString().slice(0, 10);
+async function neuronsJour(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS neurons (jour TEXT PRIMARY KEY, n REAL NOT NULL DEFAULT 0, appels INTEGER NOT NULL DEFAULT 0)").run();
+  const r = await env.DB.prepare("SELECT n, appels FROM neurons WHERE jour = ?").bind(jourUtc()).first();
+  return { jour: jourUtc(), utilises: Math.round((r && r.n || 0) * 10) / 10, appels: r ? r.appels : 0, budget: +env.NEURONS_JOUR || 10000, coupure: 0.8 };
+}
+async function neuronsAjouter(env, n) {
+  await env.DB.prepare("INSERT INTO neurons (jour, n, appels) VALUES (?, ?, 1) ON CONFLICT(jour) DO UPDATE SET n = n + excluded.n, appels = appels + 1").bind(jourUtc(), n).run();
+}
+async function laboratoire(req, env, url, json, erreur) {
+  const etat = await neuronsJour(env);
+  const chemin = url.pathname.slice(4);
+  if (chemin === "/modeles") return json(200, { ok: true, etat, modeles: Object.entries(TEXTE_IA).map(([id, [nom, e, so]]) => ({ id, nom, entree: e, sortie: so })), dictee: "@cf/openai/whisper-large-v3-turbo", voix: "@cf/myshell-ai/melotts", vecteurs: "@cf/baai/bge-m3" });
+  let c; try { c = await req.json(); } catch { return erreur(400, "Requête invalide."); }
+  if (!c.force && etat.utilises >= etat.budget * etat.coupure) return erreur(429, "Budget gratuit du jour entamé à plus de 80 % (" + etat.utilises + " / " + etat.budget + " Neurons) : réessayez demain (00 h UTC) ou forcez l'essai.");
+  const t0 = Date.now();
+  try {
+    if (chemin === "/chat") {
+      const m = TEXTE_IA[c.model]; if (!m) return erreur(400, "Modèle non autorisé.");
+      if (!Array.isArray(c.messages) || !c.messages.length || JSON.stringify(c.messages).length > MAX_TEXTE_IA) return erreur(400, "Messages invalides ou trop longs.");
+      const corps = { messages: c.messages, max_tokens: Math.min(Math.max(+c.max_tokens || 800, 16), 8000), temperature: Math.min(Math.max(+c.temperature || 0, 0), 2) };
+      if (Array.isArray(c.tools) && c.tools.length) corps.tools = c.tools.slice(0, 20);
+      const r = await env.AI.run(c.model, corps);
+      const ch = r && r.choices && r.choices[0] && r.choices[0].message || {}, u = r && r.usage || {};
+      const entree = u.prompt_tokens || 0, sortie = u.completion_tokens || 0, neurons = (entree * m[1] + sortie * m[2]) / 1e6;
+      await neuronsAjouter(env, neurons);
+      return json(200, { ok: true, modele: c.model, nom: m[0], texte: (ch.content != null ? ch.content : r && r.response) || "", raisonnement: ch.reasoning || ch.reasoning_content || "", outils: ch.tool_calls || [], entree, sortie, neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0, restant: Math.round((etat.budget - etat.utilises - neurons) * 10) / 10 });
+    }
+    if (chemin === "/dictee") {
+      const audio = String(c.audio || ""); if (!audio || audio.length > MAX_AUDIO) return erreur(400, "Audio absent ou trop long (6 Mo au plus).");
+      const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio, language: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" });
+      const duree = +(r && r.transcription_info && r.transcription_info.duration) || +c.duree || 0, neurons = duree / 60 * NEURONS_PAR_MINUTE.dictee;
+      await neuronsAjouter(env, neurons);
+      return json(200, { ok: true, texte: String(r && r.text || "").trim(), mots: r && r.words ? r.words.length : 0, duree, neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0 });
+    }
+    if (chemin === "/voix") {
+      const texte = String(c.texte || "").slice(0, 2000); if (!texte) return erreur(400, "Texte absent.");
+      const r = await env.AI.run("@cf/myshell-ai/melotts", { prompt: texte, lang: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" });
+      const neurons = texte.length / 14 / 60 * NEURONS_PAR_MINUTE.voix;
+      await neuronsAjouter(env, neurons);
+      return json(200, { ok: true, audio: r && r.audio || "", neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0 });
+    }
+    if (chemin === "/vecteurs") {
+      const textes = Array.isArray(c.textes) ? c.textes.map(t => String(t).slice(0, 4000)).slice(0, 100) : [];
+      if (!textes.length) return erreur(400, "Textes absents.");
+      const r = await env.AI.run("@cf/baai/bge-m3", { text: textes });
+      const neurons = textes.reduce((n, t) => n + t.length / 3, 0) * NEURONS_VECTEUR_PAR_JETON;
+      await neuronsAjouter(env, neurons);
+      return json(200, { ok: true, vecteurs: r && r.data || [], neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0 });
+    }
+  } catch (e) {
+    return erreur(502, "Workers AI : " + String(e && e.message || e).slice(0, 300));
+  }
+  return erreur(404, "Adresse inconnue.");
+}
+
 export default {
   async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
@@ -187,6 +266,7 @@ export default {
     if (!qui) return erreur(401, "Session ScoutHub invalide ou expirée : rechargez la page.");
     const admin = qui.r === "admin";
 
+    if (url.pathname.startsWith("/ia/")) return admin ? laboratoire(req, env, url, json, erreur) : erreur(403, "Réservé à l'administrateur.");
     if (url.pathname === "/credits") return json(200, { ok: true, ...(await etatCredits(env, qui)) });
 
     if (url.pathname === "/chat" || url.pathname === "/") {

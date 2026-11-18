@@ -11,3 +11,6 @@ CREATE TABLE IF NOT EXISTS usage (
   credits INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS usage_email_ts ON usage (email, ts);
+
+-- Neurons Workers AI consommés par jour (créée aussi à la demande par le Worker)
+CREATE TABLE IF NOT EXISTS neurons (jour TEXT PRIMARY KEY, n REAL NOT NULL DEFAULT 0, appels INTEGER NOT NULL DEFAULT 0);

@@ -5,6 +5,8 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  // Workers AI (modèles gratuits : 10 000 Neurons par jour pour le compte) : laboratoire de l'administrateur
+  "ai": { "binding": "AI" },
   "d1_databases": [
     { "binding": "DB", "database_name": "scouthub", "database_id": "1fbba344-d555-438e-b948-7bffefe30e5b" }
   ],
@@ -24,7 +26,8 @@
     "CREDITS_FENETRE": "30",
     "FENETRE_HEURES": "5",
     "CREDITS_SEMAINE": "60",
-    "BONUS_MAX": "40"
+    "BONUS_MAX": "40",
+    "NEURONS_JOUR": "10000"
   }
   // Secret propre au Worker (npx wrangler secret put RELAIS_SECRET) : le même que la propriété RELAIS_CLOUDFLARE_SECRET
   // du serveur ScoutHub (Apps Script). Variable facultative : ANTHROPIC_WORKSPACE_ID (identifiant, pas un secret).
