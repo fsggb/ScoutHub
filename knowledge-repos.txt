@@ -1,7 +1,0 @@
-# Dépôts dont la fiche CHATGDB.md alimente l'assistant ChatGDB (une fiche par dépôt, à la racine).
-ScoutHub
-SoLeadWorks
-ScoutMap
-CathIA
-ChatGDB
-ScoutBibliotheque

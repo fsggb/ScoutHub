@@ -1,5 +1,5 @@
 ---
-# Fiche de connaissances ChatGDB (format : ScoutHub/docs/projet-chatgdb.md, §5).
+# Fiche de connaissances ChatGDB (format : ChatGDB/docs/projet-chatgdb.md, §5).
 # ChatGDB lit ce fichier pour répondre aux questions sur les applications de ce dépôt.
 depot: fsggb/ScoutHub
 maj: 2026-11-11

@@ -136,6 +136,9 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
           pattern: app-*
@@ -147,10 +150,8 @@ jobs:
           VERSIONS: ${{ needs.plan.outputs.versions }}
         run: |
           mkdir build
-          # Base de connaissances de ChatGDB : fiches Markdown -> carte index.json + fiches/*.json
-          node scripts/connaissances.mjs
           # Le portail (sans le serveur, les docs ni la configuration du dépôt)
-          tar -c --exclude='./.git' --exclude='./.github' --exclude='./backend' --exclude='./docs' --exclude='./build' --exclude='./artifacts' --exclude='./scripts' --exclude='*.md' --exclude='./apps.txt' --exclude='./knowledge-repos.txt' --exclude='./connaissances/src' --exclude='./cloudflare' --exclude='./CLAUDE.md' . | tar -x -C build
+          tar -c --exclude='./.git' --exclude='./.github' --exclude='./backend' --exclude='./docs' --exclude='./build' --exclude='./artifacts' --exclude='./scripts' --exclude='*.md' --exclude='./apps.txt' --exclude='./cloudflare' --exclude='./CLAUDE.md' . | tar -x -C build
           # Les applications, telles quelles
           while read -r type dir repo arg; do
             dest="build/${dir}"
@@ -170,9 +171,19 @@ jobs:
             esac
           done < <(grep -vE '^\s*(#|$)' apps.txt)
           echo "$VERSIONS" > build/mirrors.json
-          # Fiches de connaissances de ChatGDB : CHATGDB.md de chaque dépôt, réunies dans knowledge/
+          # Base de connaissances de ChatGDB : elle vit dans le dépôt ChatGDB (connaissances/src/*.md). On en tire ici la carte
+          # index.json et les fiches/*.json, avec le générateur du dépôt ChatGDB lancé SANS réseau, sans lancer d'autre programme
+          # et avec le seul droit d'écrire dans connaissances/ (mode « permission » de Node) : ce déploiement a le droit de publier.
+          kb="build/ChatGDB/connaissances"
+          if [ -f build/ChatGDB/scripts/connaissances.mjs ]; then
+            node --permission --allow-fs-read="$PWD/build/ChatGDB" --allow-fs-write="$PWD/$kb" build/ChatGDB/scripts/connaissances.mjs
+            # ancienne adresse (…/ScoutHub/connaissances/), pour le serveur Apps Script tant qu'il n'est pas remis à jour
+            cp -a "$kb" build/connaissances
+            rm -rf build/ChatGDB/connaissances/src build/connaissances/src
+          else echo "::warning::ChatGDB : générateur de la base de connaissances introuvable"; fi
+          # Fiches de connaissances par application : CHATGDB.md de chaque dépôt (liste dans ChatGDB/connaissances/depots.txt), réunies dans knowledge/
           mkdir -p build/knowledge
-          grep -vE '^\s*(#|$)' knowledge-repos.txt | while read -r repo; do
+          grep -vE '^\s*(#|$)' "$kb/depots.txt" 2>/dev/null | while read -r repo; do
             if curl -fsSL "https://raw.githubusercontent.com/fsggb/${repo}/main/CHATGDB.md" -o "build/knowledge/${repo}.md"; then
               { printf '\n\n<<< Fiche du dépôt %s >>>\n' "$repo"; cat "build/knowledge/${repo}.md"; } >> build/knowledge/all.md
             else echo "::warning::fiche ${repo} introuvable"; rm -f "build/knowledge/${repo}.md"; fi

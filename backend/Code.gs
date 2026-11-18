@@ -84,7 +84,7 @@ var CHAT_FENETRE_H = 5, CHAT_CREDITS_FENETRE = 30, CHAT_CREDITS_SEMAINE = 60, CH
 var CHAT_CONNAISSANCES_URL = 'https://fsggb.github.io/ScoutHub/knowledge/all.md';
 // Base de connaissances structurée (fiches de synthèse des documents de la Troupe et notices des applications),
 // construite par scripts/connaissances.mjs et servie par GitHub Pages : rapide, sans passer par Google Drive.
-var CHAT_BASE_URL = 'https://fsggb.github.io/ScoutHub/connaissances/';
+var CHAT_BASE_URL = 'https://fsggb.github.io/ScoutHub/ChatGDB/connaissances/';
 var MAX_FAILS = 5;
 var LOCK_SECONDS = 600;
 var SESSION_CACHE_SECONDS = 600;

@@ -18,7 +18,7 @@
 
   const Hub = window.Hub = {
     $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER,
-    // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir docs/projet-chatgdb.md).
+    // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir ChatGDB/docs/projet-chatgdb.md).
     can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(user.role) >= ROLE_ORDER.indexOf(min)), cachedUser, cacheUser,
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",

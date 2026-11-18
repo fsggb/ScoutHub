@@ -4,7 +4,7 @@
 window.SCOUTHUB_GOOGLE_CLIENT_ID = "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com";
 // ChatGDB : assistant IA de la fédération. « live: false » = interface seule, envoi désactivé.
 // Crédits (unité : 1 crédit ≈ une question courte). Limites glissantes façon Claude : une par session de 5 heures
-// et une par semaine. Les valeurs sont des points de départ à ajuster ; voir docs/projet-chatgdb.md.
+// et une par semaine. Les valeurs sont des points de départ à ajuster ; voir ChatGDB/docs/projet-chatgdb.md.
 window.SCOUTHUB_CHATGDB = {
   live: false,
   windowHours: 5, windowCredits: 30, weekCredits: 60,
