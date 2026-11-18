@@ -19,7 +19,7 @@ const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
   { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération", url: "ChatGDB/", icon: "assets/icons/ChatGDB.png", protege: true, local: true },
   { group: "Assistant", name: "Laboratoire", desc: "Essais de modèles, dictée, voix et recherche (administrateur)", url: "ChatGDB/laboratoire.html", icon: "assets/icons/Laboratoire.svg", protege: true, local: true, admin: true },
-  { group: "Vie spirituelle", featured: true, name: "Divinum Officium", desc: "Le bréviaire romain en latin, jour par jour (rubriques de 1960)", url: "DivinumOfficium/", icon: "assets/icons/DivinumOfficium.svg", local: true },
+  { group: "Vie spirituelle", featured: true, name: "Divinum Officium", desc: "La messe et le bréviaire en latin, jour par jour (rubriques de 1960)", url: "DivinumOfficium/", icon: "assets/icons/DivinumOfficium.svg", local: true },
   { group: "Boutique", featured: true, name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Ressources et aide", name: "Bibliothèque", desc: "Documents et ressources de la fédération", url: "ScoutBibliotheque/", icon: "assets/icons/Bibliotheque.svg", protege: true, local: true },
   { group: "Ressources et aide", name: "Aide", desc: "Un souci avec une application ? Écrire au service informatique", url: "aide.html", icon: "assets/icons/Aide.svg", protege: true, local: true },
