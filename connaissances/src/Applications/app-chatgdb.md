@@ -56,6 +56,12 @@ Page Aide de ScoutHub > « Demander de l'aide à ChatGDB » (ou ChatGDB avec `?a
 3. Pour une page web, **Modifier dans l'aperçu** permet de cliquer dans la page et d'en changer les textes directement ; le code suit.
 4. **Enregistrer** (ou Ctrl+S) crée une nouvelle version, marquée « modifiée » dans la liste des versions. ChatGDB la voit à la question suivante et repart d'elle.
 
+### Autonomie, initiative et priorité de l'administrateur
+- Quand on lui confie une tâche dans une application, ChatGDB la mène **jusqu'au bout seul**, en enchaînant plusieurs actions dans la même réponse : il prend les décisions, invente le contenu manquant quand on lui laisse la liberté, corrige ses erreurs et ne pose une question que si une information indispensable manque. S'il conclut quand même par une question ou une promesse (« veux-tu que je continue ? », « je vais… ») alors qu'il travaille dans une application, il est **relancé automatiquement** (au plus deux relances sans effet).
+- **Priorité de l'administrateur :** pour un compte administrateur, ses demandes l'emportent sur les consignes générales (style, prudence, longueur, nombre d'étapes, autonomie). Seules limites : ce qui serait illégal ou dangereux pour des personnes, et les restrictions techniques des outils. Dans les applications, l'administrateur peut aussi lui faire supprimer ou effacer des éléments ; le paiement, la commande et la déconnexion restent refusés à tout le monde.
+- **Mémoire de ses gestes :** à la fin de chacun de ses messages, le système lui renvoie un journal des actions réellement exécutées, pour qu'il sache où il en est d'une réponse à l'autre.
+- Il peut agrandir l'application en plein écran (action « agrandir ») quand la fenêtre est étroite.
+
 ### Sélectionner, placer le curseur, valider (toutes les applications)
 - **Règle essentielle :** pour appliquer un style, une police, une taille, une couleur, du gras ou un alignement à un texte ou à des cellules, ChatGDB les **sélectionne d'abord**, vérifie sur la capture que la zone surlignée est la bonne, puis applique.
 - **Sélectionner :** double-clic sur un mot, triple-clic sur une ligne ou un paragraphe, clic puis clic avec Maj pour une plage, glisser, ou au clavier (Maj+flèches, Ctrl+Maj+flèche pour un mot, Maj+Début / Maj+Fin, Ctrl+A).
