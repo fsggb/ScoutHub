@@ -8,7 +8,7 @@
 //  GET  /ign/{z}/{x}/{y}.jpg (ou /scan25/…, adresse attendue par ScoutMap) : tuile des cartes IGN (SCAN 25) ; la clé IGN est ajoutée ici et n'est jamais visible.
 // Secrets : ANTHROPIC_KEY (clé Claude, jamais visible du navigateur), RELAIS_SECRET (partagé avec le serveur ScoutHub).
 const MODELES = { "claude-haiku-5-5": [0.10, 0.50], "claude-sonnet-5-5": [2, 10] };   // $ par million de jetons (entrée, sortie)
-const MAX_JETONS = 16000, CREDIT_DOLLARS = 0.001;
+const MAX_JETONS = 128000, CREDIT_DOLLARS = 0.001;       // plafond de sécurité très large : la vraie limite est celle du modèle (Claude la signale)
 
 const enc = new TextEncoder();
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
