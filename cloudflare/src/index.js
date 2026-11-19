@@ -313,10 +313,12 @@ async function laboratoire(req, env, url, json, erreur) {
     }
     if (chemin === "/dictee") {
       const audio = String(c.audio || ""); if (!audio || audio.length > MAX_AUDIO) return erreur(400, "Audio absent ou trop long (6 Mo au plus).");
+      const voix = paroleWav(audio); if (voix !== null && voix < 0.2) return json(200, { ok: true, texte: "", silence: true, mots: 0, duree: 0, neurons: 0, ms: Date.now() - t0 });      // pas de parole : rien n'est envoyé à Whisper
       const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio, language: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" });
       const duree = +(r && r.transcription_info && r.transcription_info.duration) || +c.duree || 0, neurons = duree / 60 * NEURONS_PAR_MINUTE.dictee;
       await neuronsAjouter(env, neurons);
-      return json(200, { ok: true, texte: String(r && r.text || "").trim(), mots: r && r.words ? r.words.length : 0, duree, neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0 });
+      let texteLab = String(r && r.text || "").trim(); if (HALLUCINATION.test(texteLab) && (voix === null || voix < 1.2)) texteLab = "";
+      return json(200, { ok: true, texte: texteLab, mots: r && r.words ? r.words.length : 0, duree, neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0 });
     }
     if (chemin === "/image") {
       const m = IMAGES_IA[c.model]; if (!m) return erreur(400, "Modèle d'image non autorisé.");
