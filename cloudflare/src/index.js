@@ -295,7 +295,7 @@ async function neuronsAjouter(env, n) {
 async function laboratoire(req, env, url, json, erreur) {
   const etat = await neuronsJour(env);
   const chemin = url.pathname.slice(3);
-  if (chemin === "/modeles") return json(200, { ok: true, etat, modeles: Object.entries(TEXTE_IA).map(([id, [nom, e, so]]) => ({ id, nom, entree: e, sortie: so })), dictee: "@cf/openai/whisper-large-v3-turbo", voix: "@cf/myshell-ai/melotts", vecteurs: "@cf/baai/bge-m3" });
+  if (chemin === "/modeles") return json(200, { ok: true, etat, modeles: Object.entries(TEXTE_IA).map(([id, [nom, e, so]]) => ({ id, nom, entree: e, sortie: so })), images: Object.entries(IMAGES_IA).map(([id, m]) => ({ id, nom: m.nom, mode: m.mode, taille: m.taille, largeur: m.l, hauteur: m.h, max: m.max || 1024, pas: m.pas, negatif: !!m.neg, guidance: m.guidance || null, neurons: Math.round(m.neurons(m.l, m.h, m.pas[0])) })), dictee: "@cf/openai/whisper-large-v3-turbo", voix: "@cf/myshell-ai/melotts", vecteurs: "@cf/baai/bge-m3" });
   let c; try { c = await req.json(); } catch { return erreur(400, "Requête invalide."); }
   if (!c.force && etat.utilises >= etat.budget * etat.coupure) return erreur(429, "Budget gratuit du jour entamé à plus de 80 % (" + etat.utilises + " / " + etat.budget + " Neurons) : réessayez demain (00 h UTC) ou forcez l'essai.");
   const t0 = Date.now();
@@ -318,6 +318,15 @@ async function laboratoire(req, env, url, json, erreur) {
       await neuronsAjouter(env, neurons);
       return json(200, { ok: true, texte: String(r && r.text || "").trim(), mots: r && r.words ? r.words.length : 0, duree, neurons: Math.round(neurons * 100) / 100, ms: Date.now() - t0 });
     }
+    if (chemin === "/image") {
+      const m = IMAGES_IA[c.model]; if (!m) return erreur(400, "Modèle d'image non autorisé.");
+      const prevu = m.neurons(m.taille ? borne(c.largeur, 256, m.max, m.l) : 1024, m.taille ? borne(c.hauteur, 256, m.max, m.h) : 1024, borne(c.pas, 1, m.pas[1], m.pas[0]));
+      if (prevu > etat.budget * 0.15 && !c.confirmer) return erreur(409, "Cette image coûterait environ " + Math.round(prevu) + " Neurons (" + Math.round(prevu / etat.budget * 100) + " % du budget du jour) : cochez « Confirmer le coût » pour la générer.");
+      if (!c.force && etat.utilises + prevu > etat.budget * etat.coupure) return erreur(429, "Cette image (≈ " + Math.round(prevu) + " Neurons) dépasserait 80 % du budget du jour : forcez l'essai ou réessayez demain.");
+      let g; try { g = await genererImage(env, c.model, c); } catch (e) { if (e && e.statut) return erreur(e.statut, e.message); throw e; }
+      await neuronsAjouter(env, g.neurons);
+      return json(200, { ok: true, modele: c.model, nom: m.nom, image: g.b64, mime: g.mime, largeur: g.l, hauteur: g.h, pas: g.p, neurons: g.neurons, estime: true, ms: Date.now() - t0 });
+    }
     if (chemin === "/voix") {
       const texte = String(c.texte || "").slice(0, 2000); if (!texte) return erreur(400, "Texte absent.");
       const r = await env.AI.run("@cf/myshell-ai/melotts", { prompt: texte, lang: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" });
@@ -337,6 +346,88 @@ async function laboratoire(req, env, url, json, erreur) {
     return erreur(502, "Workers AI : " + String(e && e.message || e).slice(0, 300));
   }
   return erreur(404, "Adresse inconnue.");
+}
+
+
+
+// ---------- DICTÉE VOCALE POUR TOUS (ChatGDB) : Whisper (Workers AI), segments de parole de 50 s au plus ----------
+// Claude, via son API, ne transcrit pas la parole (il lit du texte, des images et des PDF) : la dictée passe par Whisper, hébergé sur Cloudflare.
+// Garde-fous : jeton valide, budget gratuit du jour (coupure à 80 %), plafond par personne et par jour (DICTEE_MIN_JOUR minutes, 20 par défaut).
+// Whisper « invente » du texte sur du silence ou du bruit (« Sous-titrage… », « Merci. ») et son détecteur de voix ne l'empêche pas : on mesure donc
+// nous-mêmes la parole dans le WAV (PCM 16 bits mono) avant de l'envoyer. Renvoie les secondes de parole (images de 20 ms au-dessus de 1,2 % d'amplitude).
+function paroleWav(b64) {
+  try {
+    if (atob(b64.slice(0, 16)).slice(0, 4) !== "RIFF" || atob(b64.slice(8, 16).padEnd(8, "=")).length < 0) return null;
+    const o = Uint8Array.from(atob(b64), c => c.charCodeAt(0)), dv = new DataView(o.buffer);
+    if (String.fromCharCode(o[8], o[9], o[10], o[11]) !== "WAVE") return null;
+    const taux = dv.getUint32(24, true); let i = 12, debut = -1, fin = 0;
+    while (i + 8 <= o.length) { const nom = String.fromCharCode(o[i], o[i + 1], o[i + 2], o[i + 3]), n = dv.getUint32(i + 4, true); if (nom === "data") { debut = i + 8; fin = Math.min(o.length, debut + n); break; } i += 8 + n + (n & 1); }
+    if (debut < 0 || dv.getUint16(22, true) !== 1 || dv.getUint16(34, true) !== 16 || !taux) return null;
+    const image = Math.max(1, Math.round(taux * 0.02)); let voix = 0;
+    for (let a = debut; a + image * 2 <= fin; a += image * 2) { let somme = 0; for (let k = 0; k < image; k++) { const v = dv.getInt16(a + k * 2, true) / 32768; somme += v * v; } if (Math.sqrt(somme / image) > 0.012) voix += 0.02; }
+    return voix;
+  } catch { return null; }
+}
+const HALLUCINATION = /^(sous-?titr\w*.*|merci\.?|merci (beaucoup|à tous)\.?|merci d['’]avoir regard\w+.*|amara\.org.*|abonnez-vous.*|à bientôt\.?|st['’]? ?\d+.*)$/i;
+async function dicteeServeur(req, env, qui, admin, json, erreur) {
+  let c; try { c = await req.json(); } catch { return erreur(400, "Requête invalide."); }
+  const audio = String(c.audio || ""); if (!audio) return erreur(400, "Audio absent.");
+  if (audio.length > 1.8e6) return erreur(413, "Segment trop long (50 secondes au plus).");
+  const etat = await neuronsJour(env);
+  if (etat.utilises >= etat.budget * etat.coupure) return erreur(429, "La dictée vocale est suspendue pour aujourd'hui (budget gratuit atteint) : utilisez la dictée de votre clavier ou réessayez demain.");
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS dictees (jour TEXT NOT NULL, qui TEXT NOT NULL, s REAL NOT NULL DEFAULT 0, PRIMARY KEY (jour, qui))").run();
+  const plafond = (+env.DICTEE_MIN_JOUR || 20) * 60 * (admin ? 3 : 1), ligne = await env.DB.prepare("SELECT s FROM dictees WHERE jour = ? AND qui = ?").bind(jourUtc(), qui.e).first(), deja = ligne ? ligne.s : 0;
+  if (deja >= plafond) return erreur(429, "Limite de dictée du jour atteinte (" + Math.round(plafond / 60) + " minutes) : reprenez demain, ou dictez avec le clavier de votre appareil.");
+  const voix = paroleWav(audio);
+  if (voix !== null && voix < 0.2) return json(200, { ok: true, texte: "", silence: true, duree: 0, restant: Math.max(0, Math.round(plafond - deja)) });      // pas de parole : rien n'est envoyé à Whisper
+  try {
+    const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio, language: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" });
+    const info = r && r.transcription_info || {}, duree = +info.duration || +c.duree || 0, utile = info.duration_after_vad != null ? +info.duration_after_vad : duree;
+    await env.DB.prepare("INSERT INTO dictees (jour, qui, s) VALUES (?, ?, ?) ON CONFLICT(jour, qui) DO UPDATE SET s = s + excluded.s").bind(jourUtc(), qui.e, duree).run();
+    await neuronsAjouter(env, duree / 60 * NEURONS_PAR_MINUTE.dictee);
+    let texte = utile < 0.25 ? "" : String(r && r.text || "").trim();
+    if (HALLUCINATION.test(texte) && (voix === null || voix < 1.2)) texte = "";        // formule inventée sur un bruit : jamais affichée
+    return json(200, { ok: true, texte, duree, restant: Math.max(0, Math.round(plafond - deja - duree)) });
+  } catch (e) { return erreur(502, "Transcription impossible : " + String(e && e.message || e).slice(0, 200)); }
+}
+
+// ---------- GÉNÉRATION D'IMAGES (Workers AI, laboratoire de l'administrateur) ----------
+// Claude ne génère pas d'images (il les lit et les décrit). Les modèles d'images disponibles sur le compte sont ceux de Workers AI.
+// Tarifs en Neurons : estimés d'après les prix publics (1 Neuron = 0,000011 $), affichés comme estimation. mode : json = {image: base64},
+// binaire = flux PNG/JPEG, multipart = formulaire (FLUX.2). tuiles = nombre de carrés de 512 px de l'image produite.
+const tuiles = (l, h) => Math.ceil(l / 512) * Math.ceil(h / 512), NEURON_USD = 0.000011;
+const IMAGES_IA = {
+  "@cf/black-forest-labs/flux-1-schnell": { nom: "FLUX.1 schnell (rapide, très bon)", mode: "json", taille: false, l: 1024, h: 1024, pas: [4, 8], neurons: (l, h, p) => (tuiles(1024, 1024) * 0.0000528 + p * 0.0001) / NEURON_USD },
+  "@cf/black-forest-labs/flux-2-klein-4b": { nom: "FLUX.2 klein 4B (rapide, détaillé)", mode: "multipart", taille: true, l: 1024, h: 768, max: 2048, pas: [4, 8], neurons: (l, h) => tuiles(l, h) * 0.000287 / NEURON_USD },
+  "@cf/black-forest-labs/flux-2-klein-9b": { nom: "FLUX.2 klein 9B (qualité)", mode: "multipart", taille: true, l: 1024, h: 768, max: 2048, pas: [4, 8], neurons: (l, h) => tuiles(l, h) * 0.00033 / NEURON_USD },
+  "@cf/black-forest-labs/flux-2-dev": { nom: "FLUX.2 dev (meilleure qualité, plus lent)", mode: "multipart", taille: true, l: 1024, h: 768, max: 2048, pas: [20, 50], neurons: (l, h) => tuiles(l, h) * 0.00041 / NEURON_USD },
+  "@cf/leonardo/phoenix-1.0": { nom: "Leonardo Phoenix 1.0 (texte dans l'image)", mode: "binaire", taille: true, l: 1024, h: 1024, max: 2048, pas: [25, 50], neg: true, guidance: [2, 10, 2], neurons: (l, h, p) => (tuiles(l, h) * 0.00583 + p * 0.00011) / NEURON_USD },
+  "@cf/leonardo/lucid-origin": { nom: "Leonardo Lucid Origin (réalisme)", mode: "json", taille: true, l: 1120, h: 1120, max: 2500, pas: [20, 40], guidance: [0, 10, 4.5], neurons: (l, h, p) => (tuiles(l, h) * 0.007 + p * 0.000132) / NEURON_USD },
+  "@cf/bytedance/stable-diffusion-xl-lightning": { nom: "SDXL Lightning (bêta, très rapide)", mode: "binaire", taille: true, l: 1024, h: 1024, max: 2048, pas: [4, 20], neg: true, guidance: [0, 10, 1.5], neurons: () => 2 },
+  "@cf/stabilityai/stable-diffusion-xl-base-1.0": { nom: "Stable Diffusion XL base (bêta)", mode: "binaire", taille: true, l: 1024, h: 1024, max: 2048, pas: [20, 20], neg: true, guidance: [0, 20, 7.5], neurons: () => 2 },
+  "@cf/lykon/dreamshaper-8-lcm": { nom: "DreamShaper 8 LCM (rapide, simple)", mode: "binaire", taille: true, l: 768, h: 768, max: 2048, pas: [8, 20], neg: true, guidance: [0, 20, 7.5], neurons: () => 2 }
+};
+const borne = (v, mini, maxi, def) => { v = +v; return isFinite(v) ? Math.min(Math.max(v, mini), maxi) : def; };
+function versBase64(octets) { let b = ""; const u = new Uint8Array(octets); for (let i = 0; i < u.length; i += 0x8000) b += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(b); }
+async function genererImage(env, id, c) {
+  const m = IMAGES_IA[id]; const prompt = String(c.prompt || "").trim().slice(0, 2000); if (!prompt) throw Object.assign(new Error("Décrivez l'image à générer."), { statut: 400 });
+  const l = m.taille ? Math.round(borne(c.largeur, 256, m.max, m.l) / 16) * 16 : 1024, h = m.taille ? Math.round(borne(c.hauteur, 256, m.max, m.h) / 16) * 16 : 1024, p = Math.round(borne(c.pas, 1, m.pas[1], m.pas[0]));
+  const seed = c.seed != null && c.seed !== "" && isFinite(+c.seed) ? Math.max(0, Math.round(+c.seed)) : null, negatif = String(c.negatif || "").slice(0, 500);
+  let r;
+  if (m.mode === "multipart") {
+    const f = new FormData(); f.append("prompt", prompt); f.append("width", String(l)); f.append("height", String(h)); f.append("steps", String(p)); if (seed !== null) f.append("seed", String(seed));
+    const rep = new Response(f); r = await env.AI.run(id, { multipart: { body: rep.body, contentType: rep.headers.get("content-type") } });
+  } else if (m.mode === "json" && !m.taille) r = await env.AI.run(id, { prompt, steps: p, ...(seed !== null ? { seed } : {}) });
+  else {
+    const g = m.guidance; const corps = { prompt, ...(g ? { guidance: borne(c.guidance, g[0], g[1], g[2]) } : {}), ...(seed !== null ? { seed } : {}) };
+    if (m.mode === "binaire" && /dreamshaper|stable-diffusion/.test(id)) Object.assign(corps, { width: l, height: h, num_steps: p, ...(negatif ? { negative_prompt: negatif } : {}) });
+    else Object.assign(corps, { width: l, height: h, num_steps: p, steps: p, ...(negatif && m.neg ? { negative_prompt: negatif } : {}) });
+    r = await env.AI.run(id, corps);
+  }
+  let b64, mime;
+  if (r && typeof r === "object" && typeof r.image === "string") { b64 = r.image; mime = b64.startsWith("iVBOR") ? "image/png" : "image/jpeg"; }
+  else { const tampon = await new Response(r).arrayBuffer(); const o = new Uint8Array(tampon); mime = o[0] === 0x89 ? "image/png" : "image/jpeg"; b64 = versBase64(tampon); }
+  return { b64, mime, l, h, p, neurons: Math.round(m.neurons(l, h, p) * 10) / 10 };
 }
 
 // ---------- FICHES DE CONNAISSANCES : brouillons proposés par ChatGDB, validés par l'administrateur ----------
@@ -436,6 +527,7 @@ export default {
     if (!qui) return erreur(401, "Session ScoutHub invalide ou expirée : rechargez la page.");
     const admin = qui.r === "admin";
 
+    if (url.pathname === "/dictee") return dicteeServeur(req, env, qui, admin, json, erreur);
     if (url.pathname.startsWith("/ia/")) return admin ? laboratoire(req, env, url, json, erreur) : erreur(403, "Réservé à l'administrateur.");
     if (url.pathname.startsWith("/fiches/")) return admin ? fiches(req, env, url, qui, json, erreur) : erreur(403, "Réservé à l'administrateur.");
     if (url.pathname === "/claude/modeles") { const d = await dernieresVersions(env) || {}; return json(200, { ok: true, modeles: Object.entries(d).filter(([f]) => admin || !ADMIN_SEUL.has(f)).map(([f, m]) => ({ famille: f, id: m.id, nom: m.nom, prix: PRIX_FAMILLE[f] })) }); }
