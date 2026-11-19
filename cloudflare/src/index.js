@@ -147,7 +147,10 @@ async function tuileIgn(req, env, ctx, url) {
 
 // ---------- Partage en direct (Durable Object : un objet par partage, connexions WebSocket en hibernation) ----------
 const sha = async t => hex(await crypto.subtle.digest("SHA-256", enc.encode(String(t))));
-const MAX_CHAT = 80, MAX_CARTE = 1500000, DUREE_VIE = 3 * 86400000;
+const MAX_CHAT = 250, MAX_CARTE = 1500000, DUREE_VIE = 3 * 86400000;
+// Fichiers de la discussion (photos, messages vocaux, documents) : déjà chiffrés par le navigateur, gardés dans le stockage du partage
+// (supprimés avec lui) ; un message WebSocket fait au plus 1 Mo, d'où cette limite ; les plus anciens sont effacés au-delà de MAX_MEDIAS.
+const MAX_MEDIA = 950000, MAX_MEDIAS = 60;
 export class Partage {
   constructor(state, env) { this.state = state; this.env = env; }
   async fetch(req) {
@@ -191,6 +194,22 @@ export class Partage {
     if (!m || typeof m.t !== "string" || String(brut).length > MAX_CARTE + 4000) return;
     if (m.t === "ping") return this.envoyer(ws, { t: "pong", c: m.c, maintenant: Date.now() });   // le navigateur mesure le délai et détecte une connexion morte
     const s = this.state.storage, moi = ws.deserializeAttachment() || {}, maintenant = Date.now();
+    // Fichiers : dépôt (« media », avec accusé « ok ») et lecture à la demande (« getm » → « media »), réservés aux personnes connectées au partage
+    if (moi.uid && m.t === "media") {
+      if (!/^[a-z0-9]{8,24}$/.test(String(m.id || "")) || typeof m.d !== "string" || m.d.length > MAX_MEDIA) return this.envoyer(ws, { t: "erreur", r: "media", id: m.id, m: "Fichier refusé (trop lourd : 650 Ko au plus)." });
+      try {
+        await s.put("m:" + m.id, m.d);
+        const idx = (await s.get("mi")) || []; if (idx.indexOf(m.id) < 0) idx.push(m.id);
+        while (idx.length > MAX_MEDIAS) await s.delete("m:" + idx.shift());
+        await s.put("mi", idx); await this.vivant().catch(() => {});
+        return this.envoyer(ws, { t: "ok", r: "media", id: m.id });
+      } catch (e) { return this.envoyer(ws, { t: "erreur", r: "media", id: m.id, m: "Fichier non enregistré (stockage du serveur indisponible ou plein)." }); }
+    }
+    if (moi.uid && m.t === "getm") {
+      if (!/^[a-z0-9]{8,24}$/.test(String(m.id || ""))) return;
+      let v = null; try { v = await s.get("m:" + m.id); } catch (e) { v = null; }
+      return this.envoyer(ws, v ? { t: "media", id: m.id, d: v } : { t: "media", id: m.id, absent: true });
+    }
     // Appels vocaux : messages de mise en relation (offres, réponses, candidats WebRTC) déjà chiffrés par le navigateur, simplement relayés ;
     // et identifiants TURN (Cloudflare Realtime) remis aux seules personnes connectées au partage.
     if (moi.uid && m.t === "sig" && typeof m.d === "string" && m.d.length <= 6000) return this.diffuser({ t: "sig", u: moi.uid, d: m.d }, ws);
@@ -218,7 +237,7 @@ export class Partage {
     }
     if (!moi.uid) return;
     if (m.t === "carte" && moi.admin && chaine(m.d, MAX_CARTE)) { const ok = await this.ecrire({ carte: m.d, carteT: maintenant }); if (ok) await this.vivant().catch(() => {}); else this.envoyer(ws, { t: "erreur", m: "La carte n'a pas pu être enregistrée (trop grande ou stockage plein) : elle est envoyée en direct, mais une personne qui arrive plus tard ne la verra pas." }); return this.diffuser({ t: "carte", d: m.d, at: maintenant }, ws); }
-    if (m.t === "msg" && chaine(m.d, 4000)) { const k = maintenant.toString(36) + Math.random().toString(36).slice(2, 6); d.chat.push({ k, d: m.d, at: maintenant }); if (await this.ecrire("chat", d.chat.slice(-MAX_CHAT))) await this.vivant().catch(() => {}); return this.diffuser({ t: "msg", k, d: m.d, at: maintenant }); }
+    if (m.t === "msg" && chaine(m.d, 6000)) { const k = maintenant.toString(36) + Math.random().toString(36).slice(2, 6); d.chat.push({ k, d: m.d, at: maintenant }); d.chat = d.chat.slice(-MAX_CHAT); while (d.chat.length > 20 && JSON.stringify(d.chat).length > 120000) d.chat.shift(); if (await this.ecrire("chat", d.chat)) await this.vivant().catch(() => {}); return this.diffuser({ t: "msg", k, d: m.d, at: maintenant }); }
     if (m.t === "admtok" && moi.proprio && chaine(m.tk, 60) && m.tk.length >= 12) { await s.put("admtok", m.tk); return this.envoyer(ws, { t: "ok", r: "admtok" }); }
     if (m.t === "revoquer" && moi.proprio) {
       await s.delete("admtok");
