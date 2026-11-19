@@ -284,8 +284,9 @@ const TEXTE_IA = {
 const NEURONS_PAR_MINUTE = { dictee: 46.6, voix: 18.6 }, NEURONS_VECTEUR_PAR_JETON = 0.001075;
 const MAX_AUDIO = 6e6, MAX_TEXTE_IA = 60000;
 const jourUtc = () => new Date().toISOString().slice(0, 10);
+let tablesPretes = false;
 async function neuronsJour(env) {
-  await env.DB.prepare("CREATE TABLE IF NOT EXISTS neurons (jour TEXT PRIMARY KEY, n REAL NOT NULL DEFAULT 0, appels INTEGER NOT NULL DEFAULT 0)").run();
+  if (!tablesPretes) await env.DB.prepare("CREATE TABLE IF NOT EXISTS neurons (jour TEXT PRIMARY KEY, n REAL NOT NULL DEFAULT 0, appels INTEGER NOT NULL DEFAULT 0)").run().then(() => { tablesPretes = true; });
   const r = await env.DB.prepare("SELECT n, appels FROM neurons WHERE jour = ?").bind(jourUtc()).first();
   return { jour: jourUtc(), utilises: Math.round((r && r.n || 0) * 10) / 10, appels: r ? r.appels : 0, budget: +env.NEURONS_JOUR || 10000, coupure: 0.8 };
 }
@@ -371,26 +372,34 @@ function paroleWav(b64) {
   } catch { return null; }
 }
 const HALLUCINATION = /^(sous-?titr\w*.*|merci\.?|merci (beaucoup|à tous)\.?|merci d['’]avoir regard\w+.*|amara\.org.*|abonnez-vous.*|à bientôt\.?|st['’]? ?\d+.*)$/i;
+let dicteesPret = false;
 async function dicteeServeur(req, env, qui, admin, json, erreur) {
   let c; try { c = await req.json(); } catch { return erreur(400, "Requête invalide."); }
   const audio = String(c.audio || ""); if (!audio) return erreur(400, "Audio absent.");
   if (audio.length > 1.8e6) return erreur(413, "Segment trop long (50 secondes au plus).");
-  const etat = await neuronsJour(env);
-  if (etat.utilises >= etat.budget * etat.coupure) return erreur(429, "La dictée vocale est suspendue pour aujourd'hui (budget gratuit atteint) : utilisez la dictée de votre clavier ou réessayez demain.");
-  await env.DB.prepare("CREATE TABLE IF NOT EXISTS dictees (jour TEXT NOT NULL, qui TEXT NOT NULL, s REAL NOT NULL DEFAULT 0, PRIMARY KEY (jour, qui))").run();
-  const plafond = (+env.DICTEE_MIN_JOUR || 20) * 60 * (admin ? 3 : 1), ligne = await env.DB.prepare("SELECT s FROM dictees WHERE jour = ? AND qui = ?").bind(jourUtc(), qui.e).first(), deja = ligne ? ligne.s : 0;
-  if (deja >= plafond) return erreur(429, "Limite de dictée du jour atteinte (" + Math.round(plafond / 60) + " minutes) : reprenez demain, ou dictez avec le clavier de votre appareil.");
+  const apercu = !!c.apercu;                                          // texte provisoire d'une phrase en cours : ne compte pas dans le plafond de la personne
+  const plafond = (+env.DICTEE_MIN_JOUR || 20) * 60 * (admin ? 3 : 1), t0 = Date.now();
   const voix = paroleWav(audio);
-  if (voix !== null && voix < 0.2) return json(200, { ok: true, texte: "", silence: true, duree: 0, restant: Math.max(0, Math.round(plafond - deja)) });      // pas de parole : rien n'est envoyé à Whisper
-  try {
-    const r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio, language: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" });
-    const info = r && r.transcription_info || {}, duree = +info.duration || +c.duree || 0, utile = info.duration_after_vad != null ? +info.duration_after_vad : duree;
-    await env.DB.prepare("INSERT INTO dictees (jour, qui, s) VALUES (?, ?, ?) ON CONFLICT(jour, qui) DO UPDATE SET s = s + excluded.s").bind(jourUtc(), qui.e, duree).run();
-    await neuronsAjouter(env, duree / 60 * NEURONS_PAR_MINUTE.dictee);
-    let texte = utile < 0.25 ? "" : String(r && r.text || "").trim();
-    if (HALLUCINATION.test(texte) && (voix === null || voix < 1.2)) texte = "";        // formule inventée sur un bruit : jamais affichée
-    return json(200, { ok: true, texte, duree, restant: Math.max(0, Math.round(plafond - deja - duree)) });
-  } catch (e) { return erreur(502, "Transcription impossible : " + String(e && e.message || e).slice(0, 200)); }
+  if (voix !== null && voix < 0.2) return json(200, { ok: true, texte: "", silence: true, duree: 0, restant: plafond });      // pas de parole : rien n'est envoyé à Whisper
+  // Vérifications du budget et du plafond lancées en même temps que la transcription : on gagne leur délai (aller-retours D1) sur chaque phrase
+  const verif = (async () => {
+    const etat = await neuronsJour(env);
+    if (etat.utilises >= etat.budget * etat.coupure) return { refus: erreur(429, "La dictée vocale est suspendue pour aujourd'hui (budget gratuit atteint) : utilisez la dictée de votre clavier ou réessayez demain.") };
+    if (!dicteesPret) { await env.DB.prepare("CREATE TABLE IF NOT EXISTS dictees (jour TEXT NOT NULL, qui TEXT NOT NULL, s REAL NOT NULL DEFAULT 0, PRIMARY KEY (jour, qui))").run(); dicteesPret = true; }
+    const ligne = await env.DB.prepare("SELECT s FROM dictees WHERE jour = ? AND qui = ?").bind(jourUtc(), qui.e).first(), deja = ligne ? ligne.s : 0;
+    if (!apercu && deja >= plafond) return { refus: erreur(429, "Limite de dictée du jour atteinte (" + Math.round(plafond / 60) + " minutes) : reprenez demain, ou dictez avec le clavier de votre appareil.") };
+    return { deja };
+  })();
+  const transcription = env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio, language: /^[a-z]{2}$/.test(c.langue) ? c.langue : "fr" }).then(r => ({ r }), e => ({ e }));
+  const [v, t] = await Promise.all([verif.catch(e => ({ erreurVerif: e })), transcription]);
+  if (v.refus) return v.refus;
+  if (t.e) return erreur(502, "Transcription impossible : " + String(t.e && t.e.message || t.e).slice(0, 200));
+  const r = t.r, info = r && r.transcription_info || {}, duree = +info.duration || +c.duree || 0, utile = info.duration_after_vad != null ? +info.duration_after_vad : duree, deja = v.deja || 0;
+  if (!apercu) await env.DB.prepare("INSERT INTO dictees (jour, qui, s) VALUES (?, ?, ?) ON CONFLICT(jour, qui) DO UPDATE SET s = s + excluded.s").bind(jourUtc(), qui.e, duree).run().catch(() => {});
+  await neuronsAjouter(env, duree / 60 * NEURONS_PAR_MINUTE.dictee).catch(() => {});
+  let texte = utile < 0.25 ? "" : String(r && r.text || "").trim();
+  if (HALLUCINATION.test(texte) && (voix === null || voix < 1.2)) texte = "";        // formule inventée sur un bruit : jamais affichée
+  return json(200, { ok: true, texte, duree, neurons: Math.round(duree / 60 * NEURONS_PAR_MINUTE.dictee * 100) / 100, ms: Date.now() - t0, restant: Math.max(0, Math.round(plafond - deja - (apercu ? 0 : duree))) });
 }
 
 // ---------- GÉNÉRATION D'IMAGES (Workers AI, laboratoire de l'administrateur) ----------
