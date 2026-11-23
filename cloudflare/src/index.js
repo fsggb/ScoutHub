@@ -160,8 +160,8 @@ export class Partage {
   }
   async lire() {
     try {
-      const s = this.state.storage, v = await s.get(["owner", "admtok", "carte", "carteT", "chat", "closed"]);
-      return { owner: v.get("owner") || null, admtok: v.get("admtok") || null, carte: v.get("carte") || null, carteT: v.get("carteT") || 0, chat: v.get("chat") || [], closed: !!v.get("closed") };
+      const s = this.state.storage, v = await s.get(["owner", "admtok", "carte", "carteT", "chat", "closed", "verrou"]);
+      return { owner: v.get("owner") || null, admtok: v.get("admtok") || null, carte: v.get("carte") || null, carteT: v.get("carteT") || 0, chat: v.get("chat") || [], closed: !!v.get("closed"), verrou: !!v.get("verrou") };
     } catch (e) { return { owner: null, admtok: null, carte: null, carteT: 0, chat: [], closed: false, ko: true }; }
   }
   // Écriture qui ne bloque jamais la diffusion : si le stockage refuse (quota du jour, erreur), les messages passent quand même en direct
@@ -233,11 +233,14 @@ export class Partage {
       if (!info.admin && chaine(m.adm, 60) && d.admtok && m.adm === d.admtok) info.admin = true;
       ws.serializeAttachment(info);
       const etat = await this.lire();
-      return this.envoyer(ws, { t: "etat", proprio: info.proprio, admin: info.admin, admRefuse: !!(m.adm && !info.admin), maintenant, carte: etat.carte, carteT: etat.carteT, chat: etat.chat, pos: this.positions() });
+      return this.envoyer(ws, { t: "etat", proprio: info.proprio, admin: info.admin, admRefuse: !!(m.adm && !info.admin), maintenant, carte: etat.carte, carteT: etat.carteT, verrou: etat.verrou, chat: etat.chat, pos: this.positions() });
     }
     if (!moi.uid) return;
-    if (m.t === "carte" && moi.admin && chaine(m.d, MAX_CARTE)) { const ok = await this.ecrire({ carte: m.d, carteT: maintenant }); if (ok) await this.vivant().catch(() => {}); else this.envoyer(ws, { t: "erreur", m: "La carte n'a pas pu être enregistrée (trop grande ou stockage plein) : elle est envoyée en direct, mais une personne qui arrive plus tard ne la verra pas." }); return this.diffuser({ t: "carte", d: m.d, at: maintenant }, ws); }
+    if (m.t === "carte" && moi.admin && (moi.proprio || !d.verrou) && chaine(m.d, MAX_CARTE)) { const ok = await this.ecrire({ carte: m.d, carteT: maintenant }); if (ok) await this.vivant().catch(() => {}); else this.envoyer(ws, { t: "erreur", m: "La carte n'a pas pu être enregistrée (trop grande ou stockage plein) : elle est envoyée en direct, mais une personne qui arrive plus tard ne la verra pas." }); return this.diffuser({ t: "carte", d: m.d, at: maintenant }, ws); }
     if (m.t === "msg" && chaine(m.d, 6000)) { const k = maintenant.toString(36) + Math.random().toString(36).slice(2, 6); d.chat.push({ k, d: m.d, at: maintenant }); d.chat = d.chat.slice(-MAX_CHAT); while (d.chat.length > 20 && JSON.stringify(d.chat).length > 120000) d.chat.shift(); if (await this.ecrire("chat", d.chat)) await this.vivant().catch(() => {}); return this.diffuser({ t: "msg", k, d: m.d, at: maintenant }); }
+    // Verrou : la personne qui dirige interdit (ou autorise de nouveau) la modification de la carte par les co-administrateurs ; annoncé à tout le monde
+    if (m.t === "verrou" && moi.proprio) { const v = !!m.v; await s.put("verrou", v); this.diffuser({ t: "verrou", v }); return; }
+    if (m.t === "carte" && moi.admin && !moi.proprio && d.verrou) return this.envoyer(ws, { t: "verrou", v: true, refus: true });
     if (m.t === "admtok" && moi.proprio && chaine(m.tk, 60) && m.tk.length >= 12) { await s.put("admtok", m.tk); return this.envoyer(ws, { t: "ok", r: "admtok" }); }
     if (m.t === "revoquer" && moi.proprio) {
       await s.delete("admtok");
