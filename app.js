@@ -105,7 +105,7 @@
     });
     let badge; const icon = Portail.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
     if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${icon}")`; }
-    else { badge = document.createElement("img"); badge.className = "app-badge"; badge.src = icon; badge.alt = ""; badge.loading = "lazy"; }
+    else { badge = document.createElement("img"); badge.className = "app-badge"; badge.alt = ""; badge.decoding = "async"; badge.loading = "eager"; badge.src = icon; badge.onerror = () => { if (icon !== "assets/fsggb.png") badge.src = "assets/fsggb.png"; }; }
     const text = document.createElement("span");
     const strong = Object.assign(document.createElement("strong"), { textContent: a.nom });
     const small = Object.assign(document.createElement("small"), { textContent: a.desc });
@@ -137,13 +137,16 @@
   $("search").addEventListener("input", renderApps);
 
   // L'accueil est accessible sans compte ; la connexion n'est demandée que pour ScoutCloud et l'enregistrement cloud.
-  function showHome() {
+  async function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
     Hub.renderBar(Hub.user);
     const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
     $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "Vos applications";
     $("guest-note").hidden = !!Hub.user;
-    renderApps(); Portail.refresh(renderApps);
+    // Première visite (pas encore de mise en page en cache) : on attend la vraie mise en page du serveur avant de peindre,
+    // pour éviter que les icônes ou l'organisation des sections changent juste après l'affichage (sinon il faut recharger pour que ça se stabilise).
+    if (!Portail.model && !localStorage.getItem('scouthub.portail')) { await Portail.refresh(() => {}); renderApps(); Portail.refresh(renderApps); }
+    else { renderApps(); Portail.refresh(renderApps); }
   }
   function enter() { if (!goNext()) showHome(); }
 
