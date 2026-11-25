@@ -6,12 +6,12 @@
 // gmail.send) ; vars attendues : GOOGLE_CLIENT_ID, GOOGLE_DOMAINE (fsggb.fr), GMAIL_SENDER (boîte d'expédition,
 // ex. no-reply@fsggb.fr), ADMIN_EMAIL, ADMIN_GOOGLE (liste séparée par des virgules), SESSION_JOURS (défaut 14).
 
-const ROLES = ["membre", "parent", "chef_unite", "chef_groupe", "admin"];
+const ROLES = ["adherent", "parent", "chef_unite", "chef_groupe", "equipe_nationale", "admin"];
 const enc = new TextEncoder();
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 async function sha256(s) { return hex(await crypto.subtle.digest("SHA-256", enc.encode(s))); }
 function egal(a, b) { a = String(a); b = String(b); if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
-function normRole(r) { return !r || r === "user" ? "membre" : (ROLES.includes(r) ? r : "membre"); }
+function normRole(r) { return !r || r === "user" || r === "membre" ? "adherent" : (ROLES.includes(r) ? r : "adherent"); }
 function cleanEmail(v) {
   const e = String(v || "").trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) || e.length > 120) throw new Erreur("Adresse e-mail invalide.");
@@ -65,7 +65,7 @@ async function requireAdmin(env, token) {
 // Ouvre le compte au premier passage (adresse déjà prouvée par Google ou par le code) puis ouvre une session.
 async function provisionner(env, email, nom, google) {
   const u = await getUser(env, email);
-  if (!u) await saveUser(env, email, { role: "membre", created: Date.now(), name: nom || "", google: !!google });
+  if (!u) await saveUser(env, email, { role: "adherent", created: Date.now(), name: nom || "", google: !!google });
   else if ((google && !u.google) || (!u.name && nom)) await saveUser(env, email, { role: u.role, created: u.created, name: u.name || nom || "", google: !!u.google || !!google });
   return nouvelleSession(env, email);
 }

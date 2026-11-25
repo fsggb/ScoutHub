@@ -66,8 +66,9 @@ MODULES.monappli = (function () {
 var ADMIN_GOOGLE = ['service-informatique@fsggb.fr'];
 var GOOGLE_DOMAINE = 'fsggb.fr';
 function adminProtege_(email) { return email === ADMIN_EMAIL || ADMIN_GOOGLE.indexOf(email) >= 0; }
-// Rôles, du moins au plus privilégié. « user » (ancien nom) vaut « membre ».
-var ROLES = ['membre', 'parent', 'chef_unite', 'chef_groupe', 'admin'];
+// Rôles, du moins au plus privilégié. « adherent » remplace l'ancien nom « membre » (normRole_ traduit les
+// comptes encore enregistrés sous l'ancien nom, ou sous le nom encore plus ancien « user »).
+var ROLES = ['adherent', 'parent', 'chef_unite', 'chef_groupe', 'equipe_nationale', 'admin'];
 var SESSION_DAYS = 14;
 // ---- ChatGDB ----
 var CHAT_MODELE = 'claude-haiku-5-5';
@@ -473,12 +474,12 @@ function provisionner_(email, nom, google) {
   var lock = LockService.getScriptLock(); lock.waitLock(5000);      // verrou court : aucun appel réseau dedans
   try {
     var u = getUser_(email);
-    if (!u) saveUser_(email, { role: 'membre', created: Date.now(), name: nom || '', google: !!google });
+    if (!u) saveUser_(email, { role: 'adherent', created: Date.now(), name: nom || '', google: !!google });
     else if ((google && !u.google) || (!u.name && nom)) saveUser_(email, { role: u.role, created: u.created, name: u.name || nom || '', google: !!u.google || !!google });
   } finally { try { lock.releaseLock(); } catch (x) { /* ignore */ } }
   return newSession_(email);
 }
-function normRole_(r) { return r === 'user' || !r ? 'membre' : (ROLES.indexOf(r) >= 0 ? r : 'membre'); }
+function normRole_(r) { return r === 'user' || r === 'membre' || !r ? 'adherent' : (ROLES.indexOf(r) >= 0 ? r : 'adherent'); }
 function publicUser_(email) {
   var u = getUser_(email);
   return { email: email, role: normRole_(u.role), name: u.name || '', google: !!u.google };
@@ -880,7 +881,7 @@ var CHAT_OUTILS_BIBLIO = [
   { name: 'lire_document', description: "Lit un document de la bibliothèque (identifiant donné par chercher_bibliotheque) : texte pour les documents Google et fichiers texte, document complet pour les PDF.", input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }
 ];
 function biblioActive_() { return typeof MODULES.bibliotheque === 'function' && !!props_().getProperty('BIBLIO_DOSSIER'); }
-var _chatRole_ = 'membre';      // rôle du compte qui pose la question : la bibliothèque filtre ses rubriques en conséquence
+var _chatRole_ = 'adherent';    // rôle du compte qui pose la question : la bibliothèque filtre ses rubriques en conséquence
 // ChatGDB appelle la bibliothèque directement (même serveur), avec le rôle de la personne qui pose la question
 function biblioAppel_(action, donnees) {
   var corps = { fn: action };
