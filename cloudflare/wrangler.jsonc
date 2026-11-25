@@ -26,7 +26,10 @@
     // , { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
   ],
   "vars": {
-    "ORIGINES": "https://fsggb.github.io",
+    // scouthub-acces-test.fsggb.workers.dev : site de test séparé (petit Worker, l'envoi direct de fichiers vers
+    // Cloudflare Pages n'étant pas disponible depuis cette session) pour valider en conditions réelles la connexion
+    // Cloudflare (Google, rôles, groupes/unités) avant de basculer le vrai portail ; à retirer une fois le test terminé.
+    "ORIGINES": "https://fsggb.github.io,https://scouthub-acces-test.fsggb.workers.dev",
     "ANTHROPIC_WORKSPACE_ID": "wrkspc_0119AE1DuVBLZoxQXQhqT3rB",
     "IGN_COUCHE": "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR",
     "CREDITS_FENETRE": "30",
@@ -36,7 +39,8 @@
     "NEURONS_JOUR": "10000",
     "TURN_KEY_ID": "29924b06b96b9c981e6d91e7eaf53265",
     // ---- Identité et sessions (rupture avec Apps Script, voir cloudflare/MIGRATION.md) ----
-    "GOOGLE_CLIENT_ID": "",
+    // Identifiant public (pas un secret) déjà utilisé côté navigateur dans config.js : active la vérification du jeton Google ci-dessus.
+    "GOOGLE_CLIENT_ID": "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com",
     "GOOGLE_DOMAINE": "fsggb.fr",
     "GMAIL_SENDER": "no-reply@fsggb.fr",
     "ADMIN_EMAIL": "jb.combet@fsggb.fr",
