@@ -47,4 +47,16 @@ CREATE TABLE IF NOT EXISTS login_codes (
 );
 
 -- Quota global d'envoi de codes (protège le compte Gmail d'expéditeur), une ligne par jour calendaire Europe/Paris.
+-- Partagé avec le lien magique (même compte d'envoi, même anti-abus).
 CREATE TABLE IF NOT EXISTS login_codes_quota (jour TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0);
+
+-- Liens magiques (un clic à la place des 6 chiffres) : le jeton lui-même sert de clé, son empreinte seule est stockée.
+CREATE TABLE IF NOT EXISTS magic_links (
+  hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  envoye INTEGER NOT NULL,
+  demandes INTEGER NOT NULL DEFAULT 1,
+  demandes_depuis INTEGER NOT NULL,
+  exp INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS magic_links_email ON magic_links (email);
