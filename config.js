@@ -40,9 +40,11 @@ window.SCOUTHUB_APPS = [
   { group: "Création", name: "Pro Tools", desc: "Studio audio et mixage", url: "ProTools/", icon: "assets/icons/ProTools.svg", local: true },
   { group: "Création", name: "Substance Painter", desc: "Peinture de textures 3D", url: "SubstancePainter/", icon: "assets/icons/SubstancePainter.svg", local: true },
   { group: "Conception et CAO", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg", local: true },
-  { group: "Conception et CAO", featured: true, crop: true, name: "SoLeadWorks", desc: "Meubles et coins de patrouille en 3D, avec plans et historique", url: "SoLeadWorks/?lang=fr", icon: "assets/icons/SoLeadWorks.png", local: true },
-  { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: "CADCraft/?lang=fr", icon: "assets/icons/ScoutDraft.png", local: true },
-  { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: "SolidCraft/?lang=fr", icon: "assets/icons/ScoutCAD.png", local: true },
+  // SoLeadWorks, AutoCAD (CADCraft) et SolidWorks (SolidCraft) se publient désormais seuls (ScoutCraft, ScoutDraft,
+  // ScoutCAD ont chacun leur propre workflow Pages) : adresses absolues, même domaine que ScoutHub (connexion partagée).
+  { group: "Conception et CAO", featured: true, crop: true, name: "SoLeadWorks", desc: "Meubles et coins de patrouille en 3D, avec plans et historique", url: O + "ScoutCraft/?lang=fr", icon: "assets/icons/SoLeadWorks.png", local: true },
+  { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png", local: true },
+  { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png", local: true },
   { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true },
 ];
 })();
