@@ -1,3 +1,4 @@
+import { authRoute } from "./auth.js";
 // Serveur Cloudflare de ScoutHub (Workers + D1, plan gratuit).
 //  POST /chat     : relais ChatGDB. Vérifie le jeton signé par le serveur ScoutHub (Apps Script), applique les limites
 //                   de crédits, transmet la requête à Claude et renvoie la réponse au fil de l'eau ; la consommation
@@ -559,6 +560,8 @@ export default {
     const erreur = (status, message) => json(status, { type: "error", error: { message } });
     if (req.method !== "POST") return erreur(405, "Méthode refusée.");
     if (!String(env.ORIGINES || "").split(",").map(s => s.trim()).includes(origine)) return erreur(403, "Origine refusée.");
+    // Identité et sessions (rupture avec Apps Script) : jeton de session propre au Worker, pas celui signé par Code.gs.
+    if (url.pathname.startsWith("/auth/")) return authRoute(req, env, url, json, erreur);
     const qui = await verifierJeton(req.headers.get("x-scouthub-jeton"), env.RELAIS_SECRET);
     if (!qui) return erreur(401, "Session ScoutHub invalide ou expirée : rechargez la page.");
     const admin = qui.r === "admin";

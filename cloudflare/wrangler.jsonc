@@ -19,7 +19,9 @@
   "secrets_store_secrets": [
     { "binding": "ANTHROPIC_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "ANTHROPIC_KEY" },
     { "binding": "IGN_SCAN25_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "IGN_SCAN25_KEY" },
-    { "binding": "GITHUB_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GITHUB_KEY" }
+    { "binding": "GITHUB_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GITHUB_KEY" },
+    // Clé JSON du compte de service Google (délégation à l'échelle du domaine, droit gmail.send) : voir cloudflare/MIGRATION.md
+    { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
   ],
   "vars": {
     "ORIGINES": "https://fsggb.github.io",
@@ -30,7 +32,15 @@
     "CREDITS_SEMAINE": "60",
     "BONUS_MAX": "40",
     "NEURONS_JOUR": "10000",
-    "TURN_KEY_ID": "29924b06b96b9c981e6d91e7eaf53265"
+    "TURN_KEY_ID": "29924b06b96b9c981e6d91e7eaf53265",
+    // ---- Identité et sessions (rupture avec Apps Script, voir cloudflare/MIGRATION.md) ----
+    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_DOMAINE": "fsggb.fr",
+    "GMAIL_SENDER": "no-reply@fsggb.fr",
+    "ADMIN_EMAIL": "jb.combet@fsggb.fr",
+    "ADMIN_GOOGLE": "service-informatique@fsggb.fr",
+    "SESSION_JOURS": "14",
+    "CODE_QUOTA_JOUR": "90"
   }
   // Appels vocaux de ScoutMap : TURN_KEY_ID (identifiant de la clé Cloudflare Realtime TURN) et, en secret du Worker, TURN_KEY_TOKEN
   // (npx wrangler secret put TURN_KEY_TOKEN). Secret propre au Worker (npx wrangler secret put RELAIS_SECRET) : le même que la propriété RELAIS_CLOUDFLARE_SECRET
