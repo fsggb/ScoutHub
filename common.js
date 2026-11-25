@@ -34,18 +34,26 @@
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",
 
+    // Identité (Google, code, « moi », déconnexion, gestion des comptes) : bascule vers le nouveau serveur Cloudflare
+    // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
+    // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
+    IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
+      me: "/auth/me", logout: "/auth/logout", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+
     async call(action, data = {}) {
-      const API = window.SCOUTHUB_API;
-      if (!API) throw new Error("Le serveur ScoutHub n’est pas encore configuré.");
+      const chemin = Hub.IDENTITE[action];
+      const API = chemin ? window.SCOUTHUB_AUTH_API : window.SCOUTHUB_API;
+      if (!API) throw new Error(chemin ? "La nouvelle connexion n’est pas encore configurée." : "Le serveur ScoutHub n’est pas encore configuré.");
       let res;
       try {
-        res = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+        res = await fetch(API + (chemin || ""), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({ action, token: store.get(), ...data }) });
       } catch { throw new Error("Serveur injoignable."); }
       let out; try { out = await res.json(); } catch { throw new Error("Réponse invalide du serveur."); }
       if (!out.ok) {
-        if (/Session expirée/.test(out.error) && Hub.here() !== "index.html") Hub.toLogin();
-        throw new Error(out.error || "Erreur.");
+        const message = out.error && out.error.message ? out.error.message : out.error;
+        if (/Session expirée/.test(message || "") && Hub.here() !== "index.html") Hub.toLogin();
+        throw new Error(message || "Erreur.");
       }
       return out;
     },
