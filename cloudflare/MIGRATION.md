@@ -22,6 +22,9 @@ domaine propre (nom à venir) — ce second point n'est pas encore commencé.
 | Action | Statut | Où ça va |
 |---|---|---|
 | `google`, `codeDemander`, `codeVerifier`, `session`, `me`, `logout` | ✅ **Porté** (`cloudflare/src/auth.js`, routes `/auth/*`) | D1 (`users`, `sessions`, `login_codes`) ; envoi du code par l'API Gmail (compte de service) |
+| Lien magique (nouveau, pas dans Apps Script) | ✅ **Porté** (`/auth/magic/demander`, `/auth/magic/verifier`) | D1 (`magic_links`), même envoi Gmail |
+| Microsoft (nouveau) | ✅ **Code écrit**, pas testable sans vraie app Microsoft (`/auth/microsoft`) | Vérification JWKS (JWT RS256), aucune donnée stockée côté Microsoft |
+| GitHub (nouveau) | ✅ **Code écrit**, pas testable sans vraie app GitHub (`/auth/github/debut`, `/auth/github/retour`) | OAuth2 classique (redirection), jeton de session renvoyé dans le fragment de l'URL |
 | `adminSetRole`, `adminList`, `adminDelete` | ✅ **Porté** (`/auth/admin/*`) | D1 `users` |
 | `portailLire`, `portailEcrire`, `config` | ⬜ à faire | D1 (un blob JSON, ou deux colonnes) |
 | `chat`, `rapide`, `outil`, `progression`, `memoire`, `consommation` | ⬜ à faire | déjà en partie sur le Worker (`/chat`, `/credits`) ; à compléter |
@@ -69,8 +72,39 @@ sur Drive **comme n'importe quel compte du domaine fsggb.fr**, sans mot de passe
    propriétés du script Apps Script) et `GMAIL_SENDER` (l'adresse qui enverra les codes, par exemple
    `no-reply@fsggb.fr` — doit exister comme utilisateur ou alias du domaine).
 
-Une fois ces 8 étapes faites, `/auth/code/demander` enverra vraiment les codes (aujourd'hui il échoue
-poliment, faute de clé).
+Une fois ces 8 étapes faites, `/auth/code/demander` **et** `/auth/magic/demander` (lien magique, même compte
+d'envoi) enverront vraiment les e-mails (aujourd'hui ils échouent poliment, faute de clé).
+
+## À faire : les apps Microsoft et GitHub (connexion « principalement Google, mais aussi… »)
+
+Toujours réservé aux adresses @fsggb.fr : Microsoft et GitHub ne servent qu'à **prouver que la personne
+possède bien cette adresse**, pas à créer un compte « avec Microsoft » ou « avec GitHub » séparé. Les comptes
+administrateur restent Google uniquement, quelle que soit la méthode ajoutée ici.
+
+**Microsoft** (gratuit, aucun abonnement Azure nécessaire pour juste l'authentification) :
+1. [entra.microsoft.com](https://entra.microsoft.com) (ou portal.azure.com → Microsoft Entra ID) →
+   Inscriptions d'applications → Nouvelle inscription.
+2. Type de compte : « Comptes dans n'importe quel annuaire organisationnel et comptes Microsoft personnels ».
+3. Authentification → ajouter une plateforme « Application monopage (SPA) », URI de redirection :
+   `https://fsggb.github.io/ScoutHub/` (ou l'URL exacte de la page de connexion).
+4. Autorisations d'API : ajouter `email`, `openid`, `profile` (Microsoft Graph, déléguées).
+5. Noter l'**ID d'application (client)** → le mettre dans `MICROSOFT_CLIENT_ID` (wrangler.jsonc, `vars`).
+6. Le client (page de connexion) devra utiliser MSAL.js pour obtenir un jeton d'identité et l'envoyer à
+   `/auth/microsoft` — pas encore fait côté client (voir plus bas, « basculer le client »).
+
+**GitHub** (gratuit) :
+1. Un propriétaire de l'organisation `fsggb` sur GitHub : Settings de l'organisation → Developer settings →
+   OAuth Apps → New OAuth App (une app GitHub « classique », pas une GitHub App).
+2. Homepage URL : `https://fsggb.github.io/ScoutHub/`. Authorization callback URL : **exactement**
+   `https://scouthub.fsggb.workers.dev/auth/github/retour` (doit correspondre à `GITHUB_REDIRECT_URI`).
+3. Noter le **Client ID** → `GITHUB_CLIENT_ID` (wrangler.jsonc, `vars`).
+4. Générer un **Client Secret** → à poser dans le Secrets Store, jamais dans le dépôt :
+   ```
+   npx wrangler secrets-store secret create 0d38faa59339406ca83b45947aab0995 \
+     --name GITHUB_OAUTH_SECRET --scopes workers --remote
+   ```
+5. Le bouton « Se connecter avec GitHub » du client pointera simplement vers
+   `https://scouthub.fsggb.workers.dev/auth/github/debut` (une redirection classique, pas d'appel JSON).
 
 ## Pour la suite (une fois le compte de service créé)
 
