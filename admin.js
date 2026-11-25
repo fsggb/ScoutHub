@@ -25,7 +25,7 @@
       if (u.role === "admin" && (u.email === user.email || u.email === "jb.combet@fsggb.fr" || u.email === "service-informatique@fsggb.fr")) roleCell.textContent = Hub.ROLE_LABELS.admin;
       else {
         const sel = document.createElement("select"); sel.className = "role-select"; sel.setAttribute("aria-label", "Rôle de " + u.email);
-        Hub.ROLE_ORDER.forEach(r => sel.append(Object.assign(document.createElement("option"), { value: r, textContent: Hub.ROLE_LABELS[r], selected: r === u.role })));
+        Hub.ROLE_ORDER.forEach(r => sel.append(Object.assign(document.createElement("option"), { value: r, textContent: Hub.ROLE_LABELS[r], selected: r === Hub.normRole(u.role) })));
         sel.onchange = async () => {
           try { await Hub.call("adminSetRole", { email: u.email, role: sel.value }); u.role = sel.value; say($("ad-status"), "Rôle de " + u.email + " : " + Hub.ROLE_LABELS[u.role] + "."); }
           catch (e) { sel.value = u.role; say($("ad-status"), e.message, true); }

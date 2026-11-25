@@ -5,6 +5,6 @@
   const user = await Hub.requireUser(); if (!user) return;
   Hub.renderBar(user);
   $("c-email").textContent = user.email;
-  $("c-role").textContent = Hub.ROLE_LABELS[user.role] || "Membre";
+  $("c-role").textContent = Hub.ROLE_LABELS[Hub.normRole(user.role)] || "Adhérent";
   $("logout").onclick = () => Hub.logout();
 })();

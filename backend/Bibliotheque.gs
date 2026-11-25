@@ -11,13 +11,14 @@ var MODULES = MODULES || {};
 MODULES.bibliotheque = (function () {
   // la personne qui appelle : sa session ScoutHub (rôle compris), ou l'appel interne de ChatGDB (rôle de la personne qui pose la question)
   function acces_(r, interne) {
-    if (interne) return { email: 'chatgdb', role: ROLES.indexOf(interne.role) >= 0 ? interne.role : 'membre' };
+    if (interne) return { email: 'chatgdb', role: normRoleBiblio_(interne.role) };
     if (!r.token) fail_('Connexion requise : connectez-vous à ScoutHub.');
     var u = HUB.user(r.token);
-    return { email: u.email, role: ROLES.indexOf(u.role) >= 0 ? u.role : 'membre' };
+    return { email: u.email, role: normRoleBiblio_(u.role) };
   }
 
-  var ROLES = ['membre', 'parent', 'chef_unite', 'chef_groupe', 'admin'];
+  var ROLES = ['adherent', 'parent', 'chef_unite', 'chef_groupe', 'equipe_nationale', 'admin'];
+  function normRoleBiblio_(r) { return r === 'user' || r === 'membre' || !r ? 'adherent' : (ROLES.indexOf(r) >= 0 ? r : 'adherent'); }
   var MAX_FICHIERS = 3000, MAX_OCTETS = 8 * 1024 * 1024, MAX_DEPOT = 25 * 1024 * 1024, MAX_LECTURE = 15 * 1024 * 1024, DUREE_INDEX = 600;
 
   var ACTIONS = {
@@ -101,7 +102,7 @@ MODULES.bibliotheque = (function () {
   };
 
   // ---------- identité : session ScoutHub, ou clé partagée (ChatGDB) ----------
-  function permis_(min, a) { return ROLES.indexOf(a.role) >= ROLES.indexOf(min || 'membre'); }
+  function permis_(min, a) { return ROLES.indexOf(normRoleBiblio_(a.role)) >= ROLES.indexOf(normRoleBiblio_(min)); }
 
   // ---------- index de l'arborescence Drive (gardé 10 minutes) ----------
   function index_(force) {
@@ -110,7 +111,7 @@ MODULES.bibliotheque = (function () {
     var racineId = PropertiesService.getScriptProperties().getProperty('BIBLIO_DOSSIER');
     if (!racineId) fail_('Dossier de la bibliothèque non configuré (BIBLIO_DOSSIER).');
     var racine = DriveApp.getFolderById(racineId), idx = { racine: racineId, dossiers: {}, fichiers: [] }, debut = Date.now();
-    idx.dossiers[racineId] = { id: racineId, nom: racine.getName(), parent: '', min: roleDossier_(racine, 'membre') };
+    idx.dossiers[racineId] = { id: racineId, nom: racine.getName(), parent: '', min: roleDossier_(racine, 'adherent') };
     (function parcourir(dossier, id, min) {
       var fs = dossier.getFiles();
       while (fs.hasNext() && idx.fichiers.length < MAX_FICHIERS && Date.now() - debut < 45000) {
@@ -130,7 +131,7 @@ MODULES.bibliotheque = (function () {
   }
   // Rôle minimal d'un dossier : ligne « acces: … » de sa description, jamais moins strict que celui du dossier parent.
   function roleDossier_(d, parent) {
-    var m = /^\s*acces\s*:\s*([a-z_]+)\s*$/im.exec(d.getDescription() || ''), r = m && ROLES.indexOf(m[1]) >= 0 ? m[1] : 'membre';
+    var m = /^\s*acces\s*:\s*([a-z_]+)\s*$/im.exec(d.getDescription() || ''), r = normRoleBiblio_(m && m[1]);
     return ROLES.indexOf(r) > ROLES.indexOf(parent) ? r : parent;
   }
   function genre_(mime) {

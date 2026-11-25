@@ -11,15 +11,18 @@
   const USER_KEY = "scouthub.user";
   const cachedUser = () => { try { return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
   const cacheUser = u => { try { u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
-  const ROLE_LABELS = { membre: "Membre", parent: "Parent", chef_unite: "Chef d’unité", chef_groupe: "Chef de groupe", admin: "Administrateur" };
-  const ROLE_ORDER = ["membre", "parent", "chef_unite", "chef_groupe", "admin"];
+  // « adherent » remplace l'ancien « membre » (même rôle de base, nouveau nom) ; les comptes encore enregistrés sous
+  // l'ancien nom sont traités comme « adherent » ci-dessous (normRole), indépendamment de la mise à jour du serveur.
+  const ROLE_LABELS = { adherent: "Adhérent", parent: "Parent", chef_unite: "Chef d’unité", chef_groupe: "Chef de groupe", equipe_nationale: "Équipe nationale", admin: "Administrateur" };
+  const ROLE_ORDER = ["adherent", "parent", "chef_unite", "chef_groupe", "equipe_nationale", "admin"];
+  const normRole = r => (!r || r === "membre" || r === "user" ? "adherent" : (ROLE_ORDER.includes(r) ? r : "adherent"));
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
 
   const Hub = window.Hub = {
     $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER,
     // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir ChatGDB/docs/projet-chatgdb.md).
-    can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(user.role) >= ROLE_ORDER.indexOf(min)), cachedUser, cacheUser,
+    can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(normRole(user.role)) >= ROLE_ORDER.indexOf(normRole(min))), cachedUser, cacheUser, normRole,
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",
 
