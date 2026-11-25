@@ -183,16 +183,17 @@ jobs:
             esac
           done < <(grep -vE '^\s*(#|$)' apps.txt)
           echo "$VERSIONS" > build/mirrors.json
-          # Base de connaissances de ChatGDB : elle vit dans le dépôt ChatGDB (connaissances/src/*.md). On en tire ici la carte
-          # index.json et les fiches/*.json, avec le générateur du dépôt ChatGDB lancé SANS réseau, sans lancer d'autre programme
-          # et avec le seul droit d'écrire dans connaissances/ (mode « permission » de Node) : ce déploiement a le droit de publier.
-          kb="build/ChatGDB/connaissances"
-          if [ -f build/ChatGDB/scripts/connaissances.mjs ]; then
-            node --permission --allow-fs-read="$PWD/build/ChatGDB" --allow-fs-write="$PWD/$kb" build/ChatGDB/scripts/connaissances.mjs
+          # Base de connaissances de ChatGDB : elle vit dans le dépôt ChatGDB (connaissances/src/*.md). ChatGDB n'est plus
+          # assemblé ici (il se publie seul sur https://fsggb.github.io/ChatGDB/), donc on le clone à part, juste pour ça,
+          # sans le publier : le générateur tourne SANS réseau, sans lancer d'autre programme, avec le seul droit d'écrire
+          # dans connaissances/ (mode « permission » de Node).
+          src="$RUNNER_TEMP/chatgdb-kb"
+          if git clone --depth 1 https://github.com/fsggb/ChatGDB.git "$src" && [ -f "$src/scripts/connaissances.mjs" ]; then
+            (cd "$src" && node --permission --allow-fs-read="$src" --allow-fs-write="$src/connaissances" scripts/connaissances.mjs)
             # ancienne adresse (…/ScoutHub/connaissances/), pour le serveur Apps Script tant qu'il n'est pas remis à jour
-            cp -a "$kb" build/connaissances
-            rm -rf build/ChatGDB/connaissances/src build/connaissances/src
-          else echo "::warning::ChatGDB : générateur de la base de connaissances introuvable"; fi
+            mkdir -p build/connaissances && cp -a "$src/connaissances/index.json" "$src/connaissances/fiches" build/connaissances/ 2>/dev/null
+            kb="$src/connaissances"
+          else echo "::warning::ChatGDB : clonage ou générateur de la base de connaissances introuvable"; kb=""; fi
           # Fiches de connaissances par application : CHATGDB.md de chaque dépôt (liste dans ChatGDB/connaissances/depots.txt), réunies dans knowledge/
           mkdir -p build/knowledge
           grep -vE '^\s*(#|$)' "$kb/depots.txt" 2>/dev/null | while read -r repo; do

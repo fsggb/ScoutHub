@@ -17,8 +17,10 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
-  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération", url: "ChatGDB/", icon: "assets/icons/ChatGDB.png", protege: true, local: true },
-  { group: "Assistant", name: "Laboratoire", desc: "Essais de modèles, dictée, voix et recherche (administrateur)", url: "ChatGDB/laboratoire.html", icon: "assets/icons/Laboratoire.svg", protege: true, local: true, admin: true },
+  // ChatGDB se publie seul (son propre workflow) : url absolue vers https://fsggb.github.io/ChatGDB/, même domaine que
+  // ScoutHub donc même connexion. « local » reste vrai : même origine, le partage du jeton fonctionne pareil.
+  { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération", url: O + "ChatGDB/", icon: "assets/icons/ChatGDB.png", protege: true, local: true },
+  { group: "Assistant", name: "Laboratoire", desc: "Essais de modèles, dictée, voix et recherche (administrateur)", url: O + "ChatGDB/laboratoire.html", icon: "assets/icons/Laboratoire.svg", protege: true, local: true, admin: true },
   { group: "Vie spirituelle", featured: true, name: "Divinum Officium", desc: "La messe et le bréviaire en latin, jour par jour (rubriques de 1960)", url: "DivinumOfficium/", icon: "assets/icons/DivinumOfficium.svg", local: true },
   { group: "Boutique", featured: true, name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
   { group: "Ressources et aide", name: "Bibliothèque", desc: "Documents et ressources de la fédération", url: "ScoutBibliotheque/", icon: "assets/icons/Bibliotheque.svg", protege: true, local: true },
@@ -37,10 +39,10 @@ window.SCOUTHUB_APPS = [
   { group: "Création", name: "After Effects", desc: "Effets visuels et compositing", url: "AfterEffects/", icon: "assets/icons/AfterEffects.png", local: true },
   { group: "Création", name: "Pro Tools", desc: "Studio audio et mixage", url: "ProTools/", icon: "assets/icons/ProTools.svg", local: true },
   { group: "Création", name: "Substance Painter", desc: "Peinture de textures 3D", url: "SubstancePainter/", icon: "assets/icons/SubstancePainter.svg", local: true },
-  { group: "Conception et CAO", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage", url: "CathIA/", icon: "assets/icons/CathIA.jpg", local: true },
+  { group: "Conception et CAO", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg", local: true },
   { group: "Conception et CAO", featured: true, crop: true, name: "SoLeadWorks", desc: "Meubles et coins de patrouille en 3D, avec plans et historique", url: "SoLeadWorks/?lang=fr", icon: "assets/icons/SoLeadWorks.png", local: true },
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: "CADCraft/?lang=fr", icon: "assets/icons/ScoutDraft.png", local: true },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: "SolidCraft/?lang=fr", icon: "assets/icons/ScoutCAD.png", local: true },
-  { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true },
+  { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true },
 ];
 })();
