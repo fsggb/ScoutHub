@@ -84,13 +84,26 @@
         if (Hub.here() === href) a.setAttribute("aria-current", "page");
         nav.append(a);
       };
-      link("Applications", "index.html");
       link("Mon compte", "compte.html");
       if (user.role === "admin") link("Administration", "admin.html");
       const out = Object.assign(document.createElement("button"), { className: "nav-btn", type: "button", textContent: "Déconnexion" });
       out.onclick = () => Hub.logout();
       nav.append(Object.assign(document.createElement("span"), { className: "who", textContent: user.email }), out);
       bar.append(nav);
+    },
+
+    // Barre du bas à 4 onglets (reprend la structure de l'ancien intranet : Accueil, Documentation, Inscriptions, Outils).
+    // « actif » est l'un de ces 4 noms, ou rien (pages hors de ces 4 sections, ex. Mon compte/Administration).
+    TABS: [["accueil", "Accueil", "index.html"], ["documentation", "Documentation", "documentation.html"], ["inscriptions", "Inscriptions", "inscriptions.html"], ["outils", "Outils", "outils.html"]],
+    renderTabs(actif) {
+      const nav = document.createElement("nav");
+      nav.className = "bottom-tabs"; nav.setAttribute("aria-label", "Sections de ScoutHub");
+      Hub.TABS.forEach(([id, label, href]) => {
+        const a = Object.assign(document.createElement("a"), { className: "bottom-tab" + (id === actif ? " actif" : ""), href, textContent: label });
+        if (id === actif) a.setAttribute("aria-current", "page");
+        nav.append(a);
+      });
+      document.body.append(nav);
     }
   };
 })();
