@@ -1,4 +1,4 @@
-import { authRoute, authGithubRoute } from "./auth.js";
+import { authRoute } from "./auth.js";
 // Serveur Cloudflare de ScoutHub (Workers + D1, plan gratuit).
 //  POST /chat     : relais ChatGDB. Vérifie le jeton signé par le serveur ScoutHub (Apps Script), applique les limites
 //                   de crédits, transmet la requête à Claude et renvoie la réponse au fil de l'eau ; la consommation
@@ -553,8 +553,6 @@ export default {
   async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: entetes });
-    // GitHub (redirection classique, pas de fetch/XHR : ni jeton de session en en-tête, ni Origin fiable)
-    if (req.method === "GET" && url.pathname.startsWith("/auth/github/")) return authGithubRoute(req, env, url);
     if (req.method === "GET" && url.pathname.startsWith("/direct/")) return direct(req, env, url);
     if (req.method === "GET" && url.pathname === "/lien") return lienCourt(req, env, url);
     if (req.method === "GET" && (url.pathname.startsWith("/ign/") || url.pathname.startsWith("/scan25/"))) return tuileIgn(req, env, ctx, url);

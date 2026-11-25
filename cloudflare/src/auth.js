@@ -70,32 +70,6 @@ async function provisionner(env, email, nom, google) {
   return nouvelleSession(env, email);
 }
 
-// ---------- vérification générique d'un jeton RS256 (JWKS public) : sert à Microsoft (Google a son propre tokeninfo) ----------
-let memoJwks = {};
-async function clePublique(jwksUrl, kid) {
-  let jeu = memoJwks[jwksUrl];
-  if (!jeu || Date.now() - jeu.t > 3600e3 || !jeu.v.keys.some(k => k.kid === kid)) {
-    const r = await fetch(jwksUrl); if (!r.ok) throw new Erreur("Clés publiques indisponibles (" + r.status + ").", 502);
-    jeu = memoJwks[jwksUrl] = { t: Date.now(), v: await r.json() };
-  }
-  const jwk = jeu.v.keys.find(k => k.kid === kid);
-  if (!jwk) throw new Erreur("Jeton signé par une clé inconnue.");
-  return crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-}
-async function verifierJwtRS256(jwksUrl, jeton) {
-  const parts = String(jeton || "").split(".");
-  if (parts.length !== 3) throw new Erreur("Jeton invalide.");
-  const [enteteB64, chargeB64, sigB64] = parts;
-  let entete, charge; try { entete = JSON.parse(new TextDecoder().decode(b64urlDecode(enteteB64))); charge = JSON.parse(new TextDecoder().decode(b64urlDecode(chargeB64))); } catch { throw new Erreur("Jeton invalide."); }
-  if (entete.alg !== "RS256" || !entete.kid) throw new Erreur("Jeton invalide.");
-  const cle = await clePublique(jwksUrl, entete.kid);
-  const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cle, b64urlDecode(sigB64), enc.encode(enteteB64 + "." + chargeB64));
-  if (!ok) throw new Erreur("Signature du jeton invalide.");
-  if (!charge.exp || charge.exp * 1000 < Date.now()) throw new Erreur("Jeton expiré.");
-  return charge;
-}
-function b64urlDecode(str) { return Uint8Array.from(atob(String(str).replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)); }
-
 // ---------- jeton Google (Google Identity Services) ----------
 async function verifyGoogle(env, credential) {
   if (typeof credential !== "string" || credential.length < 100 || credential.length > 4000) throw new Erreur("Jeton Google invalide.");
@@ -107,42 +81,6 @@ async function verifyGoogle(env, credential) {
   if (String(info.email_verified) !== "true" || !info.email) throw new Erreur("Adresse Google non vérifiée.");
   if (Number(info.exp) * 1000 < Date.now()) throw new Erreur("Jeton Google expiré.");
   return info;
-}
-
-// ---------- Microsoft (Entra ID / comptes Microsoft, point de terminaison « common ») ----------
-// Jeton d'identité obtenu côté navigateur (MSAL.js, authorization code + PKCE ou flux implicite) ; vérifié ici par JWKS.
-async function verifyMicrosoft(env, jeton) {
-  const charge = await verifierJwtRS256("https://login.microsoftonline.com/common/discovery/v2.0/keys", jeton);
-  if (charge.aud !== env.MICROSOFT_CLIENT_ID) throw new Erreur("Jeton Microsoft destiné à une autre application.");
-  if (!/^https:\/\/login\.microsoftonline\.com\/.+\/v2\.0$/.test(String(charge.iss || ""))) throw new Erreur("Jeton Microsoft invalide.");
-  const email = String(charge.email || charge.preferred_username || "").toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Erreur("Ce compte Microsoft n'a pas d'adresse e-mail exploitable.");
-  return { email, name: charge.name || "" };
-}
-
-// ---------- GitHub (OAuth2 classique : pas de jeton d'identité, un aller-retour par redirection) ----------
-async function githubAutorisationUrl(env, retour) {
-  const etat = await etatSigne(env, { exp: Date.now() + 600000, retour: retour || "" });
-  const p = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, scope: "read:user user:email", redirect_uri: env.GITHUB_REDIRECT_URI, state: etat, allow_signup: "false" });
-  return "https://github.com/login/oauth/authorize?" + p.toString();
-}
-async function githubEchangerCode(env, code) {
-  const cle = env.GITHUB_CLIENT_SECRET && typeof env.GITHUB_CLIENT_SECRET.get === "function" ? await env.GITHUB_CLIENT_SECRET.get() : env.GITHUB_CLIENT_SECRET;
-  const res = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST", headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify({ client_id: env.GITHUB_CLIENT_ID, client_secret: cle, code, redirect_uri: env.GITHUB_REDIRECT_URI })
-  });
-  const j = await res.json();
-  if (!res.ok || !j.access_token) throw new Erreur("GitHub a refusé l'échange (" + (j.error_description || j.error || res.status) + ").", 502);
-  return j.access_token;
-}
-async function githubEmailFsggb(env, jetonAcces) {
-  const res = await fetch("https://api.github.com/user/emails", { headers: { authorization: "Bearer " + jetonAcces, accept: "application/vnd.github+json", "user-agent": "scouthub-auth" } });
-  if (!res.ok) throw new Erreur("GitHub : lecture des adresses refusée (" + res.status + ").", 502);
-  const emails = await res.json();
-  const bon = (Array.isArray(emails) ? emails : []).find(e => e.verified && estFsggb(env, String(e.email || "").toLowerCase()));
-  if (!bon) throw new Erreur("Aucune adresse @" + (env.GOOGLE_DOMAINE || "fsggb.fr") + " vérifiée sur ce compte GitHub. Ajoutez-la et vérifiez-la dans les paramètres GitHub, puis réessayez.");
-  return bon.email.toLowerCase();
 }
 
 // ---------- envoi du code par Gmail (compte de service, délégation à l'échelle du domaine) ----------
@@ -187,23 +125,6 @@ async function envoyerLienMagique(env, email, token) {
   const lien = (env.SITE_RETOUR || "https://fsggb.github.io/ScoutHub/") + "?lien=" + encodeURIComponent(token);
   await envoyerMail(env, email, "Votre lien de connexion ScoutHub",
     "Cliquez sur ce lien pour vous connecter à ScoutHub (valable 15 minutes, usage unique) :\n" + lien + "\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement ce message.");
-}
-
-// ---------- état signé (HMAC), sert au paramètre « state » du flux GitHub (anti-CSRF, sans aller-retour en base) ----------
-async function cleHmac(secret) { return crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]); }
-async function etatSigne(env, charge) {
-  const texte = b64url(enc.encode(JSON.stringify(charge)));
-  const sig = hex(await crypto.subtle.sign("HMAC", await cleHmac(env.RELAIS_SECRET), enc.encode(texte)));
-  return texte + "." + sig;
-}
-async function etatVerifie(env, etat) {
-  const [texte, sig] = String(etat || "").split(".");
-  if (!texte || !sig) throw new Erreur("Requête invalide (state).");
-  const attendu = hex(await crypto.subtle.sign("HMAC", await cleHmac(env.RELAIS_SECRET), enc.encode(texte)));
-  if (!egal(attendu, sig)) throw new Erreur("Requête invalide (state).");
-  const charge = JSON.parse(new TextDecoder().decode(b64urlDecode(texte)));
-  if (!charge.exp || charge.exp < Date.now()) throw new Erreur("Requête expirée : recommencez la connexion.");
-  return charge;
 }
 
 // ---------- quota et anti-abus (D1 remplace CacheService + PropertiesService du compteur journalier) ----------
@@ -298,16 +219,6 @@ export async function authRoute(req, env, url, json, erreur) {
       const token2 = await provisionner(env, l.email, "", false);
       return json(200, { ok: true, token: token2, user: publicUser(await getUser(env, l.email)) });
     }
-    if (url.pathname === "/auth/microsoft") {
-      const r = await req.json().catch(() => ({}));
-      if (!env.MICROSOFT_CLIENT_ID) throw new Erreur("La connexion Microsoft n'est pas encore activée.", 503);
-      const info = await verifyMicrosoft(env, r.jeton);
-      const email = cleanEmail(info.email);
-      if (!estFsggb(env, email)) throw new Erreur("La connexion est réservée aux adresses @" + (env.GOOGLE_DOMAINE || "fsggb.fr") + ".");
-      if (await adminGoogleSeul(env, email)) throw new Erreur("Les comptes administrateur se connectent uniquement avec Google.");
-      const token = await provisionner(env, email, info.name, false);
-      return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
-    }
     if (url.pathname === "/auth/me") {
       const r = await req.json().catch(() => ({}));
       const email = await sessionEmail(env, r.token);
@@ -343,37 +254,6 @@ export async function authRoute(req, env, url, json, erreur) {
     }
   } catch (e) { return erreur(e instanceof Erreur ? e.code : 500, e && e.message ? e.message : "Erreur du serveur."); }
   return erreur(404, "Adresse inconnue.");
-}
-
-// ---------- GitHub : redirection (pas de JSON, pas de jeton de session à ce stade) ----------
-// GET /auth/github/debut           : redirige vers GitHub pour l'autorisation.
-// GET /auth/github/retour?code&state : échange le code, vérifie l'adresse @fsggb.fr, redirige vers le site avec
-//                                      le jeton de session dans le FRAGMENT de l'URL (jamais envoyé au serveur).
-export async function authGithubRoute(req, env, url) {
-  const page = (titre, corps) => new Response("<!doctype html><meta charset=utf-8><title>" + titre + "</title><body style=\"font:16px system-ui;max-width:32em;margin:3em auto;padding:0 1em\">" + corps + "</body>", { headers: { "content-type": "text/html; charset=utf-8" } });
-  try {
-    if (!env.GITHUB_CLIENT_ID) throw new Erreur("La connexion GitHub n'est pas encore activée.", 503);
-    if (url.pathname === "/auth/github/debut") {
-      const retour = url.searchParams.get("retour") || "";
-      return Response.redirect(await githubAutorisationUrl(env, retour), 302);
-    }
-    if (url.pathname === "/auth/github/retour") {
-      const erreurGithub = url.searchParams.get("error");
-      if (erreurGithub) throw new Erreur("GitHub : " + (url.searchParams.get("error_description") || erreurGithub));
-      const charge = await etatVerifie(env, url.searchParams.get("state"));
-      const code = url.searchParams.get("code");
-      if (!code) throw new Erreur("Requête incomplète.");
-      const jetonAcces = await githubEchangerCode(env, code);
-      const email = await githubEmailFsggb(env, jetonAcces);
-      if (await adminGoogleSeul(env, email)) throw new Erreur("Les comptes administrateur se connectent uniquement avec Google.");
-      const token = await provisionner(env, email, "", false);
-      const dest = (charge.retour || env.SITE_RETOUR || "https://fsggb.github.io/ScoutHub/") + "#token=" + encodeURIComponent(token);
-      return Response.redirect(dest, 302);
-    }
-  } catch (e) {
-    return page("Connexion impossible", "<h1>Connexion impossible</h1><p>" + (e && e.message ? String(e.message).replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])) : "Erreur du serveur.") + "</p><p><a href=\"" + (env.SITE_RETOUR || "https://fsggb.github.io/ScoutHub/") + "\">Retour à ScoutHub</a></p>");
-  }
-  return new Response("Adresse inconnue.", { status: 404 });
 }
 
 // Pour les autres routes du Worker, une fois la bascule faite : vérifie un jeton de session /auth/* (remplace verifierJeton).
