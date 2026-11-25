@@ -8,6 +8,9 @@
   const slug = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "x";
   const safeUrl = u => typeof u === "string" && (/^https:\/\/[^\s"'<>\\]{3,300}$/.test(u) || /^[A-Za-z0-9][\w.\-\/]{0,120}(\?[\w=&%.\-]{0,160})?$/.test(u));
   const safeIcon = i => typeof i === "string" && (/^assets\/icons\/[\w.\-]{1,60}$/.test(i) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]{20,200000}$/.test(i));
+  // Rôle minimum pour voir l'application (en plus de « protege », qui ne demande qu'un compte @fsggb.fr quelconque) :
+  // "" = personne de particulier exigé, sinon un rôle de Hub.ROLE_ORDER (vérifié par Hub.can).
+  const safeRole = r => !r || (!!window.Hub && window.Hub.ROLE_ORDER.includes(r));
 
   // Valeurs d'origine : config.js
   function defaults() {
@@ -15,13 +18,13 @@
     (window.SCOUTHUB_APPS || []).forEach(a => {
       let s = sections.find(x => x.titre === a.group);
       if (!s) sections.push(s = { id: slug(a.group), titre: a.group, haut: TOP.includes(a.group) });
-      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, local: !!a.local, admin: !!a.admin });
+      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, role: safeRole(a.role) ? (a.role || "") : "", local: !!a.local, admin: !!a.admin });
     });
     return { v: 1, sections, apps };
   }
   // Applications ajoutées à config.js après l'enregistrement de la mise en page : elles apparaissent en fin de section.
   function merge(m) {
-    const d = defaults(), out = { ...m, sections: m.sections.map(s => ({ ...s })), apps: m.apps.map(a => ({ ...a })) };
+    const d = defaults(), out = { ...m, sections: m.sections.map(s => ({ ...s })), apps: m.apps.map(a => ({ ...a, role: safeRole(a.role) ? (a.role || "") : "" })) };
     // Le caractère « réservée à l'administrateur » vient toujours de config.js, même pour une mise en page déjà enregistrée
     out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) x.admin = o.admin; });
     d.apps.forEach(a => {
@@ -33,10 +36,10 @@
     });
     return out;
   }
-  function valid(m) { return m && Array.isArray(m.sections) && Array.isArray(m.apps) && m.apps.every(a => a && safeUrl(a.url) && safeIcon(a.icone) && typeof a.nom === "string"); }
+  function valid(m) { return m && Array.isArray(m.sections) && Array.isArray(m.apps) && m.apps.every(a => a && safeUrl(a.url) && safeIcon(a.icone) && typeof a.nom === "string" && safeRole(a.role)); }
   const cached = () => { try { const m = JSON.parse(localStorage.getItem(KEY) || "null"); return valid(m) ? m : null; } catch { return null; } };
   const P = window.Portail = {
-    TOP, slug, safeUrl, safeIcon, defaults, merge, valid, isAdmin: false, model: null,
+    TOP, slug, safeUrl, safeIcon, safeRole, defaults, merge, valid, isAdmin: false, model: null,
     current() { return P.model || (P.model = merge(cached() || defaults())); },
     // Connecté (compte @fsggb.fr) ? Sinon les applications protégées n'existent pas pour la personne (le serveur ne les envoie pas non plus).
     connected: () => !!(window.Hub && Hub.token && Hub.cachedUser()),

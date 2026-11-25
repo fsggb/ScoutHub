@@ -88,6 +88,9 @@
     setTimeout(() => $("email").focus(), 0);
   }
 
+  const { masquePerso, toggleMasquePerso: toggleMasqueBase } = Hub;
+  const toggleMasquePerso = id => { toggleMasqueBase(id); renderApps(); };
+
   // ---------- accueil ----------
   // « Mon compte » et « Administration » sont déjà dans la barre du haut : pas de tuile en plus (une seule ligne en tête).
   function tile(a) {
@@ -110,7 +113,14 @@
     const strong = Object.assign(document.createElement("strong"), { textContent: a.nom });
     const small = Object.assign(document.createElement("small"), { textContent: a.desc });
     text.append(strong, small); link.append(badge, text);
-    if (Portail.isAdmin && (a.admin || a.masque || a.protege)) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: a.admin ? "Administrateur" : a.masque ? "Masquée pour les autres" : "Réservée aux @fsggb.fr" }));
+    if (Portail.isAdmin && (a.admin || a.masque || a.protege || a.role)) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: a.admin ? "Administrateur" : a.masque ? "Masquée pour les autres" : a.role ? "Réservée : " + (Hub.ROLE_LABELS[a.role] || a.role) + " et plus" : "Réservée aux @fsggb.fr" }));
+    if (Hub.user) {
+      const hide = document.createElement("button");
+      hide.type = "button"; hide.className = "app-hide"; hide.title = "Masquer pour moi (dans « Mon compte » pour la retrouver)";
+      hide.textContent = "✕"; hide.setAttribute("aria-label", "Masquer « " + a.nom + " » pour moi");
+      hide.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); toggleMasquePerso(a.id); };
+      link.append(hide);
+    }
     return link;
   }
 
@@ -120,7 +130,7 @@
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";

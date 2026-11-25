@@ -19,10 +19,18 @@
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
 
+  // Applications masquées par la personne elle-même (icône ✕ sur l'accueil) : choix propre à cet appareil,
+  // indépendant de la mise en page que l'administrateur enregistre pour tout le monde (portail.js/admin-portail.js).
+  const PERSO_KEY = "scouthub.masquees.perso";
+  const mesMasquees = () => { try { const l = JSON.parse(localStorage.getItem(PERSO_KEY) || "[]"); return Array.isArray(l) ? l : []; } catch { return []; } };
+  const masquePerso = id => mesMasquees().includes(id);
+  const toggleMasquePerso = id => { const l = mesMasquees(), i = l.indexOf(id); if (i >= 0) l.splice(i, 1); else l.push(id); try { localStorage.setItem(PERSO_KEY, JSON.stringify(l)); } catch {} };
+
   const Hub = window.Hub = {
     $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER,
     // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir ChatGDB/docs/projet-chatgdb.md).
     can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(normRole(user.role)) >= ROLE_ORDER.indexOf(normRole(min))), cachedUser, cacheUser, normRole,
+    mesMasquees, masquePerso, toggleMasquePerso,
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",
 

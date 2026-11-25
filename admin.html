@@ -53,6 +53,8 @@
         <label class="chk"><input id="ap-feat" type="checkbox"> Mettre en avant (contour doré)</label>
         <label class="chk"><input id="ap-new" type="checkbox"> Ouvrir dans un nouvel onglet</label>
         <label class="chk"><input id="ap-prot" type="checkbox"> Protégée : visible seulement des comptes connectés @fsggb.fr (les autres ne savent pas qu’elle existe)</label>
+        <label for="ap-role">Réservée à partir du rôle</label><select id="ap-role"></select>
+        <p class="hint left">En plus de « Protégée » : seules les personnes ayant au moins ce rôle (ou davantage) la voient. Laissez « Personne en particulier » pour ne pas limiter par rôle.</p>
         <label class="chk"><input id="ap-mask" type="checkbox"> Masquer à tout le monde sauf à moi</label>
         <p id="ap-status" class="status" role="status"></p>
         <div class="dlg-actions"><button class="text-danger" type="button" id="ap-del" hidden>Supprimer ce lien</button><button class="ghost" type="button" data-close>Annuler</button><button class="primary" type="submit">Valider</button></div>
