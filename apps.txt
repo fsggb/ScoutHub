@@ -6,8 +6,9 @@
 #   trunk   : compilation Rust → WebAssembly depuis le dernier commit du dépôt (<paramètre> = dossier de l'application)
 #   excali  : compilation d'Excalidraw (Node) depuis le dernier commit
 #   static  : dépôt de site statique cloné tel quel
-# CathIA, ScoutMap et ChatGDB se publient désormais SEULS (leur propre workflow, sur https://fsggb.github.io/<dépôt>/) :
-# ScoutHub ne les clone plus, le portail pointe directement sur ces adresses (même domaine : connexion partagée).
+# CathIA, ScoutMap, ChatGDB, SolidWorks (ScoutCAD), SoLeadWorks (ScoutCraft) et AutoCAD (ScoutDraft) se publient
+# désormais SEULS (leur propre workflow, sur https://fsggb.github.io/<dépôt>/) : ScoutHub ne les clone/compile plus,
+# le portail pointe directement sur ces adresses (même domaine : connexion partagée).
 #   perl    : site pré-calculé par un script du dépôt (<paramètre> = chemin du script Python), régénéré chaque jour
 release Word             storytold/wordcraft     wordcraft
 release Excel            storytold/gridcraft     gridcraft
@@ -22,9 +23,6 @@ release Figma            storytold/figcraft      figcraft
 release SubstancePainter storytold/texturecraft  texturecraft
 release AfterEffects     storytold/effectcraft   effectcraft
 release ProTools         storytold/soundcraft    soundcraft
-trunk   SolidCraft       tangency-labs/solidcraft apps/solidcraft-web
-trunk   CADCraft         storytold/cadcraft      apps/cadcraft-web
-trunk   SoLeadWorks      fsggb/SoLeadWorks       apps/solidcraft-web
 excali  Draw             excalidraw/excalidraw
 static  ScoutBibliotheque fsggb/ScoutBibliotheque
 perl    DivinumOfficium   fsggb/DivinumOfficium scripts/generer_site.py
