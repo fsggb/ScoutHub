@@ -12,6 +12,7 @@ const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, 
 async function sha256(s) { return hex(await crypto.subtle.digest("SHA-256", enc.encode(s))); }
 function egal(a, b) { a = String(a); b = String(b); if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
 function normRole(r) { return !r || r === "user" || r === "membre" ? "adherent" : (ROLES.includes(r) ? r : "adherent"); }
+function slug(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60); }
 function cleanEmail(v) {
   const e = String(v || "").trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) || e.length > 120) throw new Erreur("Adresse e-mail invalide.");
@@ -24,10 +25,10 @@ class Erreur extends Error { constructor(msg, code = 400) { super(msg); this.cod
 // ---------- utilisateurs (D1 remplace PropertiesService « u: ») ----------
 async function getUser(env, email) {
   const u = await env.DB.prepare("SELECT * FROM users WHERE email = ?1").bind(email).first();
-  if (u) return u;
+  if (u) { const p = await portee(env, email); return { ...u, groupe_id: p.groupe_id, unite_id: p.unite_id }; }
   if (email === env.ADMIN_EMAIL) {
     await env.DB.prepare("INSERT OR IGNORE INTO users (email, role, name, google, created) VALUES (?1, 'admin', '', 0, ?2)").bind(email, Date.now()).run();
-    return { email, role: "admin", name: "", google: 0, created: Date.now() };
+    return { email, role: "admin", name: "", google: 0, created: Date.now(), groupe_id: null, unite_id: null };
   }
   return null;
 }
@@ -38,7 +39,30 @@ async function saveUser(env, email, base) {
     "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google"
   ).bind(email, role, base.name || "", base.google ? 1 : 0, base.created || Date.now()).run();
 }
-function publicUser(u) { return { email: u.email, role: normRole(u.role), name: u.name || "", google: !!u.google }; }
+function publicUser(u) { return { email: u.email, role: normRole(u.role), name: u.name || "", google: !!u.google, groupe_id: u.groupe_id || null, unite_id: u.unite_id || null }; }
+async function portee(env, email) { return (await env.DB.prepare("SELECT groupe_id, unite_id FROM portees WHERE email = ?1").bind(email).first()) || { groupe_id: null, unite_id: null }; }
+
+// ---------- portée d'un compte : quel groupe/quelle unité voit-il (préparation des futures données sensibles) ----------
+// équipe nationale et admin voient tout ; chef_groupe voit tout son groupe (toutes ses unités) ; chef_unite ne voit
+// que la sienne ; adhérent/parent ne voient que leur propre groupe/unité (jamais ceux des autres).
+const VOIT_TOUT = new Set(["equipe_nationale", "admin"]);
+// « Voir le groupe » = voir l'ensemble du groupe (toutes ses unités) : seuls le chef de groupe (sur le sien) et
+// l'équipe nationale/admin (sur tous) ont cette vue d'ensemble. Un chef d'unité, un parent ou un adhérent ne
+// voient JAMAIS le groupe en général, seulement leur propre unité (peutVoirUnite ci-dessous).
+function peutVoirGroupe(user, groupeId) {
+  if (!groupeId) return false;
+  const r = normRole(user.role);
+  if (VOIT_TOUT.has(r)) return true;
+  return r === "chef_groupe" && user.groupe_id === groupeId;
+}
+function peutVoirUnite(user, groupeId, uniteId) {
+  if (!groupeId || !uniteId) return false;
+  const r = normRole(user.role);
+  if (VOIT_TOUT.has(r)) return true;
+  if (r === "chef_groupe") return user.groupe_id === groupeId;   // voit toutes les unités de son groupe
+  if (r === "chef_unite" || r === "parent" || r === "adherent") return user.groupe_id === groupeId && user.unite_id === uniteId;
+  return false;
+}
 async function adminGoogleSeul(env, email) { const u = await getUser(env, email); return adminProtege(env, email) || (!!u && u.role === "admin"); }
 
 // ---------- sessions (D1 remplace PropertiesService « s: » + CacheService) ----------
@@ -231,8 +255,47 @@ export async function authRoute(req, env, url, json, erreur) {
     }
     if (url.pathname === "/auth/admin/list") {
       await requireAdmin(env, (await req.json().catch(() => ({}))).token);
-      const { results } = await env.DB.prepare("SELECT email, role, created, google FROM users ORDER BY email").all();
-      return json(200, { ok: true, users: results.map(u => ({ email: u.email, role: normRole(u.role), created: u.created, google: !!u.google })) });
+      const { results } = await env.DB.prepare("SELECT u.email, u.role, u.created, u.google, p.groupe_id, p.unite_id FROM users u LEFT JOIN portees p ON p.email = u.email ORDER BY u.email").all();
+      return json(200, { ok: true, users: results.map(u => ({ email: u.email, role: normRole(u.role), created: u.created, google: !!u.google, groupe_id: u.groupe_id || null, unite_id: u.unite_id || null })) });
+    }
+    if (url.pathname === "/auth/admin/groupes") {
+      await requireAdmin(env, (await req.json().catch(() => ({}))).token);
+      const g = (await env.DB.prepare("SELECT id, nom FROM groupes ORDER BY nom").all()).results;
+      const u = (await env.DB.prepare("SELECT id, groupe_id, nom FROM unites ORDER BY nom").all()).results;
+      return json(200, { ok: true, groupes: g, unites: u });
+    }
+    if (url.pathname === "/auth/admin/groupe/creer") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const id = slug(r.nom); if (!id) throw new Erreur("Nom de groupe invalide.");
+      await env.DB.prepare("INSERT INTO groupes (id, nom) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET nom = excluded.nom").bind(id, String(r.nom).slice(0, 100)).run();
+      return json(200, { ok: true, id });
+    }
+    if (url.pathname === "/auth/admin/unite/creer") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const groupeId = String(r.groupe_id || ""); if (!(await env.DB.prepare("SELECT 1 FROM groupes WHERE id = ?1").bind(groupeId).first())) throw new Erreur("Groupe inconnu.");
+      const id = groupeId + "-" + slug(r.nom); if (!slug(r.nom)) throw new Erreur("Nom d'unité invalide.");
+      await env.DB.prepare("INSERT INTO unites (id, groupe_id, nom) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET nom = excluded.nom").bind(id, groupeId, String(r.nom).slice(0, 100)).run();
+      return json(200, { ok: true, id });
+    }
+    if (url.pathname === "/auth/admin/scope") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const email = cleanEmail(r.email), u = await getUser(env, email);
+      if (!u) throw new Erreur("Compte introuvable.");
+      const groupeId = r.groupe_id ? String(r.groupe_id) : null, uniteId = r.unite_id ? String(r.unite_id) : null;
+      if (groupeId && !(await env.DB.prepare("SELECT 1 FROM groupes WHERE id = ?1").bind(groupeId).first())) throw new Erreur("Groupe inconnu.");
+      if (uniteId) {
+        const un = await env.DB.prepare("SELECT groupe_id FROM unites WHERE id = ?1").bind(uniteId).first();
+        if (!un) throw new Erreur("Unité inconnue.");
+        if (!groupeId || un.groupe_id !== groupeId) throw new Erreur("Cette unité n'appartient pas au groupe indiqué.");
+      }
+      if (normRole(u.role) === "chef_unite" && (!groupeId || !uniteId)) throw new Erreur("Un chef d'unité doit avoir un groupe ET une unité.");
+      if (normRole(u.role) === "chef_groupe" && !groupeId) throw new Erreur("Un chef de groupe doit avoir un groupe.");
+      await env.DB.prepare("INSERT INTO portees (email, groupe_id, unite_id) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET groupe_id = excluded.groupe_id, unite_id = excluded.unite_id")
+        .bind(email, groupeId, uniteId).run();
+      return json(200, { ok: true });
     }
     if (url.pathname === "/auth/admin/role") {
       const r = await req.json().catch(() => ({}));
@@ -249,6 +312,7 @@ export async function authRoute(req, env, url, json, erreur) {
       await requireAdmin(env, r.token);
       const email = cleanEmail(r.email);
       if (adminProtege(env, email)) throw new Erreur("Un compte administrateur ne peut pas être supprimé.");
+      await env.DB.prepare("DELETE FROM portees WHERE email = ?1").bind(email).run();
       await env.DB.prepare("DELETE FROM users WHERE email = ?1").bind(email).run();
       return json(200, { ok: true });
     }
@@ -260,5 +324,8 @@ export async function authRoute(req, env, url, json, erreur) {
 export async function quiEstCe(env, token) {
   const email = await sessionEmail(env, token);
   const u = await getUser(env, email);
-  return { e: email, r: normRole(u.role), n: u.name || "" };
+  return { e: email, r: normRole(u.role), n: u.name || "", groupe_id: u.groupe_id, unite_id: u.unite_id };
 }
+// Pour les futures routes de données sensibles (fiches sanitaires, listes d'adhérents…) : filtrer AVANT d'envoyer,
+// jamais seulement côté affichage. `qui` est l'objet renvoyé par quiEstCe (ou getUser/publicUser).
+export { peutVoirGroupe, peutVoirUnite };

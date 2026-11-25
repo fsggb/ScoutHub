@@ -50,6 +50,27 @@ CREATE TABLE IF NOT EXISTS login_codes (
 -- Partagé avec le lien magique (même compte d'envoi, même anti-abus).
 CREATE TABLE IF NOT EXISTS login_codes_quota (jour TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0);
 
+-- ===== Groupes et unités : portée des rôles chef_groupe / chef_unite pour les futures données sensibles =====
+-- (fiches sanitaires, listes d'adhérents…). Un chef_groupe voit tout son groupe (toutes ses unités) ; un
+-- chef_unite ne voit que la sienne. Référence par identifiant court (slug), jamais par le nom affiché, qui
+-- peut changer sans casser les données déjà liées.
+CREATE TABLE IF NOT EXISTS groupes (id TEXT PRIMARY KEY, nom TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS unites (
+  id TEXT PRIMARY KEY,
+  groupe_id TEXT NOT NULL REFERENCES groupes(id),
+  nom TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS unites_groupe ON unites (groupe_id);
+
+-- Portée d'un compte : quel groupe/unité il représente (chef_groupe : groupe_id seul ; chef_unite : les deux ;
+-- équipe nationale/admin : aucun, ils voient tout ; adhérent/parent : le groupe/unité auquel la personne appartient).
+-- Table à part (plutôt qu'une colonne ajoutée à « users ») pour que ce fichier reste rejouable sans erreur.
+CREATE TABLE IF NOT EXISTS portees (
+  email TEXT PRIMARY KEY REFERENCES users(email),
+  groupe_id TEXT REFERENCES groupes(id),
+  unite_id TEXT REFERENCES unites(id)
+);
+
 -- Liens magiques (un clic à la place des 6 chiffres) : le jeton lui-même sert de clé, son empreinte seule est stockée.
 CREATE TABLE IF NOT EXISTS magic_links (
   hash TEXT PRIMARY KEY,
