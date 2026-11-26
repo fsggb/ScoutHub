@@ -93,9 +93,9 @@
   function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
     Hub.renderBar(Hub.user); Hub.renderTabs("accueil");
-    const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
-    $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "ScoutHub";
-    $("guest-note").hidden = !!Hub.user;
+    // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
+    const prenom = Hub.user.email.split("@")[0].split(/[._-]+/)[0];
+    $("hello").textContent = "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1);
   }
   function enter() { if (!goNext()) showHome(); }
 
@@ -110,13 +110,14 @@
       .catch(e => { showAuth(); say($("auth-status"), e.message, true); });
     return;
   }
-  const wantLogin = new URLSearchParams(location.search).has("connexion") || new URLSearchParams(location.search).has("next");
+  // Seul l'onglet Outils reste accessible sans compte (outils.html/outils.js, inchangé) : l'accueil (tableau de
+  // bord) demande désormais une connexion, comme Documentation et Inscriptions (onglet.js).
   if (store.get() && window.SCOUTHUB_API) {
     // Affichage immédiat avec l'utilisateur mémorisé, vérification de la session en arrière-plan.
     Hub.user = Hub.cachedUser();
-    if (Hub.user && !wantLogin) showHome(); // sinon : on attend la vérification de la session
-    Hub.call("me").then(o => { Hub.user = o.user; Hub.cacheUser(o.user); if (wantLogin) enter(); else showHome(); })
-      .catch(() => { store.set(null); Hub.user = null; wantLogin ? showAuth() : showHome(); });
-  } else if (wantLogin) showAuth();
-  else showHome();
+    if (Hub.user) showHome(); // sinon : on attend la vérification de la session (showAuth déjà affiché ci-dessous)
+    else showAuth();
+    Hub.call("me").then(o => { Hub.user = o.user; Hub.cacheUser(o.user); enter(); })
+      .catch(() => { store.set(null); Hub.user = null; showAuth(); });
+  } else showAuth();
 })();
