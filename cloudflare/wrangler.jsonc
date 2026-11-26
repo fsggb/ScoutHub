@@ -38,7 +38,9 @@
     // Identifiant public (pas un secret) de la connexion Google actuelle (déjà dans config.js côté navigateur).
     "GOOGLE_CLIENT_ID": "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com",
     "GOOGLE_DOMAINE": "fsggb.fr",
-    "GMAIL_SENDER": "no-reply@fsggb.fr",
+    // Provisoire : no-reply@fsggb.fr n'existe pas encore comme boîte/alias du domaine (Google a refusé
+    // l'envoi, « Invalid email or User ID »). À remettre sur no-reply@fsggb.fr une fois l'alias créé.
+    "GMAIL_SENDER": "service-informatique@fsggb.fr",
     "ADMIN_EMAIL": "jb.combet@fsggb.fr",
     "ADMIN_GOOGLE": "service-informatique@fsggb.fr",
     "SESSION_JOURS": "14",
