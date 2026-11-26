@@ -25,10 +25,9 @@
     { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
   ],
   "vars": {
-    // scouthub-vrai-test.fsggb.workers.dev : site de test (voir cloudflare/README ou la conversation) — à retirer
-    // une fois la migration validée et le vrai portail basculé dessus. Retiré par erreur le 26/11 lors d'un
-    // déploiement depuis une branche qui ne l'avait pas encore ; remis ici pour que ça ne se reproduise plus.
-    "ORIGINES": "https://fsggb.github.io,https://scouthub-vrai-test.fsggb.workers.dev",
+    // intranet.fsggb.workers.dev : site de test (nom choisi par l'administrateur, remplace scouthub-vrai-test) —
+    // à retirer une fois la migration validée et le vrai portail basculé dessus.
+    "ORIGINES": "https://fsggb.github.io,https://intranet.fsggb.workers.dev",
     "ANTHROPIC_WORKSPACE_ID": "wrkspc_0119AE1DuVBLZoxQXQhqT3rB",
     "IGN_COUCHE": "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR",
     "CREDITS_FENETRE": "30",
@@ -38,8 +37,10 @@
     "NEURONS_JOUR": "10000",
     "TURN_KEY_ID": "29924b06b96b9c981e6d91e7eaf53265",
     // ---- Identité et sessions (rupture avec Apps Script, voir cloudflare/MIGRATION.md) ----
-    // Identifiant public (pas un secret) de la connexion Google actuelle (déjà dans config.js côté navigateur).
-    "GOOGLE_CLIENT_ID": "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com",
+    // Nouveau client OAuth « Intranet general - Web » (projet intranet-general), remplace l'ancien client
+    // « Contacts des groupes » (599247454430-…, resté dans le projet Apps Script Connexion Outils FSGGB,
+    // inchangé, toujours utilisé par les Apps Script). Identifiant public (pas un secret).
+    "GOOGLE_CLIENT_ID": "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com",
     "GOOGLE_DOMAINE": "fsggb.fr",
     // Provisoire : no-reply@fsggb.fr n'existe pas encore comme boîte/alias du domaine (Google a refusé
     // l'envoi, « Invalid email or User ID »). À remettre sur no-reply@fsggb.fr une fois l'alias créé.
