@@ -13,7 +13,7 @@
 <body>
   <header class="topbar" id="bar"></header>
   <main class="shell">
-    <p class="label">Administration · <a href="ChatGDB/laboratoire.html">Laboratoire ChatGDB</a></p>
+    <p class="label">Administration · <a href="https://fsggb.github.io/ChatGDB/laboratoire.html">Laboratoire ChatGDB</a></p>
     <div class="atabs" role="tablist"><button type="button" role="tab" id="tb-comptes" aria-selected="true">Comptes</button><button type="button" role="tab" id="tb-portail" aria-selected="false">Affichage du portail</button></div>
     <div id="tab-comptes">
     <div class="home-head">
@@ -53,6 +53,8 @@
         <label class="chk"><input id="ap-feat" type="checkbox"> Mettre en avant (contour doré)</label>
         <label class="chk"><input id="ap-new" type="checkbox"> Ouvrir dans un nouvel onglet</label>
         <label class="chk"><input id="ap-prot" type="checkbox"> Protégée : visible seulement des comptes connectés @fsggb.fr (les autres ne savent pas qu’elle existe)</label>
+        <label for="ap-role">Réservée à partir du rôle</label><select id="ap-role"></select>
+        <p class="hint left">En plus de « Protégée » : seules les personnes ayant au moins ce rôle (ou davantage) la voient. Laissez « Personne en particulier » pour ne pas limiter par rôle.</p>
         <label class="chk"><input id="ap-mask" type="checkbox"> Masquer à tout le monde sauf à moi</label>
         <p id="ap-status" class="status" role="status"></p>
         <div class="dlg-actions"><button class="text-danger" type="button" id="ap-del" hidden>Supprimer ce lien</button><button class="ghost" type="button" data-close>Annuler</button><button class="primary" type="submit">Valider</button></div>
@@ -66,6 +68,7 @@
   <script src="portail.js"></script>
   <script src="admin.js"></script>
   <script src="admin-portail.js"></script>
-  <script src="ChatGDB/panneau.js" data-contexte="administration"></script>
+  <!-- ChatGDB se publie seul depuis le changement « liens directs » (#17) : adresse absolue, sinon 404 ici. -->
+  <script src="https://fsggb.github.io/ChatGDB/panneau.js" data-contexte="administration"></script>
 </body>
 </html>

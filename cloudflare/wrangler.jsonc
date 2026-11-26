@@ -25,7 +25,10 @@
     { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
   ],
   "vars": {
-    "ORIGINES": "https://fsggb.github.io",
+    // scouthub-vrai-test.fsggb.workers.dev : le vrai ScoutHub (branche claude/acces-par-role), servi depuis un Worker
+    // (l'envoi direct de fichiers vers Cloudflare Pages n'est pas disponible depuis cette session) pour valider en
+    // conditions réelles la connexion Cloudflare avant de basculer le vrai portail ; à retirer une fois le test terminé.
+    "ORIGINES": "https://fsggb.github.io,https://scouthub-vrai-test.fsggb.workers.dev",
     "ANTHROPIC_WORKSPACE_ID": "wrkspc_0119AE1DuVBLZoxQXQhqT3rB",
     "IGN_COUCHE": "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR",
     "CREDITS_FENETRE": "30",

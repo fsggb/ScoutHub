@@ -35,7 +35,10 @@ form input:focus{outline:2px solid var(--gold);border-color:var(--gold-dark)}
 .ghost:hover{border-color:var(--gold-dark)}
 .hint{margin:14px 0 0;color:#6a6c79;font-size:12px;text-align:center}
 .grid-apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-bottom:26px}
-.app-tile{display:flex;align-items:center;gap:13px;padding:16px;background:#fff;border:1px solid #e7e4dc;border-radius:12px;color:var(--text);text-decoration:none;box-shadow:0 1px 3px rgba(0,7,97,.08);transition:transform .15s,box-shadow .15s}
+.app-tile{position:relative;display:flex;align-items:center;gap:13px;padding:16px;background:#fff;border:1px solid #e7e4dc;border-radius:12px;color:var(--text);text-decoration:none;box-shadow:0 1px 3px rgba(0,7,97,.08);transition:transform .15s,box-shadow .15s}
+.app-hide{position:absolute;top:6px;right:6px;width:22px;height:22px;line-height:20px;padding:0;border:1px solid #e7e4dc;border-radius:50%;background:#fff;color:#8a8c99;font-size:12px;cursor:pointer;opacity:0;transition:opacity .15s}
+.app-tile:hover .app-hide,.app-tile:focus-within .app-hide{opacity:1}
+.app-hide:hover{color:#b42318;border-color:#b42318}
 .app-tile:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.14)}
 .app-tile strong,.app-tile small{display:block}.app-tile small{color:#5f616e;font-size:13px;margin-top:2px}
 .app-badge{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:10px;background:var(--navy);color:var(--gold);font-size:22px;font-weight:700;object-fit:contain}
