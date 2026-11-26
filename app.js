@@ -63,10 +63,9 @@
         callback: async resp => {
           say($("auth-status"), "Un instant…");
           try {
+            // Photo de compte Google (out.user.picture) : vérifiée et renvoyée par le serveur (auth.js), qui l'a
+            // lue dans le jeton Google et conservée en base — pas besoin de la relire côté client.
             const out = await Hub.call("google", { credential: resp.credential });
-            // Photo de compte Google (façon « cliquer sur sa photo de profil ») : lue directement dans le jeton
-            // reçu du navigateur, jamais vérifiée côté serveur ni stockée côté serveur — juste pour l'affichage.
-            try { const p = JSON.parse(atob(resp.credential.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); if (p.picture) out.user.picture = p.picture; } catch {}
             store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); enter();
           } catch (e) { say($("auth-status"), e.message, true); }
         }

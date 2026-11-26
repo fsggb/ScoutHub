@@ -57,6 +57,8 @@
     $("none").hidden = shown.length > 0;
   }
   $("search").addEventListener("input", renderApps);
+  // Recherche lancée depuis l'en-tête (n'importe quelle page, Hub.rechercherOutil) : ?q=... pré-remplit la recherche.
+  { const q = new URLSearchParams(location.search).get("q"); if (q) $("search").value = q; }
 
   async function montrer() {
     Hub.renderBar(Hub.user, "Outils"); Hub.renderTabs("outils", Hub.user);

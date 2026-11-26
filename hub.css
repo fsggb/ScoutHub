@@ -145,6 +145,9 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tb-logo{width:28px;height:28px;object-fit:contain;flex:none}
 .tb-titre{margin:0;color:#fff;font-size:17px;font-weight:600;font-family:system-ui,-apple-system,Segoe UI,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tb-spacer{flex:1}
+.tb-search{min-width:0;flex:1;max-width:320px;margin:0 6px;padding:7px 12px;border:0;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-size:14px}
+.tb-search::placeholder{color:#b9bce3}
+.tb-search:focus{outline:2px solid var(--gold);background:rgba(255,255,255,.22)}
 .tb-icon{display:grid;place-items:center;width:38px;height:38px;flex:none;border:0;border-radius:50%;background:none;color:#d9dbf0;cursor:pointer;padding:0}
 .tb-icon:hover{background:rgba(255,255,255,.14);color:#fff}
 /* Photo de profil cliquable dans l'en-tête, façon Google : vraie photo si on l'a, sinon initiale sur fond clair. */

@@ -128,6 +128,20 @@
       // Ordinateur (rail visible) : ☰ étend/réduit le rail en place (réduit le contenu, ne le recouvre pas).
       // Téléphone (pas de rail) : ☰ ouvre le tiroir par-dessus la page, comme avant.
       burger.onclick = () => { if (window.matchMedia("(min-width:880px)").matches) Hub.toggleRail(); else Hub.ouvrirTiroir(user, Hub._actif); };
+      // Recherche (n'importe quelle page) : l'icône ouvre un champ qui envoie vers Outils, dont la recherche se
+      // pré-remplit (outils.js lit ?q=...). Pas de redondance avec le champ d'Outils lui-même : il reste masqué là.
+      const search = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.recherche, ariaLabel: "Rechercher une application" });
+      const champ = Object.assign(document.createElement("input"), { type: "search", className: "tb-search", placeholder: "Rechercher une application…" });
+      champ.hidden = true;
+      search.onclick = () => {
+        champ.hidden = !champ.hidden;
+        if (!champ.hidden) champ.focus(); else champ.value = "";
+      };
+      champ.addEventListener("keydown", ev => { if (ev.key === "Escape") { champ.hidden = true; champ.value = ""; } });
+      champ.addEventListener("change", () => {
+        const v = champ.value.trim(); if (!v) return;
+        location.href = "outils.html?q=" + encodeURIComponent(v);
+      });
       const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
       refresh.onclick = () => location.reload();
       const sp = document.createElement("span"); sp.className = "tb-spacer";
@@ -139,7 +153,7 @@
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
         Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
-        sp, refresh, avatar);
+        champ, sp, search, refresh, avatar);
     },
 
     // Tiroir (menu ☰) : la liste complète (Hub.navItems), avec libellés — reprend le menu « ACCES CHEFS » de
