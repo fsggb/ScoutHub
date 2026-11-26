@@ -22,8 +22,12 @@
   // Applications ajoutées à config.js après l'enregistrement de la mise en page : elles apparaissent en fin de section.
   function merge(m) {
     const d = defaults(), out = { ...m, sections: m.sections.map(s => ({ ...s })), apps: m.apps.map(a => ({ ...a })) };
-    // Le caractère « réservée à l'administrateur » vient toujours de config.js, même pour une mise en page déjà enregistrée
-    out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) x.admin = o.admin; });
+    // L'adresse, l'icône, « local » et « réservée à l'administrateur » viennent toujours de config.js, même pour une
+    // mise en page déjà enregistrée : sinon, une adresse qui change (ex. une application qui se publie désormais
+    // seule) reste figée dans l'ancienne mise en page et casse le lien pour tout le monde, sans que personne ne le
+    // remarque avant qu'un visiteur tombe sur une page 404 (incident du 26/11/2026 : AutoCAD, CathIA, Cartes IGN).
+    // Le nom, la description, la section, l'ordre, le masquage et le rôle restent les choix de l'administrateur.
+    out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) { x.admin = o.admin; x.url = o.url; x.icone = o.icone; x.local = o.local; } });
     d.apps.forEach(a => {
       if (out.apps.some(x => x.id === a.id)) return;
       const ds = d.sections.find(s => s.id === a.section);
