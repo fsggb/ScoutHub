@@ -121,7 +121,9 @@
         return;
       }
       const burger = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.burger, ariaLabel: "Menu" });
-      burger.onclick = () => Hub.ouvrirTiroir(user, Hub._actif);
+      // Ordinateur (rail visible) : ☰ étend/réduit le rail en place (réduit le contenu, ne le recouvre pas).
+      // Téléphone (pas de rail) : ☰ ouvre le tiroir par-dessus la page, comme avant.
+      burger.onclick = () => { if (window.matchMedia("(min-width:880px)").matches) Hub.toggleRail(); else Hub.ouvrirTiroir(user, Hub._actif); };
       const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
       refresh.onclick = () => location.reload();
       const sp = document.createElement("span"); sp.className = "tb-spacer";
@@ -155,20 +157,30 @@
       document.body.append(fond, tiroir);
     },
 
-    // Barre latérale réduite (ordinateur) : icônes seules, toute la liste (Hub.navItems) ; cliquer sur ☰ ouvre le
-    // tiroir pour voir les libellés. Barre du bas (téléphone) : seulement les 4 onglets, avec leur libellé affiché.
+    // Barre latérale (ordinateur) : icônes seules par défaut, toute la liste (Hub.navItems). Cliquer sur ☰ l'étend
+    // en place (icônes + libellés, cf. toggleRail) : ça réduit le contenu, ça ne l'ouvre pas en tiroir par-dessus
+    // — reprend le fonctionnement du vrai « ACCES CHEFS ». Barre du bas (téléphone) : seulement les 4 onglets.
     renderRail(user, actif) {
       document.querySelectorAll(".rail").forEach(n => n.remove());
       if (!user) return;
-      const nav = document.createElement("nav"); nav.className = "rail"; nav.setAttribute("aria-label", "Navigation");
+      const nav = document.createElement("nav");
+      nav.className = "rail" + (Hub._railEtendu ? " etendu" : ""); nav.setAttribute("aria-label", "Navigation");
       Hub.navItems(user).forEach(it => {
         const el = it.href ? Object.assign(document.createElement("a"), { href: it.href }) : Object.assign(document.createElement("button"), { type: "button" });
-        el.className = "rail-item" + (it.id === actif ? " actif" : ""); el.innerHTML = it.icon;
+        el.className = "rail-item" + (it.id === actif ? " actif" : ""); el.innerHTML = it.icon + "<span>" + it.label + "</span>";
         el.title = it.label; el.setAttribute("aria-label", it.label);
         if (it.onClick) el.onclick = it.onClick;
         nav.append(el);
       });
       document.body.append(nav);
+    },
+
+    // État étendu/réduit du rail : conservé d'une page à l'autre (site multi-pages, pas une appli monopage).
+    _railEtendu: (() => { try { return sessionStorage.getItem("scouthub.railEtendu") === "1"; } catch { return false; } })(),
+    toggleRail() {
+      Hub._railEtendu = !Hub._railEtendu;
+      try { sessionStorage.setItem("scouthub.railEtendu", Hub._railEtendu ? "1" : "0"); } catch {}
+      const rail = document.querySelector(".rail"); if (rail) rail.classList.toggle("etendu", Hub._railEtendu);
     },
 
     // Barre du bas à 4 onglets (reprend la structure de l'ancien intranet : Accueil, Documentation, Inscriptions, Outils).

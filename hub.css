@@ -159,15 +159,23 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tiroir-lien.actif{color:var(--navy);font-weight:600}.tiroir-lien.actif svg{color:var(--navy)}
 
 /* Barre latérale (ordinateur) : icônes seules, fond clair ; seul le bandeau du haut reste navy (comme l'ancien
-   intranet : rail blanc à gauche, pas de barre du bas). */
+   intranet : rail blanc à gauche, pas de barre du bas). Le bandeau du haut (.topbar) reste pleine largeur dans
+   tous les cas : seul le contenu (<main>) se décale/se réduit selon la largeur du rail, jamais l'en-tête — sinon
+   un angle de l'en-tête n'est plus couvert. Cliquer sur ☰ étend le rail en place (icônes + libellés, comme
+   « ACCES CHEFS ») : ça réduit le contenu, ça ne le recouvre pas d'un tiroir par-dessus. */
 .rail{display:none}
 @media(min-width:880px){
   .bottom-tabs{display:none}
   body:has(.bottom-tabs){padding-bottom:0}
-  .rail{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;top:68px;left:0;bottom:0;width:58px;padding-top:10px;background:#fff;border-right:1px solid #e7e4dc;z-index:15;overflow-y:auto}
-  body:has(.rail){padding-left:58px}
+  .rail{display:flex;flex-direction:column;align-items:stretch;gap:2px;position:fixed;top:68px;left:0;bottom:0;width:58px;padding:10px 8px;background:#fff;border-right:1px solid #e7e4dc;z-index:15;overflow-x:hidden;overflow-y:auto;transition:width .15s}
+  .rail.etendu{width:240px}
+  body:has(.rail) main{padding-left:58px;transition:padding-left .15s}
+  body:has(.rail.etendu) main{padding-left:240px}
 }
-.rail-item{display:grid;place-items:center;width:42px;height:42px;flex:none;border:0;border-radius:10px;background:none;color:#6a6c79;cursor:pointer;text-decoration:none}
+.rail-item{display:flex;align-items:center;gap:12px;width:100%;height:42px;padding:0 10px;flex:none;border:0;border-radius:10px;background:none;color:#6a6c79;cursor:pointer;text-decoration:none;white-space:nowrap}
+.rail-item svg{flex:none}
+.rail-item span{display:none;font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.rail.etendu .rail-item span{display:inline}
 .rail-item:hover{background:#f6f4ee;color:var(--navy)}
 .rail-item.actif{color:var(--navy);background:#eceafb}
 .tiroir-pied{margin-top:auto;display:flex;align-items:center;gap:10px;padding:16px 18px;border-top:1px solid #e7e4dc;font-size:13px;color:var(--text-secondary);word-break:break-all}
