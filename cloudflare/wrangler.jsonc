@@ -19,11 +19,10 @@
   "secrets_store_secrets": [
     { "binding": "ANTHROPIC_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "ANTHROPIC_KEY" },
     { "binding": "IGN_SCAN25_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "IGN_SCAN25_KEY" },
-    { "binding": "GITHUB_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GITHUB_KEY" }
-    // GMAIL_SA_KEY (identité : code et lien magique par e-mail) volontairement absent tant que le vrai compte de
-    // service Google n'existe pas (cloudflare/MIGRATION.md) : Cloudflare refuse de déployer un binding vers un
-    // secret qui n'existe pas encore. Une fois le secret créé, ajouter cette ligne puis « npx wrangler deploy » :
-    // , { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
+    { "binding": "GITHUB_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GITHUB_KEY" },
+    // Compte de service Google « Intranet general » (intranet-general-serveur@intranet-general.iam.gserviceaccount.com,
+    // délégation à l'échelle du domaine autorisée le 26/11/2026, portées gmail.send et drive) : code et lien magique par e-mail.
+    { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
   ],
   "vars": {
     "ORIGINES": "https://fsggb.github.io",
@@ -36,9 +35,12 @@
     "NEURONS_JOUR": "10000",
     "TURN_KEY_ID": "29924b06b96b9c981e6d91e7eaf53265",
     // ---- Identité et sessions (rupture avec Apps Script, voir cloudflare/MIGRATION.md) ----
-    "GOOGLE_CLIENT_ID": "",
+    // Identifiant public (pas un secret) de la connexion Google actuelle (déjà dans config.js côté navigateur).
+    "GOOGLE_CLIENT_ID": "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com",
     "GOOGLE_DOMAINE": "fsggb.fr",
-    "GMAIL_SENDER": "no-reply@fsggb.fr",
+    // Provisoire : no-reply@fsggb.fr n'existe pas encore comme boîte/alias du domaine (Google a refusé
+    // l'envoi, « Invalid email or User ID »). À remettre sur no-reply@fsggb.fr une fois l'alias créé.
+    "GMAIL_SENDER": "service-informatique@fsggb.fr",
     "ADMIN_EMAIL": "jb.combet@fsggb.fr",
     "ADMIN_GOOGLE": "service-informatique@fsggb.fr",
     "SESSION_JOURS": "14",
