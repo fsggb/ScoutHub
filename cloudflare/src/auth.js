@@ -35,11 +35,11 @@ async function getUser(env, email) {
 async function saveUser(env, email, base) {
   const role = adminProtege(env, email) ? "admin" : normRole(base.role);
   await env.DB.prepare(
-    "INSERT INTO users (email, role, name, google, created) VALUES (?1, ?2, ?3, ?4, ?5) " +
-    "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google"
-  ).bind(email, role, base.name || "", base.google ? 1 : 0, base.created || Date.now()).run();
+    "INSERT INTO users (email, role, name, google, picture, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6) " +
+    "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google, picture = excluded.picture"
+  ).bind(email, role, base.name || "", base.google ? 1 : 0, base.picture || "", base.created || Date.now()).run();
 }
-function publicUser(u) { return { email: u.email, role: normRole(u.role), name: u.name || "", google: !!u.google, groupe_id: u.groupe_id || null, unite_id: u.unite_id || null }; }
+function publicUser(u) { return { email: u.email, role: normRole(u.role), name: u.name || "", google: !!u.google, picture: u.picture || "", groupe_id: u.groupe_id || null, unite_id: u.unite_id || null }; }
 async function portee(env, email) { return (await env.DB.prepare("SELECT groupe_id, unite_id FROM portees WHERE email = ?1").bind(email).first()) || { groupe_id: null, unite_id: null }; }
 
 // ---------- portée d'un compte : quel groupe/quelle unité voit-il (préparation des futures données sensibles) ----------
@@ -87,10 +87,11 @@ async function requireAdmin(env, token) {
   return email;
 }
 // Ouvre le compte au premier passage (adresse déjà prouvée par Google ou par le code) puis ouvre une session.
-async function provisionner(env, email, nom, google) {
+async function provisionner(env, email, nom, google, photo) {
   const u = await getUser(env, email);
-  if (!u) await saveUser(env, email, { role: "adherent", created: Date.now(), name: nom || "", google: !!google });
-  else if ((google && !u.google) || (!u.name && nom)) await saveUser(env, email, { role: u.role, created: u.created, name: u.name || nom || "", google: !!u.google || !!google });
+  if (!u) await saveUser(env, email, { role: "adherent", created: Date.now(), name: nom || "", google: !!google, picture: photo || "" });
+  else if ((google && !u.google) || (!u.name && nom) || (photo && photo !== u.picture))
+    await saveUser(env, email, { role: u.role, created: u.created, name: u.name || nom || "", google: !!u.google || !!google, picture: photo || u.picture || "" });
   return nouvelleSession(env, email);
 }
 
@@ -192,7 +193,8 @@ export async function authRoute(req, env, url, json, erreur) {
       const info = await verifyGoogle(env, r.credential);
       const email = cleanEmail(info.email);
       if (!estFsggb(env, email) || String(info.hd || "").toLowerCase() !== (env.GOOGLE_DOMAINE || "fsggb.fr")) throw new Erreur("La connexion est réservée aux adresses @" + (env.GOOGLE_DOMAINE || "fsggb.fr") + ".");
-      const token = await provisionner(env, email, info.name, true);
+      const photo = /^https:\/\/[^\s"<>]{1,500}$/.test(String(info.picture || "")) ? info.picture : "";
+      const token = await provisionner(env, email, info.name, true, photo);
       return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
     }
     if (url.pathname === "/auth/code/demander") {

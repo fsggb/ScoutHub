@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'membre',
   name TEXT NOT NULL DEFAULT '',
   google INTEGER NOT NULL DEFAULT 0,      -- 1 si déjà prouvé par Google au moins une fois
+  picture TEXT NOT NULL DEFAULT '',       -- photo de compte Google (URL), jamais pour un compte prouvé par code e-mail
   created INTEGER NOT NULL
 );
 
