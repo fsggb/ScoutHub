@@ -139,8 +139,10 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .app-tile .hidden-flag{top:-9px;right:10px;box-shadow:0 0 0 2px var(--bg,#fafafc)}
 @media(max-width:640px){.topnav .nav-link:first-child{display:none}.stat span{font-size:10.5px;letter-spacing:.02em}.stat b{font-size:22px}}
 
-/* En-tête façon ancien intranet (☰, logo, titre, recherche/actualiser) et tiroir latéral */
-.topbar{gap:4px;padding:0 10px}
+/* En-tête façon ancien intranet (☰, logo, titre, recherche/actualiser) et tiroir latéral.
+   Comme sur le vrai « ACCES CHEFS » : l'en-tête et la navigation (onglets du bas, rail d'ordinateur) restent
+   toujours visibles, c'est le contenu qui défile en dessous. */
+.topbar{gap:4px;padding:0 10px;position:sticky;top:0;z-index:25}
 .tb-logo{width:28px;height:28px;object-fit:contain;flex:none}
 .tb-titre{margin:0;color:#fff;font-size:17px;font-weight:600;font-family:system-ui,-apple-system,Segoe UI,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tb-spacer{flex:1}
@@ -156,18 +158,18 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tiroir-lien:hover{background:#f6f4ee}
 .tiroir-lien.actif{color:var(--navy);font-weight:600}.tiroir-lien.actif svg{color:var(--navy)}
 
-/* Barre latérale (ordinateur) : icônes seules ; la barre du bas (téléphone) passe alors en barre latérale.
-   Reprend la disposition de l'ancien intranet sur grand écran (rail à gauche, pas de barre du bas). */
+/* Barre latérale (ordinateur) : icônes seules, fond clair ; seul le bandeau du haut reste navy (comme l'ancien
+   intranet : rail blanc à gauche, pas de barre du bas). */
 .rail{display:none}
 @media(min-width:880px){
   .bottom-tabs{display:none}
   body:has(.bottom-tabs){padding-bottom:0}
-  .rail{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;top:68px;left:0;bottom:0;width:58px;padding-top:10px;background:var(--navy);z-index:15;overflow-y:auto}
+  .rail{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;top:68px;left:0;bottom:0;width:58px;padding-top:10px;background:#fff;border-right:1px solid #e7e4dc;z-index:15;overflow-y:auto}
   body:has(.rail){padding-left:58px}
 }
-.rail-item{display:grid;place-items:center;width:42px;height:42px;flex:none;border:0;border-radius:10px;background:none;color:#b9bce3;cursor:pointer;text-decoration:none}
-.rail-item:hover{background:rgba(255,255,255,.14);color:#fff}
-.rail-item.actif{color:#fff;background:rgba(255,255,255,.16)}
+.rail-item{display:grid;place-items:center;width:42px;height:42px;flex:none;border:0;border-radius:10px;background:none;color:#6a6c79;cursor:pointer;text-decoration:none}
+.rail-item:hover{background:#f6f4ee;color:var(--navy)}
+.rail-item.actif{color:var(--navy);background:#eceafb}
 .tiroir-pied{margin-top:auto;display:flex;align-items:center;gap:10px;padding:16px 18px;border-top:1px solid #e7e4dc;font-size:13px;color:var(--text-secondary);word-break:break-all}
 .tiroir-pied .avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;flex:none}
 .bottom-tab svg{display:block;margin:0 auto}
