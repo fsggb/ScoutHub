@@ -79,33 +79,62 @@
       return Hub.user;
     },
 
-    // Construit la barre de navigation (page active en surbrillance).
-    renderBar(user) {
+    // Icônes (traits simples, génériques, dessinées pour ScoutHub — pas copiées d'une bibliothèque tierce).
+    ICONS: {
+      burger: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>',
+      recherche: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+      actualiser: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>',
+      accueil: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg>',
+      documentation: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 7c-1.8-1.3-4.2-2-7-2v13c2.8 0 5.2.7 7 2m0-13c1.8-1.3 4.2-2 7-2v13c-2.8 0-5.2.7-7 2m0-13v13"/></svg>',
+      inscriptions: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.6 1.8-2.4 3-2.4s2.4.8 3 2.4M15 10h4M15 14h4"/></svg>',
+      outils: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m14.7 6.3 3 3-7.4 7.4a2.1 2.1 0 0 1-3-3z"/><path d="M14.7 6.3 17 4l3 3-2.3 2.3M4 20l2.6-.8.8-2.6"/></svg>'
+    },
+
+    // En-tête façon ancien intranet : menu ☰ (tiroir), logo, titre de page, recherche, actualiser.
+    renderBar(user, titre) {
       const bar = $("bar"); if (!bar) return;
       bar.textContent = "";
-      const brand = Object.assign(document.createElement("a"), { className: "brand", href: "index.html" });
-      brand.setAttribute("aria-label", "Accueil ScoutHub");
-      brand.append(Object.assign(document.createElement("img"), { className: "brand-logo", src: "assets/fsggb.png", alt: "FSGGB", width: 40, height: 40 }),
-        Object.assign(document.createElement("strong"), { textContent: "ScoutHub" }));
-      bar.append(brand);
       if (!user) {
-        const nav = Object.assign(document.createElement("nav"), { className: "topnav" });
+        bar.append(Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
+          Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: titre || "ScoutHub" }));
         const q = new URLSearchParams(location.search);
-        if (!(Hub.here() === "index.html" && (q.has("connexion") || q.has("next")))) nav.append(Object.assign(document.createElement("a"), { className: "nav-btn", href: "index.html?connexion=1", textContent: "Se connecter" }));
-        bar.append(nav); return;
+        if (!(Hub.here() === "index.html" && (q.has("connexion") || q.has("next")))) {
+          const sp = document.createElement("span"); sp.className = "tb-spacer"; bar.append(sp);
+          bar.append(Object.assign(document.createElement("a"), { className: "nav-btn", href: "index.html?connexion=1", textContent: "Se connecter" }));
+        }
+        return;
       }
-      const nav = Object.assign(document.createElement("nav"), { className: "topnav" });
-      const link = (label, href) => {
-        const a = Object.assign(document.createElement("a"), { className: "nav-link", href, textContent: label });
-        if (Hub.here() === href) a.setAttribute("aria-current", "page");
-        nav.append(a);
-      };
-      link("Mon compte", "compte.html");
-      if (user.role === "admin") link("Administration", "admin.html");
-      const out = Object.assign(document.createElement("button"), { className: "nav-btn", type: "button", textContent: "Déconnexion" });
-      out.onclick = () => Hub.logout();
-      nav.append(Object.assign(document.createElement("span"), { className: "who", textContent: user.email }), out);
-      bar.append(nav);
+      const burger = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.burger, ariaLabel: "Menu" });
+      burger.onclick = () => Hub.ouvrirTiroir(user);
+      const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
+      refresh.onclick = () => location.reload();
+      const sp = document.createElement("span"); sp.className = "tb-spacer";
+      bar.append(burger,
+        Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
+        Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: titre || "ScoutHub" }),
+        sp, refresh);
+    },
+
+    // Tiroir (menu ☰) : compte, administration, déconnexion — reprend la structure « ACCES CHEFS » de l'ancien intranet.
+    ouvrirTiroir(user) {
+      document.querySelectorAll(".tiroir,.tiroir-fond").forEach(n => n.remove());
+      const fond = Object.assign(document.createElement("div"), { className: "tiroir-fond" });
+      const tiroir = document.createElement("nav"); tiroir.className = "tiroir"; tiroir.setAttribute("aria-label", "Menu");
+      const fermer = () => { fond.remove(); tiroir.remove(); };
+      fond.onclick = fermer;
+      const entete = document.createElement("div"); entete.className = "tiroir-entete";
+      entete.append(Object.assign(document.createElement("img"), { src: "assets/fsggb.png", alt: "" }), Object.assign(document.createElement("strong"), { textContent: "ScoutHub" }));
+      const lien = (label, href) => Object.assign(document.createElement("a"), { className: "tiroir-lien", href, textContent: label });
+      const items = [lien("Mon compte", "compte.html")];
+      if (user.role === "admin") items.push(lien("Administration", "admin.html"));
+      const deco = Object.assign(document.createElement("button"), { type: "button", className: "tiroir-lien", textContent: "Se déconnecter" });
+      deco.onclick = () => Hub.logout();
+      items.push(deco);
+      const pied = document.createElement("div"); pied.className = "tiroir-pied";
+      const lettre = (user.name || user.email).charAt(0).toUpperCase();
+      pied.append(Object.assign(document.createElement("span"), { className: "avatar", textContent: lettre }), Object.assign(document.createElement("span"), { textContent: user.email }));
+      tiroir.append(entete, ...items, pied);
+      document.body.append(fond, tiroir);
     },
 
     // Barre du bas à 4 onglets (reprend la structure de l'ancien intranet : Accueil, Documentation, Inscriptions, Outils).
@@ -115,7 +144,8 @@
       const nav = document.createElement("nav");
       nav.className = "bottom-tabs"; nav.setAttribute("aria-label", "Sections de ScoutHub");
       Hub.TABS.forEach(([id, label, href]) => {
-        const a = Object.assign(document.createElement("a"), { className: "bottom-tab" + (id === actif ? " actif" : ""), href, textContent: label });
+        const a = document.createElement("a"); a.className = "bottom-tab" + (id === actif ? " actif" : ""); a.href = href;
+        a.innerHTML = Hub.ICONS[id] + "<span>" + label + "</span>";
         if (id === actif) a.setAttribute("aria-current", "page");
         nav.append(a);
       });

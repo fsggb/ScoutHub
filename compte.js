@@ -1,10 +1,10 @@
 (async () => {
   "use strict";
   const { $, say } = Hub;
-  { const connu = Hub.cachedUser(); if (connu) Hub.renderBar(connu); }      // barre affichée tout de suite, sans attendre le serveur
+  { const connu = Hub.cachedUser(); if (connu) Hub.renderBar(connu, "Mon compte"); }      // barre affichée tout de suite, sans attendre le serveur
   Hub.renderTabs();
   const user = await Hub.requireUser(); if (!user) return;
-  Hub.renderBar(user);
+  Hub.renderBar(user, "Mon compte");
   $("c-email").textContent = user.email;
   $("c-role").textContent = Hub.ROLE_LABELS[Hub.normRole(user.role)] || "Adhérent";
   $("logout").onclick = () => Hub.logout();

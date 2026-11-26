@@ -120,11 +120,16 @@ body:has(.bottom-tabs){padding-bottom:58px}
 .bottom-tab:hover{color:#fff}
 
 /* Tableau de bord de l'accueil et pages Documentation/Inscriptions (structure reprise de l'ancien intranet) */
+/* Tuiles « photo » (fond plein, étiquette en surimpression en bas à gauche) : même composition que l'ancien
+   intranet. Fond en dégradé tant qu'aucune vraie photo n'est fournie (voir conversation du 26/11/2026). */
 .dash-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin:18px 0}
-.dash-card{display:flex;flex-direction:column;gap:4px;padding:22px 20px;background:#fff;border:1px solid #e7e4dc;border-radius:12px;box-shadow:0 1px 3px rgba(0,7,97,.08);color:var(--text);text-decoration:none;transition:transform .15s,box-shadow .15s}
+.dash-card{position:relative;display:flex;align-items:flex-end;min-height:140px;padding:0;border:0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,7,97,.08);color:var(--text);text-decoration:none;transition:transform .15s,box-shadow .15s;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-soft) 55%,var(--gold-dark) 150%)}
+.dash-cards>*:nth-child(3n+2){background:linear-gradient(135deg,var(--navy-soft) 0%,var(--navy) 60%,#4a3a14 150%)}
+.dash-cards>*:nth-child(3n+3){background:linear-gradient(135deg,#1e2472 0%,#000761 55%,var(--gold-text) 160%)}
 a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.14)}
-.dash-card strong{color:var(--navy);font-size:17px}.dash-card span{color:#6a6c79;font-size:13.5px}
-.dash-card.a-venir{opacity:.65;border-style:dashed}
+.dash-card .tile-label{display:flex;flex-direction:column;gap:2px;margin:12px;padding:8px 12px;max-width:calc(100% - 24px);background:rgba(255,255,255,.9);border-radius:8px}
+.dash-card strong{color:var(--navy);font-size:15px;line-height:1.25}.dash-card .desc{color:#4e505d;font-size:12px}
+.dash-card.a-venir{opacity:.7}.dash-card.a-venir .tile-label{background:rgba(255,255,255,.72)}
 .app-tile:focus-visible,.nav-link:focus-visible,.nav-btn:focus-visible,.ghost:focus-visible,.primary:focus-visible,.text-button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .pt-actions{align-items:center}.pt-actions .primary{margin:0}#pt-status{margin:0 0 12px}
 .pt-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}.pt-app small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6a6c79}
@@ -133,3 +138,21 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .stack .muted{margin:0 0 12px}.code-links .text-button:disabled{color:#6a6c79}
 .app-tile .hidden-flag{top:-9px;right:10px;box-shadow:0 0 0 2px var(--bg,#fafafc)}
 @media(max-width:640px){.topnav .nav-link:first-child{display:none}.stat span{font-size:10.5px;letter-spacing:.02em}.stat b{font-size:22px}}
+
+/* En-tête façon ancien intranet (☰, logo, titre, recherche/actualiser) et tiroir latéral */
+.topbar{gap:4px;padding:0 10px}
+.tb-logo{width:28px;height:28px;object-fit:contain;flex:none}
+.tb-titre{margin:0;color:#fff;font-size:17px;font-weight:600;font-family:system-ui,-apple-system,Segoe UI,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-spacer{flex:1}
+.tb-icon{display:grid;place-items:center;width:38px;height:38px;flex:none;border:0;border-radius:50%;background:none;color:#d9dbf0;cursor:pointer;padding:0}
+.tb-icon:hover{background:rgba(255,255,255,.14);color:#fff}
+.tiroir-fond{position:fixed;inset:0;background:rgba(0,7,97,.35);z-index:29}
+.tiroir{position:fixed;top:0;left:0;bottom:0;width:min(300px,82vw);background:#fff;z-index:30;display:flex;flex-direction:column;box-shadow:4px 0 24px rgba(0,7,97,.25);overflow-y:auto;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+.tiroir-entete{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid #e7e4dc}
+.tiroir-entete img{width:34px;height:34px;object-fit:contain}
+.tiroir-entete strong{color:var(--navy);font-size:17px}
+.tiroir-lien{display:block;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid #efece4;background:none;color:var(--text);font:inherit;font-size:15px;cursor:pointer;text-decoration:none}
+.tiroir-lien:hover{background:#f6f4ee}
+.tiroir-pied{margin-top:auto;display:flex;align-items:center;gap:10px;padding:16px 18px;border-top:1px solid #e7e4dc;font-size:13px;color:var(--text-secondary);word-break:break-all}
+.tiroir-pied .avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;flex:none}
+.bottom-tab svg{display:block;margin:0 auto}

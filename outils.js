@@ -59,7 +59,7 @@
   $("search").addEventListener("input", renderApps);
 
   async function montrer() {
-    Hub.renderBar(Hub.user); Hub.renderTabs("outils");
+    Hub.renderBar(Hub.user, "Outils"); Hub.renderTabs("outils");
     const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
     $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "Vos applications";
     $("guest-note").hidden = !!Hub.user;

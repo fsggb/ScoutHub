@@ -82,7 +82,7 @@
       const id = window.SCOUTHUB_GOOGLE_CLIENT_ID || "(aucun)";
       $("g-diag").hidden = false; $("g-diag").textContent = "Diagnostic Google — identifiant : " + id + " · origine du site : " + location.origin + " (à déclarer dans « Origines JavaScript autorisées »)";
     }
-    Hub.renderBar(null);
+    Hub.renderBar(null, "Connexion");
     $("home").hidden = true; $("auth").hidden = false;
     if (!window.SCOUTHUB_API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
     setTimeout(() => $("email").focus(), 0);
@@ -92,7 +92,7 @@
   // la structure (Accueil/Documentation/Inscriptions/Outils) reprend l'ancien intranet (Hub.renderTabs, common.js). ----------
   function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
-    Hub.renderBar(Hub.user); Hub.renderTabs("accueil");
+    Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil");
     // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
     const prenom = Hub.user.email.split("@")[0].split(/[._-]+/)[0];
     $("hello").textContent = "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1);

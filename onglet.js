@@ -3,8 +3,9 @@
 // ces pages demandent une connexion, comme l'accueil (index.html/app.js).
 (async () => {
   "use strict";
-  { const connu = Hub.cachedUser(); if (connu) Hub.renderBar(connu); }      // barre affichée tout de suite, sans attendre le serveur
+  const titre = document.querySelector("h1").textContent;
+  { const connu = Hub.cachedUser(); if (connu) Hub.renderBar(connu, titre); }      // barre affichée tout de suite, sans attendre le serveur
   Hub.renderTabs(document.body.dataset.onglet || "");
   const user = await Hub.requireUser(); if (!user) return;
-  Hub.renderBar(user);
+  Hub.renderBar(user, titre);
 })();
