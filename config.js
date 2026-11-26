@@ -1,7 +1,9 @@
 // Identifiant client OAuth « Application Web » du projet Google Cloud (identifiant PUBLIC, pas une clé secrète).
-// Tant qu'il est vide, le bouton « Continuer avec Google » reste masqué. Le même identifiant doit aussi être
-// enregistré dans la propriété de script GOOGLE_CLIENT_ID du serveur Apps Script (backend/Code.gs).
-window.SCOUTHUB_GOOGLE_CLIENT_ID = "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com";
+// Tant qu'il est vide, le bouton « Continuer avec Google » reste masqué.
+// Nouveau client « Intranet general - Web » (projet intranet-general) : doit correspondre au GOOGLE_CLIENT_ID du
+// Worker Cloudflare (cloudflare/wrangler.jsonc), qui vérifie le jeton. Site de test uniquement sur cette branche :
+// la production (main) garde encore l'ancien client, utilisé par Apps Script (backend/Code.gs), inchangé.
+window.SCOUTHUB_GOOGLE_CLIENT_ID = "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com";
 // ChatGDB : assistant IA de la fédération. « live: false » = interface seule, envoi désactivé.
 // Crédits (unité : 1 crédit ≈ une question courte). Limites glissantes façon Claude : une par session de 5 heures
 // et une par semaine. Les valeurs sont des points de départ à ajuster ; voir ChatGDB/docs/projet-chatgdb.md.
