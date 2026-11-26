@@ -114,24 +114,45 @@ function pem2binaire(pem) {
   return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 }
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-let memoJetonGmail = { t: 0, v: "" };
-async function jetonGmail(env) {
-  if (memoJetonGmail.v && Date.now() < memoJetonGmail.t) return memoJetonGmail.v;
+// Jeton générique (compte de service, délégation à l'échelle du domaine) : un memo par couple (scope, compte
+// usurpé) — Gmail (gmail.send, GMAIL_SENDER) et lecture Sheets/Drive (spreadsheets.readonly ou drive.readonly,
+// n'importe quel compte @fsggb.fr qui a accès au fichier visé) partagent la même clé GMAIL_SA_KEY.
+const memosJetonGoogle = new Map();
+async function jetonGoogle(env, scope, sub) {
+  const cleMemo = scope + "|" + sub;
+  const m = memosJetonGoogle.get(cleMemo);
+  if (m && Date.now() < m.t) return m.v;
   const cle = env.GMAIL_SA_KEY && typeof env.GMAIL_SA_KEY.get === "function" ? await env.GMAIL_SA_KEY.get() : env.GMAIL_SA_KEY;
-  if (!cle) throw new Erreur("Envoi du code indisponible : secret GMAIL_SA_KEY absent du serveur.", 503);
+  if (!cle) throw new Erreur("Compte de service indisponible : secret GMAIL_SA_KEY absent du serveur.", 503);
   const sa = JSON.parse(cle);
   const maintenant = Math.floor(Date.now() / 1000);
   const entete = { alg: "RS256", typ: "JWT" };
-  const charge = { iss: sa.client_email, sub: env.GMAIL_SENDER, scope: "https://www.googleapis.com/auth/gmail.send", aud: "https://oauth2.googleapis.com/token", iat: maintenant, exp: maintenant + 3600 };
+  const charge = { iss: sa.client_email, sub, scope, aud: "https://oauth2.googleapis.com/token", iat: maintenant, exp: maintenant + 3600 };
   const base = b64url(enc.encode(JSON.stringify(entete))) + "." + b64url(enc.encode(JSON.stringify(charge)));
   const clePrivee = await crypto.subtle.importKey("pkcs8", pem2binaire(sa.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", clePrivee, enc.encode(base));
   const jwt = base + "." + b64url(signature);
   const res = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "grant_type=" + encodeURIComponent("urn:ietf:params:oauth:grant-type:jwt-bearer") + "&assertion=" + jwt });
   const j = await res.json();
-  if (!res.ok || !j.access_token) throw new Erreur("Compte de service Google refusé : " + (j.error_description || j.error || res.status), 502);
-  memoJetonGmail = { t: Date.now() + (j.expires_in - 120) * 1000, v: j.access_token };
+  if (!res.ok || !j.access_token) throw new Erreur("Compte de service Google refusé (" + scope + ") : " + (j.error_description || j.error || res.status), 502);
+  memosJetonGoogle.set(cleMemo, { t: Date.now() + (j.expires_in - 120) * 1000, v: j.access_token });
   return j.access_token;
+}
+const jetonGmail = env => jetonGoogle(env, "https://www.googleapis.com/auth/gmail.send", env.GMAIL_SENDER);
+
+// ---------- lecture de la feuille « base de données » (Outils, etc.) : compte de service, pas le compte
+// personnel de l'administrateur — la délégation à l'échelle du domaine doit inclure le droit
+// spreadsheets.readonly (en plus de gmail.send et drive déjà en place) dans la console d'administration Google
+// Workspace (Sécurité > Contrôles des API > Délégation à l'échelle du domaine), pour le client du compte de
+// service. SHEET_ID : identifiant de la feuille (dans son URL, après /d/) ; SHEET_SUB : compte @fsggb.fr usurpé
+// pour la lecture (doit avoir accès à la feuille).
+const SHEET_ID = "1e5aqzBPsl4wOs4anjAeKeSPzRDm_dbRuPXLyIqzYQDU";
+async function lireFeuille(env, sub, plage) {
+  const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/spreadsheets.readonly", sub);
+  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + SHEET_ID + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
+  const j = await res.json();
+  if (!res.ok) throw new Erreur("Lecture de la feuille refusée : " + (j.error?.message || res.status), 502);
+  return j.values || [];
 }
 async function envoyerMail(env, destinataire, sujet, corps) {
   const message = ["From: ScoutHub FSGGB <" + env.GMAIL_SENDER + ">", "To: " + destinataire, "Subject: =?utf-8?B?" + btoa(unescape(encodeURIComponent(sujet))) + "?=", "Content-Type: text/plain; charset=utf-8", "", corps].join("\r\n");
@@ -252,6 +273,16 @@ export async function authRoute(req, env, url, json, erreur) {
       const r = await req.json().catch(() => ({}));
       if (r.token) await env.DB.prepare("DELETE FROM sessions WHERE hash = ?1").bind(await sha256(String(r.token))).run();
       return json(200, { ok: true });
+    }
+    // Métadonnées des outils (nom/description/image/lien/visibilité) lues dans la feuille « base de données »
+    // fournie par l'administrateur, via le compte de service (pas le compte personnel d'un administrateur) : lecture
+    // publique, les données elles-mêmes (liste des outils) ne sont pas sensibles. SHEET_SUB est provisoire : à
+    // ajuster si le compte usurpé n'a pas accès à la feuille (voir le commentaire au-dessus de lireFeuille).
+    if (url.pathname === "/auth/outils") {
+      const SHEET_SUB = "jb.combet@fsggb.fr";
+      const lignes = await lireFeuille(env, SHEET_SUB, "Outils!A2:E20");
+      const outils = lignes.filter(l => l[0]).map(l => ({ nom: l[0] || "", desc: l[1] || "", image: l[2] || "", lien: l[3] || "", visibilite: l[4] || "" }));
+      return json(200, { ok: true, outils });
     }
     if (url.pathname === "/auth/admin/list") {
       await requireAdmin(env, (await req.json().catch(() => ({}))).token);
