@@ -92,7 +92,7 @@
   // la structure (Accueil/Documentation/Inscriptions/Outils) reprend l'ancien intranet (Hub.renderTabs, common.js). ----------
   function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
-    Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil");
+    Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil", Hub.user);
     // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
     const prenom = Hub.user.email.split("@")[0].split(/[._-]+/)[0];
     $("hello").textContent = "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1);

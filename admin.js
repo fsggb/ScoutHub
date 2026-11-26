@@ -1,10 +1,9 @@
 (async () => {
   "use strict";
   const { $, say } = Hub;
-  { const connu = Hub.cachedUser(); if (connu) Hub.renderBar(connu, "Administration"); }      // barre affichée tout de suite, sans attendre le serveur
-  Hub.renderTabs();
+  { const connu = Hub.cachedUser(); if (connu) { Hub.renderBar(connu, "Administration"); Hub.renderTabs("administration", connu); } }      // affichage tout de suite, sans attendre le serveur
   const user = await Hub.requireUser({ admin: true }); if (!user) return;
-  Hub.renderBar(user, "Administration");
+  Hub.renderBar(user, "Administration"); Hub.renderTabs("administration", user);
   let users = [], target = null;
   const date = t => t ? new Date(t).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 

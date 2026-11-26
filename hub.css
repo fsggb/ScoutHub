@@ -151,8 +151,23 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tiroir-entete{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid #e7e4dc}
 .tiroir-entete img{width:34px;height:34px;object-fit:contain}
 .tiroir-entete strong{color:var(--navy);font-size:17px}
-.tiroir-lien{display:block;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid #efece4;background:none;color:var(--text);font:inherit;font-size:15px;cursor:pointer;text-decoration:none}
+.tiroir-lien{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid #efece4;background:none;color:var(--text);font:inherit;font-size:15px;cursor:pointer;text-decoration:none}
+.tiroir-lien svg{flex:none;color:#6a6c79}
 .tiroir-lien:hover{background:#f6f4ee}
+.tiroir-lien.actif{color:var(--navy);font-weight:600}.tiroir-lien.actif svg{color:var(--navy)}
+
+/* Barre latérale (ordinateur) : icônes seules ; la barre du bas (téléphone) passe alors en barre latérale.
+   Reprend la disposition de l'ancien intranet sur grand écran (rail à gauche, pas de barre du bas). */
+.rail{display:none}
+@media(min-width:880px){
+  .bottom-tabs{display:none}
+  body:has(.bottom-tabs){padding-bottom:0}
+  .rail{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;top:68px;left:0;bottom:0;width:58px;padding-top:10px;background:var(--navy);z-index:15;overflow-y:auto}
+  body:has(.rail){padding-left:58px}
+}
+.rail-item{display:grid;place-items:center;width:42px;height:42px;flex:none;border:0;border-radius:10px;background:none;color:#b9bce3;cursor:pointer;text-decoration:none}
+.rail-item:hover{background:rgba(255,255,255,.14);color:#fff}
+.rail-item.actif{color:#fff;background:rgba(255,255,255,.16)}
 .tiroir-pied{margin-top:auto;display:flex;align-items:center;gap:10px;padding:16px 18px;border-top:1px solid #e7e4dc;font-size:13px;color:var(--text-secondary);word-break:break-all}
 .tiroir-pied .avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;flex:none}
 .bottom-tab svg{display:block;margin:0 auto}

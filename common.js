@@ -87,7 +87,22 @@
       accueil: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg>',
       documentation: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 7c-1.8-1.3-4.2-2-7-2v13c2.8 0 5.2.7 7 2m0-13c1.8-1.3 4.2-2 7-2v13c-2.8 0-5.2.7-7 2m0-13v13"/></svg>',
       inscriptions: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.6 1.8-2.4 3-2.4s2.4.8 3 2.4M15 10h4M15 14h4"/></svg>',
-      outils: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m14.7 6.3 3 3-7.4 7.4a2.1 2.1 0 0 1-3-3z"/><path d="M14.7 6.3 17 4l3 3-2.3 2.3M4 20l2.6-.8.8-2.6"/></svg>'
+      outils: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m14.7 6.3 3 3-7.4 7.4a2.1 2.1 0 0 1-3-3z"/><path d="M14.7 6.3 17 4l3 3-2.3 2.3M4 20l2.6-.8.8-2.6"/></svg>',
+      compte: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+      reglages: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.5-2-3.4-2.4.6a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.3 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-.6-2 3.4L6.6 11a7.7 7.7 0 0 0 0 2l-2 1.5 2 3.4 2.4-.6a7.6 7.6 0 0 0 1.7 1L9 21h4l.3-2.6a7.6 7.6 0 0 0 1.7-1l2.4.6 2-3.4z"/></svg>',
+      administration: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg>',
+      deconnexion: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>'
+    },
+
+    // Liste unique des entrées de navigation (barre du bas + tiroir + barre latérale ordinateur) : les 4 onglets
+    // puis Mon compte/Réglages/Administration/Déconnexion — reprend la structure « ACCES CHEFS » de l'ancien intranet.
+    navItems(user) {
+      const items = Hub.TABS.map(([id, label, href]) => ({ id, label, href, icon: Hub.ICONS[id] }));
+      items.push({ id: "compte", label: "Mon compte", href: "compte.html", icon: Hub.ICONS.compte });
+      items.push({ id: "reglages", label: "Réglages (mes applications)", href: "compte.html#mes-applications", icon: Hub.ICONS.reglages });
+      if (user.role === "admin") items.push({ id: "administration", label: "Administration", href: "admin.html", icon: Hub.ICONS.administration });
+      items.push({ id: "deconnexion", label: "Se déconnecter", onClick: () => Hub.logout(), icon: Hub.ICONS.deconnexion });
+      return items;
     },
 
     // En-tête façon ancien intranet : menu ☰ (tiroir), logo, titre de page, recherche, actualiser.
@@ -105,7 +120,7 @@
         return;
       }
       const burger = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.burger, ariaLabel: "Menu" });
-      burger.onclick = () => Hub.ouvrirTiroir(user);
+      burger.onclick = () => Hub.ouvrirTiroir(user, Hub._actif);
       const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
       refresh.onclick = () => location.reload();
       const sp = document.createElement("span"); sp.className = "tb-spacer";
@@ -115,8 +130,10 @@
         sp, refresh);
     },
 
-    // Tiroir (menu ☰) : compte, administration, déconnexion — reprend la structure « ACCES CHEFS » de l'ancien intranet.
-    ouvrirTiroir(user) {
+    // Tiroir (menu ☰) : la liste complète (Hub.navItems), avec libellés — reprend le menu « ACCES CHEFS » de
+    // l'ancien intranet. Sur téléphone, il s'ouvre par-dessus la page ; sur ordinateur, c'est la seule façon de
+    // voir le libellé de chaque icône de la barre latérale (celle-ci reste réduite aux icônes seules).
+    ouvrirTiroir(user, actif) {
       document.querySelectorAll(".tiroir,.tiroir-fond").forEach(n => n.remove());
       const fond = Object.assign(document.createElement("div"), { className: "tiroir-fond" });
       const tiroir = document.createElement("nav"); tiroir.className = "tiroir"; tiroir.setAttribute("aria-label", "Menu");
@@ -124,23 +141,42 @@
       fond.onclick = fermer;
       const entete = document.createElement("div"); entete.className = "tiroir-entete";
       entete.append(Object.assign(document.createElement("img"), { src: "assets/fsggb.png", alt: "" }), Object.assign(document.createElement("strong"), { textContent: "ScoutHub" }));
-      const lien = (label, href) => Object.assign(document.createElement("a"), { className: "tiroir-lien", href, textContent: label });
-      const items = [lien("Mon compte", "compte.html")];
-      if (user.role === "admin") items.push(lien("Administration", "admin.html"));
-      const deco = Object.assign(document.createElement("button"), { type: "button", className: "tiroir-lien", textContent: "Se déconnecter" });
-      deco.onclick = () => Hub.logout();
-      items.push(deco);
+      const els = Hub.navItems(user).map(it => {
+        const el = it.href ? Object.assign(document.createElement("a"), { href: it.href }) : Object.assign(document.createElement("button"), { type: "button" });
+        el.className = "tiroir-lien" + (it.id === actif ? " actif" : ""); el.innerHTML = it.icon + "<span>" + it.label + "</span>";
+        if (it.onClick) el.onclick = it.onClick; else el.addEventListener("click", fermer);
+        return el;
+      });
       const pied = document.createElement("div"); pied.className = "tiroir-pied";
       const lettre = (user.name || user.email).charAt(0).toUpperCase();
       pied.append(Object.assign(document.createElement("span"), { className: "avatar", textContent: lettre }), Object.assign(document.createElement("span"), { textContent: user.email }));
-      tiroir.append(entete, ...items, pied);
+      tiroir.append(entete, ...els, pied);
       document.body.append(fond, tiroir);
     },
 
+    // Barre latérale réduite (ordinateur) : icônes seules, toute la liste (Hub.navItems) ; cliquer sur ☰ ouvre le
+    // tiroir pour voir les libellés. Barre du bas (téléphone) : seulement les 4 onglets, avec leur libellé affiché.
+    renderRail(user, actif) {
+      document.querySelectorAll(".rail").forEach(n => n.remove());
+      if (!user) return;
+      const nav = document.createElement("nav"); nav.className = "rail"; nav.setAttribute("aria-label", "Navigation");
+      Hub.navItems(user).forEach(it => {
+        const el = it.href ? Object.assign(document.createElement("a"), { href: it.href }) : Object.assign(document.createElement("button"), { type: "button" });
+        el.className = "rail-item" + (it.id === actif ? " actif" : ""); el.innerHTML = it.icon;
+        el.title = it.label; el.setAttribute("aria-label", it.label);
+        if (it.onClick) el.onclick = it.onClick;
+        nav.append(el);
+      });
+      document.body.append(nav);
+    },
+
     // Barre du bas à 4 onglets (reprend la structure de l'ancien intranet : Accueil, Documentation, Inscriptions, Outils).
-    // « actif » est l'un de ces 4 noms, ou rien (pages hors de ces 4 sections, ex. Mon compte/Administration).
+    // « actif » est l'un de ces 4 noms, ou un des autres identifiants de Hub.navItems (compte/reglages/administration),
+    // ou rien. « user » : nécessaire pour construire la barre latérale ordinateur (absente si personne n'est connecté).
     TABS: [["accueil", "Accueil", "index.html"], ["documentation", "Documentation", "documentation.html"], ["inscriptions", "Inscriptions", "inscriptions.html"], ["outils", "Outils", "outils.html"]],
-    renderTabs(actif) {
+    renderTabs(actif, user) {
+      Hub._actif = actif;
+      document.querySelectorAll(".bottom-tabs").forEach(n => n.remove());
       const nav = document.createElement("nav");
       nav.className = "bottom-tabs"; nav.setAttribute("aria-label", "Sections de ScoutHub");
       Hub.TABS.forEach(([id, label, href]) => {
@@ -150,6 +186,7 @@
         nav.append(a);
       });
       document.body.append(nav);
+      Hub.renderRail(user, actif);
     }
   };
 })();

@@ -268,15 +268,23 @@ export async function authRoute(req, env, url, json, erreur) {
       const r = await req.json().catch(() => ({}));
       await requireAdmin(env, r.token);
       const id = slug(r.nom); if (!id) throw new Erreur("Nom de groupe invalide.");
-      await env.DB.prepare("INSERT INTO groupes (id, nom) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET nom = excluded.nom").bind(id, String(r.nom).slice(0, 100)).run();
+      const nom = String(r.nom).slice(0, 100);
+      // Deux noms proches (« A B » et « a-b ») donnent le même identifiant : sans ce contrôle, créer le second
+      // renommerait silencieusement le premier groupe (ON CONFLICT ci-dessous), en perdant son vrai nom.
+      const existant = await env.DB.prepare("SELECT nom FROM groupes WHERE id = ?1").bind(id).first();
+      if (existant && existant.nom !== nom) throw new Erreur("Un autre groupe (« " + existant.nom + " ») correspond déjà à cet identifiant : choisissez un nom moins proche.");
+      await env.DB.prepare("INSERT INTO groupes (id, nom) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET nom = excluded.nom").bind(id, nom).run();
       return json(200, { ok: true, id });
     }
     if (url.pathname === "/auth/admin/unite/creer") {
       const r = await req.json().catch(() => ({}));
       await requireAdmin(env, r.token);
       const groupeId = String(r.groupe_id || ""); if (!(await env.DB.prepare("SELECT 1 FROM groupes WHERE id = ?1").bind(groupeId).first())) throw new Erreur("Groupe inconnu.");
-      const id = groupeId + "-" + slug(r.nom); if (!slug(r.nom)) throw new Erreur("Nom d'unité invalide.");
-      await env.DB.prepare("INSERT INTO unites (id, groupe_id, nom) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET nom = excluded.nom").bind(id, groupeId, String(r.nom).slice(0, 100)).run();
+      if (!slug(r.nom)) throw new Erreur("Nom d'unité invalide.");
+      const id = groupeId + "-" + slug(r.nom), nom = String(r.nom).slice(0, 100);
+      const existante = await env.DB.prepare("SELECT nom FROM unites WHERE id = ?1").bind(id).first();
+      if (existante && existante.nom !== nom) throw new Erreur("Une autre unité (« " + existante.nom + " ») correspond déjà à cet identifiant : choisissez un nom moins proche.");
+      await env.DB.prepare("INSERT INTO unites (id, groupe_id, nom) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET nom = excluded.nom").bind(id, groupeId, nom).run();
       return json(200, { ok: true, id });
     }
     if (url.pathname === "/auth/admin/scope") {
