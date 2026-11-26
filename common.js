@@ -15,6 +15,10 @@
   // l'ancien nom sont traités comme « adherent » ci-dessous (normRole), indépendamment de la mise à jour du serveur.
   const ROLE_LABELS = { adherent: "Adhérent", parent: "Parent", chef_unite: "Chef d’unité", chef_groupe: "Chef de groupe", equipe_nationale: "Équipe nationale", admin: "Administrateur" };
   const ROLE_ORDER = ["adherent", "parent", "chef_unite", "chef_groupe", "equipe_nationale", "admin"];
+  // Mention à côté du logo (fixe, ne change pas d'une page à l'autre — reprend « ACCES CHEFS » de l'ancien
+  // intranet) : le rôle décide, pas le type de compte. « parent » = accès famille ; les rôles d'encadrement =
+  // accès chefs ; le reste (compte Google ou e-mail @fsggb.fr sans rôle particulier) = accès membre.
+  const ACCES_LABELS = { adherent: "ACCÈS MEMBRE", parent: "ACCÈS FAMILLE", chef_unite: "ACCÈS CHEFS", chef_groupe: "ACCÈS CHEFS", equipe_nationale: "ACCÈS CHEFS", admin: "ACCÈS CHEFS" };
   const normRole = r => (!r || r === "membre" || r === "user" ? "adherent" : (ROLE_ORDER.includes(r) ? r : "adherent"));
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
@@ -27,7 +31,7 @@
   const toggleMasquePerso = id => { const l = mesMasquees(), i = l.indexOf(id); if (i >= 0) l.splice(i, 1); else l.push(id); try { localStorage.setItem(PERSO_KEY, JSON.stringify(l)); } catch {} };
 
   const Hub = window.Hub = {
-    $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER,
+    $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER, ACCES_LABELS,
     // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir ChatGDB/docs/projet-chatgdb.md).
     can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(normRole(user.role)) >= ROLE_ORDER.indexOf(normRole(min))), cachedUser, cacheUser, normRole,
     mesMasquees, masquePerso, toggleMasquePerso,
@@ -127,10 +131,15 @@
       const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
       refresh.onclick = () => location.reload();
       const sp = document.createElement("span"); sp.className = "tb-spacer";
+      // Photo de profil (cliquable, façon Google) : la vraie photo du compte Google si on l'a (connexion Google,
+      // lue dans le jeton), sinon le rond avec l'initiale comme avant. Ouvre « Mon compte ».
+      const avatar = document.createElement("a"); avatar.className = "tb-avatar"; avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
+      if (user.picture) avatar.append(Object.assign(document.createElement("img"), { src: user.picture, alt: "" }));
+      else avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
-        Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: titre || "ScoutHub" }),
-        sp, refresh);
+        Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
+        sp, refresh, avatar);
     },
 
     // Tiroir (menu ☰) : la liste complète (Hub.navItems), avec libellés — reprend le menu « ACCES CHEFS » de
@@ -151,8 +160,10 @@
         return el;
       });
       const pied = document.createElement("div"); pied.className = "tiroir-pied";
-      const lettre = (user.name || user.email).charAt(0).toUpperCase();
-      pied.append(Object.assign(document.createElement("span"), { className: "avatar", textContent: lettre }), Object.assign(document.createElement("span"), { textContent: user.email }));
+      const avatar = document.createElement("span"); avatar.className = "avatar";
+      if (user.picture) avatar.append(Object.assign(document.createElement("img"), { src: user.picture, alt: "" }));
+      else avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
+      pied.append(avatar, Object.assign(document.createElement("span"), { textContent: user.email }));
       tiroir.append(entete, ...els, pied);
       document.body.append(fond, tiroir);
     },
