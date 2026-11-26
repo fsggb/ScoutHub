@@ -25,7 +25,10 @@
     { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
   ],
   "vars": {
-    "ORIGINES": "https://fsggb.github.io",
+    // scouthub-vrai-test.fsggb.workers.dev : site de test (voir cloudflare/README ou la conversation) — à retirer
+    // une fois la migration validée et le vrai portail basculé dessus. Retiré par erreur le 26/11 lors d'un
+    // déploiement depuis une branche qui ne l'avait pas encore ; remis ici pour que ça ne se reproduise plus.
+    "ORIGINES": "https://fsggb.github.io,https://scouthub-vrai-test.fsggb.workers.dev",
     "ANTHROPIC_WORKSPACE_ID": "wrkspc_0119AE1DuVBLZoxQXQhqT3rB",
     "IGN_COUCHE": "GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR",
     "CREDITS_FENETRE": "30",
