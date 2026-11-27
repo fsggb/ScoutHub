@@ -41,9 +41,11 @@
   function goNext() {
     let next = new URLSearchParams(location.search).get("next");
     if (next && /^[\w\-\/.?=&%]+$/.test(next) && !next.startsWith("//") && !/^[a-z]+:/i.test(next)) {
-      // « /ChatGDB/ » envoyé par une application : adresse relative au portail, pas à la racine du site
-      const root = new URL(Hub.root).pathname;
-      if (next.startsWith("/") && !next.startsWith(root)) next = root + next.slice(1);
+      // Sans « / » de tête : relatif au portail (ex. « compte.html », envoyé par Hub.toLogin() pour une page de
+      // ScoutHub lui-même). Avec un « / » de tête : adresse absolue réelle d'une autre application de la fédération
+      // (ex. « /ScoutMap/index.html », « /ChatGDB/ ») — CathIA, ScoutMap, ChatGDB, ScoutCraft/ScoutCAD/ScoutDraft se
+      // publient chacune seules sur leur propre adresse de haut niveau depuis la migration (apps.txt) : ne plus la
+      // réécrire comme un sous-dossier du portail, ça n'existe plus (corrige un retour cassé vers ces applications).
       location.replace(next); return true;
     }
     return false;
