@@ -17,7 +17,7 @@
     // Applications qui peuvent recevoir un code d'échange (paramètre « aud ») : une valeur par application, à
     // ajouter ici (et redéployer) pour brancher une nouvelle application. Les Apps Script prendront un nom court
     // (ex. « boutique »), fixé identique des deux côtés.
-    "APPS_AUTORISEES": "fsggb.github.io,intranet.fsggb.workers.dev",
+    "APPS_AUTORISEES": "fsggb.github.io,intranet.fsggb.workers.dev,boutique,gestion-unite,comptabilite,annuaire,agenda",
     "GOOGLE_CLIENT_ID": "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com",
     "GOOGLE_DOMAINE": "fsggb.fr",
     "GMAIL_SENDER": "service-informatique@fsggb.fr",

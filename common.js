@@ -49,7 +49,7 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
       const chemin = Hub.IDENTITE[action];

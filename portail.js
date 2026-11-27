@@ -18,7 +18,7 @@
     (window.SCOUTHUB_APPS || []).forEach(a => {
       let s = sections.find(x => x.titre === a.group);
       if (!s) sections.push(s = { id: slug(a.group), titre: a.group, haut: TOP.includes(a.group) });
-      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, role: safeRole(a.role) ? (a.role || "") : "", local: !!a.local, admin: !!a.admin });
+      apps.push({ id: slug(a.name), section: s.id, nom: a.name, desc: a.desc || "", url: a.url, icone: a.icon, crop: !!a.crop, featured: !!a.featured, masque: false, protege: !!a.protege, role: safeRole(a.role) ? (a.role || "") : "", local: !!a.local, sso: typeof a.sso === "string" ? a.sso : "", admin: !!a.admin });
     });
     return { v: 1, sections, apps };
   }
@@ -30,7 +30,7 @@
     // seule) reste figée dans l'ancienne mise en page et casse le lien pour tout le monde, sans que personne ne le
     // remarque avant qu'un visiteur tombe sur une page 404 (incident du 26/11/2026 : AutoCAD, CathIA, Cartes IGN).
     // Le nom, la description, la section, l'ordre, le masquage et le rôle restent les choix de l'administrateur.
-    out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) { x.admin = o.admin; x.url = o.url; x.icone = o.icone; x.local = o.local; } });
+    out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) { x.admin = o.admin; x.url = o.url; x.icone = o.icone; x.local = o.local; x.sso = o.sso; } });
     d.apps.forEach(a => {
       if (out.apps.some(x => x.id === a.id)) return;
       const ds = d.sections.find(s => s.id === a.section);

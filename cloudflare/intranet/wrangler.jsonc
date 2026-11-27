@@ -1,7 +1,16 @@
 {
-  // Site de test intranet.fsggb.workers.dev : instantané du portail (src/files.json, généré par construire.mjs)
-  // servi par un Worker ; le reste est relayé vers la production. Aucune liaison.
+  // Intranet de la fédération : intranet.fsggb.workers.dev. Déploiement : node construire.mjs && npx wrangler deploy
+  // Portail (instantané src/files.json) servi UNIQUEMENT aux personnes connectées ; identité via le Worker « auth ».
   "name": "intranet",
   "main": "src/index.js",
-  "compatibility_date": "2026-10-01"
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "services": [{ "binding": "AUTH", "service": "auth" }],
+  "vars": {
+    "SELF_ORIGIN": "https://intranet.fsggb.workers.dev",
+    "GOOGLE_CLIENT_ID": "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com",
+    "SESSION_JOURS": "14",
+    // Applications extérieures branchées sur la connexion unifiée : identifiant (= « aud » de auth/wrangler.jsonc) → adresse de base.
+    "APPS_EXTERNES": "{}"
+  }
 }

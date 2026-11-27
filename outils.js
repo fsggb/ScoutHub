@@ -11,7 +11,16 @@
     if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
     // La boutique : la personne connectée à ScoutHub y arrive connectée (code à usage unique, jamais la session).
     let hote = ""; try { hote = new URL(a.url, location.href).host; } catch {}
-    if (hote === "boutique.fsggb.fr") link.addEventListener("click", ev => {
+    // Application extérieure branchée sur la connexion unifiée (propriété « sso » de config.js = identifiant dans
+    // APPS_AUTORISEES) : code à usage unique (60 s) ajouté à l'adresse, que l'application échange auprès de auth.fsggb.workers.dev.
+    if (a.sso) link.addEventListener("click", ev => {
+      if (!store.get()) return;
+      ev.preventDefault();
+      const w = a.local ? null : window.open("about:blank", "_blank");
+      const aller = u => { if (w) w.location.href = u; else location.href = u; };
+      Hub.call("echange", { aud: a.sso }).then(o => { const u = new URL(a.url); u.searchParams.set("code", o.code); u.searchParams.set("aud", a.sso); aller(u.href); }).catch(() => aller(a.url));
+    });
+    else if (hote === "boutique.fsggb.fr") link.addEventListener("click", ev => {
       if (!store.get() || !window.SCOUTHUB_API) return;
       ev.preventDefault();
       const w = window.open("about:blank", "_blank");
