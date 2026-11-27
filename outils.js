@@ -36,9 +36,10 @@
     return link;
   }
 
+  let recherche = "";
   function renderApps() {
     const plat = t => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();      // « creation » trouve « Création »
-    const q = plat($("search").value.trim()), box = $("apps"); box.textContent = "";
+    const q = plat(recherche.trim()), box = $("apps"); box.textContent = "";
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
@@ -56,12 +57,15 @@
     });
     $("none").hidden = shown.length > 0;
   }
-  $("search").addEventListener("input", renderApps);
-  // Recherche lancée depuis l'en-tête (n'importe quelle page, Hub.rechercherOutil) : ?q=... pré-remplit la recherche.
-  { const q = new URLSearchParams(location.search).get("q"); if (q) $("search").value = q; }
+  // Recherche : champ de l'en-tête (toujours visible, Hub.renderBar), pas un champ propre à cette page.
+  Hub.onSearch = v => { recherche = v; renderApps(); };
+  // Recherche lancée depuis l'en-tête d'une autre page (?q=... pré-remplit la recherche, et le champ de l'en-tête
+  // reprend la valeur après son premier rendu, une fois Hub.renderBar appelé dans montrer() ci-dessous).
+  { const q = new URLSearchParams(location.search).get("q"); if (q) recherche = q; }
 
   async function montrer() {
     Hub.renderBar(Hub.user, "Outils"); Hub.renderTabs("outils", Hub.user);
+    if (recherche) Hub.setSearchValue(recherche);
     const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
     $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "Vos applications";
     $("guest-note").hidden = !!Hub.user;

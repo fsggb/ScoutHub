@@ -128,20 +128,20 @@
       // Ordinateur (rail visible) : ☰ étend/réduit le rail en place (réduit le contenu, ne le recouvre pas).
       // Téléphone (pas de rail) : ☰ ouvre le tiroir par-dessus la page, comme avant.
       burger.onclick = () => { if (window.matchMedia("(min-width:880px)").matches) Hub.toggleRail(); else Hub.ouvrirTiroir(user, Hub._actif); };
-      // Recherche (n'importe quelle page) : l'icône ouvre un champ qui envoie vers Outils, dont la recherche se
-      // pré-remplit (outils.js lit ?q=...). Pas de redondance avec le champ d'Outils lui-même : il reste masqué là.
-      const search = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.recherche, ariaLabel: "Rechercher une application" });
-      const champ = Object.assign(document.createElement("input"), { type: "search", className: "tb-search", placeholder: "Rechercher une application…" });
-      champ.hidden = true;
-      search.onclick = () => {
-        champ.hidden = !champ.hidden;
-        if (!champ.hidden) champ.focus(); else champ.value = "";
-      };
-      champ.addEventListener("keydown", ev => { if (ev.key === "Escape") { champ.hidden = true; champ.value = ""; } });
+      // Recherche : champ toujours visible dans l'en-tête (pas une icône qui l'ouvre), comme « ACCES CHEFS »,
+      // avec un intitulé qui reprend le nom de la page (« Rechercher Outils », « Rechercher Inscriptions »…).
+      // Hub.onSearch, posé par la page elle-même (ex. outils.js), reçoit chaque frappe pour filtrer sur place ;
+      // sans ça (page sans recherche locale), Entrée envoie vers Outils avec la recherche pré-remplie.
+      const wrap = document.createElement("span"); wrap.className = "tb-search-wrap"; wrap.innerHTML = Hub.ICONS.recherche;
+      const champ = Object.assign(document.createElement("input"), { type: "search", className: "tb-search", placeholder: "Rechercher " + (titre || "une application"), autocomplete: "off" });
+      wrap.append(champ);
+      champ.addEventListener("input", () => { if (Hub.onSearch) Hub.onSearch(champ.value); });
       champ.addEventListener("change", () => {
+        if (Hub.onSearch) return;
         const v = champ.value.trim(); if (!v) return;
         location.href = "outils.html?q=" + encodeURIComponent(v);
       });
+      Hub._champRecherche = champ;
       const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
       refresh.onclick = () => location.reload();
       const sp = document.createElement("span"); sp.className = "tb-spacer";
@@ -153,8 +153,12 @@
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
         Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
-        champ, sp, search, refresh, avatar);
+        wrap, sp, refresh, avatar);
     },
+
+    // Valeur du champ de recherche de l'en-tête (ex. en arrivant sur outils.html?q=...) : Hub.onSearch n'est posé
+    // qu'après coup par la page, donc on met à jour le champ sans redéclencher onSearch (déjà fait par la page).
+    setSearchValue(v) { if (Hub._champRecherche) Hub._champRecherche.value = v; },
 
     // Tiroir (menu ☰) : la liste complète (Hub.navItems), avec libellés — reprend le menu « ACCES CHEFS » de
     // l'ancien intranet. Sur téléphone, il s'ouvre par-dessus la page ; sur ordinateur, c'est la seule façon de
@@ -166,18 +170,21 @@
       const fermer = () => { fond.remove(); tiroir.remove(); };
       fond.onclick = fermer;
       const entete = document.createElement("div"); entete.className = "tiroir-entete";
-      entete.append(Object.assign(document.createElement("img"), { src: "assets/fsggb.png", alt: "" }), Object.assign(document.createElement("strong"), { textContent: "ScoutHub" }));
+      // Même mention que l'en-tête (ACCES CHEFS / MEMBRE / FAMILLE), pas « ScoutHub » : reprend « ACCES CHEFS »
+      // en toutes lettres dans le tiroir de l'ancien intranet.
+      entete.append(Object.assign(document.createElement("img"), { src: "assets/fsggb.png", alt: "" }), Object.assign(document.createElement("strong"), { textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }));
       const els = Hub.navItems(user).map(it => {
         const el = it.href ? Object.assign(document.createElement("a"), { href: it.href }) : Object.assign(document.createElement("button"), { type: "button" });
         el.className = "tiroir-lien" + (it.id === actif ? " actif" : ""); el.innerHTML = it.icon + "<span>" + it.label + "</span>";
         if (it.onClick) el.onclick = it.onClick; else el.addEventListener("click", fermer);
         return el;
       });
-      const pied = document.createElement("div"); pied.className = "tiroir-pied";
+      const pied = document.createElement("a"); pied.className = "tiroir-pied"; pied.href = "compte.html";
       const avatar = document.createElement("span"); avatar.className = "avatar";
       if (user.picture) avatar.append(Object.assign(document.createElement("img"), { src: user.picture, alt: "" }));
       else avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
-      pied.append(avatar, Object.assign(document.createElement("span"), { textContent: user.email }));
+      const chevron = document.createElement("span"); chevron.className = "tiroir-pied-chevron"; chevron.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+      pied.append(avatar, Object.assign(document.createElement("span"), { className: "tiroir-pied-mail", textContent: user.email }), chevron);
       tiroir.append(entete, ...els, pied);
       document.body.append(fond, tiroir);
     },
