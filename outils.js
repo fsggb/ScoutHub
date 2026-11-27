@@ -72,8 +72,7 @@
   async function montrer() {
     Hub.renderBar(Hub.user, "Outils"); Hub.renderTabs("outils", Hub.user);
     if (recherche) Hub.setSearchValue(recherche);
-    const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
-    $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "Vos applications";
+    $("hello").textContent = Hub.user ? "Bonjour, " + Hub.prenom(Hub.user) : "Vos applications";
     $("guest-note").hidden = !!Hub.user;
     // Première visite (pas encore de mise en page en cache) : on attend la vraie mise en page du serveur avant de peindre,
     // pour éviter que les icônes ou l'organisation des sections changent juste après l'affichage (sinon il faut recharger pour que ça se stabilise).

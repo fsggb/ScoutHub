@@ -95,8 +95,7 @@
   function showHome() {    $("auth").hidden = true; $("home").hidden = false;
     Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil", Hub.user);
     // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
-    const prenom = Hub.user.email.split("@")[0].split(/[._-]+/)[0];
-    $("hello").textContent = "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1);
+    $("hello").textContent = "Bonjour, " + Hub.prenom(Hub.user);
   }
   function enter() { if (!goNext()) showHome(); }
 

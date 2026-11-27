@@ -40,6 +40,8 @@
     // u.fsggb absent (anciens jetons mis en cache avant ce champ) : traité comme membre, pas comme externe.
     estFederation: user => !!user && user.fsggb !== false,
     mesMasquees, masquePerso, toggleMasquePerso,
+    // Prénom pour l'accueil : le vrai prénom Google (user.name) si on l'a, sinon on le devine dans l'adresse.
+    prenom: user => { const n = (user && user.name || "").trim().split(/\s+/)[0] || (user && user.email || "").split("@")[0].split(/[._-]+/)[0] || ""; return n.charAt(0).toUpperCase() + n.slice(1); },
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",
 
