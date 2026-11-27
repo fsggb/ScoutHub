@@ -70,6 +70,7 @@
     },
 
     async logout() {
+      if (!confirm("Se déconnecter de ScoutHub ?")) return;
       try { if (store.get()) await Hub.call("logout"); } catch {}
       store.set(null); location.replace(ROOT.href + "index.html");
     },

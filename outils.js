@@ -36,14 +36,14 @@
     return link;
   }
 
-  let recherche = "";
+  let recherche = "", voirMasquees = false;
   function renderApps() {
     const plat = t => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();      // « creation » trouve « Création »
     const q = plat(recherche.trim()), box = $("apps"); box.textContent = "";
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin || voirMasquees) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";
@@ -56,7 +56,13 @@
       else { box.append(section); prevTop = false; }
     });
     $("none").hidden = shown.length > 0;
+    // Option pour revoir temporairement les applications masquées pour soi (sans les « remettre » une à une) :
+    // seulement utile si on en a masqué, et sans objet pour l'administrateur qui les voit déjà toutes.
+    const bouton = $("voir-masquees"), n = Hub.mesMasquees().length;
+    bouton.hidden = Portail.isAdmin || !n;
+    if (!bouton.hidden) bouton.textContent = voirMasquees ? "Ne plus afficher les applications masquées" : "Afficher les " + n + " application" + (n > 1 ? "s" : "") + " masquée" + (n > 1 ? "s" : "");
   }
+  $("voir-masquees").onclick = () => { voirMasquees = !voirMasquees; renderApps(); };
   // Recherche : champ de l'en-tête (toujours visible, Hub.renderBar), pas un champ propre à cette page.
   Hub.onSearch = v => { recherche = v; renderApps(); };
   // Recherche lancée depuis l'en-tête d'une autre page (?q=... pré-remplit la recherche, et le champ de l'en-tête

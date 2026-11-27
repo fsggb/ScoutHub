@@ -23,6 +23,14 @@ window.SCOUTHUB_AUTH_API = "https://scouthub.fsggb.workers.dev";
 (() => {
 const O = "https://fsggb.github.io/";
 window.SCOUTHUB_APPS = [
+  // Outils de l'ancien intranet (feuille « Outils » de la base de données), en premier : un seul grand lanceur
+  // d'applications, pas deux (ces outils vivent dans la même grille que Word/ChatGDB/etc., pas dans un bloc à
+  // part sur Outils).
+  { group: "Outils fédération", name: "Gestion unité", desc: "Gestion des unités (ancien outil)", url: "https://script.google.com/macros/s/AKfycbxq02CNzaauOXL7cBWeLvUhiIwHvPHp0pEP3cZY9Or-2ntWgZCVW1CHy5DYE85i6uPSFA/exec", icon: "assets/fsggb.png", protege: true },
+  { group: "Outils fédération", name: "Comptabilité", desc: "Comptabilité des groupes et unités (ancien outil)", url: "https://script.google.com/macros/s/AKfycbx59wWEfz2JDFIuGnwFuy66q4v-BG-QUS0ALgEpNlHCTz6Bv9nZumBzrFqupp1eOi0Q/exec", icon: "assets/fsggb.png", protege: true },
+  { group: "Outils fédération", name: "Procuration", desc: "Création de procurations (ancien outil)", url: "https://www.appsheet.com/start/815a5b07-74ee-4bf4-8d29-c0f8b467d79b?platform=desktop#appName=Cr%C3%A9ationdeprocurationsCA-327649315&vss=H4sIAAAAAAAAA6WOSwrCMBRFtyJ3nBVkqg5EFEFx0jhIm1cJtklpUrWELMh1uDFTP-hUHb77OIcTcNR0WntZHMCz8L7m1IMjCGz6hgS4wNga39pKgAksZf0YV3JPo8n1kndeICLu2EvhyYGHrw387wYGrch4XWpqB90AJ80TTe8BTMMHhshQd17mFd3LExZj2kpbdI7UNgX9FuJmZnpupFELq5K1lJWjeAMfVKIndAEAAA==&view=Page%20D%C3%A9but", icon: "assets/fsggb.png", protege: true },
+  { group: "Outils fédération", name: "Annuaire", desc: "Contacts des groupes et unités (ancien outil)", url: "https://script.google.com/macros/s/AKfycbya1brqCVAlR81m6yHi47QH6AuTkdDNaJQVsqoqh47F-Ue3XGDQHnt8cPZdvP6XvLaj/exec", icon: "assets/fsggb.png", protege: true },
+  { group: "Outils fédération", name: "Agenda", desc: "Agenda de la fédération (ancien outil, accès restreint)", url: "https://script.google.com/macros/s/AKfycbwDrNnYdOiF09HREH4GEnu9u5-mFYzDEb47OFzRXZJMWQi95H4SgL2ta5dICfKt-Qhe/exec", icon: "assets/fsggb.png", protege: true, admin: true },
   // ChatGDB se publie seul (son propre workflow) : url absolue vers https://fsggb.github.io/ChatGDB/, même domaine que
   // ScoutHub donc même connexion. « local » reste vrai : même origine, le partage du jeton fonctionne pareil.
   { group: "Assistant", featured: true, name: "ChatGDB", desc: "L’assistant IA de la fédération", url: O + "ChatGDB/", icon: "assets/icons/ChatGDB.png", protege: true, local: true },
@@ -52,12 +60,5 @@ window.SCOUTHUB_APPS = [
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png", local: true },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png", local: true },
   { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true },
-  // Outils de l'ancien intranet (feuille « Outils » de la base de données) : un seul grand lanceur d'applications,
-  // pas deux (ces outils vivent dans la même grille que Word/ChatGDB/etc., pas dans un bloc à part sur Outils).
-  { group: "Outils fédération", name: "Gestion unité", desc: "Gestion des unités (ancien outil)", url: "https://script.google.com/macros/s/AKfycbxq02CNzaauOXL7cBWeLvUhiIwHvPHp0pEP3cZY9Or-2ntWgZCVW1CHy5DYE85i6uPSFA/exec", icon: "assets/fsggb.png", protege: true },
-  { group: "Outils fédération", name: "Comptabilité", desc: "Comptabilité des groupes et unités (ancien outil)", url: "https://script.google.com/macros/s/AKfycbx59wWEfz2JDFIuGnwFuy66q4v-BG-QUS0ALgEpNlHCTz6Bv9nZumBzrFqupp1eOi0Q/exec", icon: "assets/fsggb.png", protege: true },
-  { group: "Outils fédération", name: "Procuration", desc: "Création de procurations (ancien outil)", url: "https://www.appsheet.com/start/815a5b07-74ee-4bf4-8d29-c0f8b467d79b?platform=desktop#appName=Cr%C3%A9ationdeprocurationsCA-327649315&vss=H4sIAAAAAAAAA6WOSwrCMBRFtyJ3nBVkqg5EFEFx0jhIm1cJtklpUrWELMh1uDFTP-hUHb77OIcTcNR0WntZHMCz8L7m1IMjCGz6hgS4wNga39pKgAksZf0YV3JPo8n1kndeICLu2EvhyYGHrw387wYGrch4XWpqB90AJ80TTe8BTMMHhshQd17mFd3LExZj2kpbdI7UNgX9FuJmZnpupFELq5K1lJWjeAMfVKIndAEAAA==&view=Page%20D%C3%A9but", icon: "assets/fsggb.png", protege: true },
-  { group: "Outils fédération", name: "Annuaire", desc: "Contacts des groupes et unités (ancien outil)", url: "https://script.google.com/macros/s/AKfycbya1brqCVAlR81m6yHi47QH6AuTkdDNaJQVsqoqh47F-Ue3XGDQHnt8cPZdvP6XvLaj/exec", icon: "assets/fsggb.png", protege: true },
-  { group: "Outils fédération", name: "Agenda", desc: "Agenda de la fédération (ancien outil, accès restreint)", url: "https://script.google.com/macros/s/AKfycbwDrNnYdOiF09HREH4GEnu9u5-mFYzDEb47OFzRXZJMWQi95H4SgL2ta5dICfKt-Qhe/exec", icon: "assets/fsggb.png", protege: true, admin: true },
 ];
 })();
