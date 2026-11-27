@@ -112,3 +112,16 @@ redéployer) ; le code est lié à son `aud` : un essai avec un autre `aud` le d
 
 **Pas encore fait** : bloquer l'accès aux pages dès le Worker (avant d'envoyer le HTML) pour ce que Cloudflare sert
 (`intranet.fsggb.workers.dev`) — impossible sur `fsggb.github.io` (zone GitHub). Bascule du client sur `auth.fsggb.workers.dev`.
+
+## Miroir sécurisé des feuilles Google (Worker `donnees`) — 27 novembre 2026
+
+`cloudflare/donnees/` (donnees.fsggb.workers.dev) : copie **en lecture seule** du classeur « intranet » (la feuille reste la
+source de vérité, les Apps Script y écrivent). Base D1 `scouthub-donnees` séparée, **juridiction UE**.
+- Chiffrement AES-256-GCM des colonnes sensibles (AAD = feuille|rang) ; **liste blanche** des colonnes en clair par feuille
+  (`feuilles.js`) : toute autre colonne, y compris une colonne ajoutée plus tard, est chiffrée. Clé : secret `CLE_DONNEES_1`
+  (rotation : nouveau secret `CLE_DONNEES_2`, `CLE_ACTIVE`=2 ; les lignes gardent leur `kid`). **Sans cette clé, les données sont perdues** :
+  copie hors ligne obligatoire chez l'administrateur.
+- Lecture déchiffrée : administrateur seulement, 100 lignes par appel, 2 000 lignes par heure, journal (`journal`) sans contenu.
+- Synchronisation chaque nuit (03 h 15 UTC) et sur demande (`/donnees/sync`), une feuille à la fois, remplacement atomique,
+  sautée si le contenu n'a pas changé. Lecture par l'identité du compte de service (feuille partagée avec lui en lecture seule).
+- Feuilles reprises : Mineurs, Majeurs, Cotisations, Camps, Groupes et unités, Compta.

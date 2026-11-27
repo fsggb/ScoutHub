@@ -127,8 +127,8 @@ const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(
 // usurpé) — Gmail (gmail.send, GMAIL_SENDER) et lecture Sheets/Drive (spreadsheets.readonly ou drive.readonly,
 // n'importe quel compte @fsggb.fr qui a accès au fichier visé) partagent la même clé GMAIL_SA_KEY.
 const memosJetonGoogle = new Map();
-async function jetonGoogle(env, scope, sub) {
-  const cleMemo = scope + "|" + sub;
+export async function jetonGoogle(env, scope, sub) {
+  const cleMemo = scope + "|" + (sub || "");
   const m = memosJetonGoogle.get(cleMemo);
   if (m && Date.now() < m.t) return m.v;
   const cle = env.GMAIL_SA_KEY && typeof env.GMAIL_SA_KEY.get === "function" ? await env.GMAIL_SA_KEY.get() : env.GMAIL_SA_KEY;
@@ -136,7 +136,7 @@ async function jetonGoogle(env, scope, sub) {
   const sa = JSON.parse(cle);
   const maintenant = Math.floor(Date.now() / 1000);
   const entete = { alg: "RS256", typ: "JWT" };
-  const charge = { iss: sa.client_email, sub, scope, aud: "https://oauth2.googleapis.com/token", iat: maintenant, exp: maintenant + 3600 };
+  const charge = { iss: sa.client_email, sub: sub || sa.client_email, scope, aud: "https://oauth2.googleapis.com/token", iat: maintenant, exp: maintenant + 3600 };
   const base = b64url(enc.encode(JSON.stringify(entete))) + "." + b64url(enc.encode(JSON.stringify(charge)));
   const clePrivee = await crypto.subtle.importKey("pkcs8", pem2binaire(sa.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", clePrivee, enc.encode(base));

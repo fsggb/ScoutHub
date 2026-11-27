@@ -1,0 +1,18 @@
+{
+  // Miroir sécurisé des feuilles Google : donnees.fsggb.workers.dev. Déploiement : cd cloudflare/donnees && npx wrangler deploy
+  // Secrets du Worker (jamais dans le dépôt) : CLE_DONNEES_1 = clé AES-256 en base64 (npx wrangler secret put CLE_DONNEES_1).
+  "name": "donnees",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["15 3 * * *"] },
+  "services": [{ "binding": "AUTH", "service": "auth" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "scouthub-donnees", "database_id": "b2ee1f16-e53f-4742-af9b-057d0995807e" }],
+  "secrets_store_secrets": [{ "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }],
+  "vars": {
+    "CLASSEUR_ID": "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs",
+    "CLE_ACTIVE": "1",
+    "SELF_ORIGIN": "https://fsggb.github.io",
+    "ORIGINES": "https://fsggb.github.io,https://intranet.fsggb.workers.dev"
+  }
+}
