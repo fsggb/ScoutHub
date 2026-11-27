@@ -59,7 +59,7 @@ async function driveListe(jeton, q) {
 }
 async function imageDrive(env, chemin, ctx) {
   const segs = chemin.split("/").filter(Boolean);
-  if (!env.DRIVE_IMAGES_ID || segs.length < 2 || segs.length > 5 || segs[0].toLowerCase() !== "images" || segs.some(x => x === "." || x === ".." || !/^[^\\<>:"|?*\u0000-\u001f]{1,120}$/.test(x))) return erreur(404, "Image inconnue.");
+  if (!env.DRIVE_IMAGES_ID || segs.length < 2 || segs.length > 5 || !(segs[0].toLowerCase() === "images" || (segs.length === 4 && segs.slice(0, 3).map(x => x.toLowerCase()).join("/") === "appsheet/acces_chef/tutos")) || segs.some(x => x === "." || x === ".." || !/^[^\\<>:"|?*\u0000-\u001f]{1,120}$/.test(x))) return erreur(404, "Image inconnue.");
   const cle = new Request("https://img.interne/" + encodeURIComponent(segs.join("/"))), cache = caches.default;
   const connue = await cache.match(cle); if (connue) return connue;
   try {
@@ -80,6 +80,23 @@ async function imageDrive(env, chemin, ctx) {
     ctx.waitUntil(cache.put(cle, rep.clone()));
     return rep;
   } catch { return erreur(502, "Image momentanément indisponible."); }
+}
+
+// Fichiers PDF (revues) : dossier « Revues_Files_ » uniquement, type PDF uniquement, 30 Mo au plus, lecture seule. Réservé aux chefs
+// (le contrôle de rôle est fait par l'appelant) ; jamais mémorisé dans le cache partagé.
+async function pdfDrive(env, chemin) {
+  const segs = chemin.split("/").filter(Boolean);
+  if (!env.DRIVE_IMAGES_ID || segs.length !== 2 || segs[0].toLowerCase() !== "revues_files_" || segs.some(x => x === "." || x === ".." || !/^[^\\<>:"|?*\u0000-\u001f]{1,160}$/.test(x))) return erreur(404, "Document inconnu.");
+  try {
+    const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/drive.readonly", "");
+    const d = (await driveListe(jeton, `'${echap(env.DRIVE_IMAGES_ID)}' in parents and name = '${echap(segs[0])}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`))[0];
+    if (!d) return erreur(404, "Document inconnu.");
+    const f = (await driveListe(jeton, `'${echap(d.id)}' in parents and name = '${echap(segs[1])}' and mimeType = 'application/pdf' and trashed = false`))[0];
+    if (!f || (+f.size || 0) > 3e7) return erreur(404, "Document inconnu.");
+    const r = await fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(f.id) + "?alt=media&supportsAllDrives=true", { headers: { authorization: "Bearer " + jeton } });
+    if (!r.ok) return erreur(404, "Document inconnu.");
+    return new Response(r.body, { headers: { "content-type": "application/pdf", "content-disposition": "inline", "cache-control": "private, max-age=600", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; plugin-types application/pdf", ...SECURITE } });
+  } catch { return erreur(502, "Document momentanément indisponible."); }
 }
 
 export default {
@@ -132,6 +149,11 @@ export default {
     }
 
     if (p.startsWith("/img/") && lecture) return imageDrive(env, p.slice(5), ctx);
+    if (p.startsWith("/fichier/") && lecture) {
+      const ROLES = ["adherent", "parent", "chef_unite", "chef_groupe", "equipe_nationale", "admin"];
+      if (s.user.fsggb === false || ROLES.indexOf(s.user.role) < ROLES.indexOf("chef_unite")) return erreur(403, "Document réservé aux chefs.");
+      return pdfDrive(env, p.slice(9));
+    }
 
     // ----- pages et fichiers -----
     if (!lecture) return erreur(405, "Méthode refusée.");
@@ -159,6 +181,7 @@ async function fichier(cle, prive, req) {
   const entetes = { "content-type": MIME[extOf(cle)] || "application/octet-stream", ...SECURITE };
   if (prive) entetes["cache-control"] = "private, no-store";
   else if (f.type === "b64") entetes["cache-control"] = "public, max-age=3600";   // images : changent rarement
+  else if (req && new URL(req.url).searchParams.has("v")) { entetes["cache-control"] = "public, max-age=31536000, immutable"; }   // adresse versionnée : le contenu ne change jamais
   else { entetes["cache-control"] = "no-cache"; entetes["etag"] = await etag(cle, f); if (req && req.headers.get("if-none-match") === entetes["etag"]) return new Response(null, { status: 304, headers: entetes }); }
   return new Response(req && req.method === "HEAD" ? null : (f.type === "b64" ? b64ToBytes(f.data) : f.data), { headers: entetes });
 }

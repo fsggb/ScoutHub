@@ -143,6 +143,19 @@ function audienceVisible(p, audience) {
     return false;
   });
 }
+// Rubriques de Documentation lues dans le classeur (feuille, colonnes, qui peut les lire). Le filtrage se fait ICI, côté serveur.
+//  min : rôle minimum (tout membre @fsggb.fr au-dessus de cette marche) ; portee : lignes limitées au groupe / à l'unité de la personne ;
+//  filtre : règle par ligne (colonne « Accès » : TOUS = chefs d'unité et plus, LIMITE = chefs de groupe et plus).
+const RUBRIQUES = {
+  "Bibliographie": { feuille: "Bibliographie", plage: "A2:E500", min: "chef_unite", cols: ["branches", "categorie", "titre", "auteur", "remarques"] },
+  "Administratif": { feuille: "Documentation", plage: "A2:H500", min: "chef_unite", cols: ["menu", "categorie", "titre", "lien", "etat", "camp", "acces", "remarques"],
+    filtre: (l, rang) => !!l[2] && (String(l[6] || "").toUpperCase() !== "LIMITE" || rang >= ROLES.indexOf("chef_groupe")), sortie: ["menu", "categorie", "titre", "lien", "remarques"] },
+  "Revues": { feuille: "Revues", plage: "A2:C1000", min: "chef_unite", cols: ["nom", "numero", "fichier"] },
+  "Tutos": { feuille: "Tutos", plage: "A2:F300", min: "chef_unite", cols: ["nom", "type", "lien", "video", "miniature", "description"] },
+  "Agenda Fédé": { feuille: "Agenda Fédé", plage: "A2:F500", min: "equipe_nationale", cols: ["tache", "mois", "type", "description", "personne", "faite"] },
+  "Lieux de camp": { feuille: "Lieux de camp", plage: "A2:L3000", min: "chef_unite", portee: true, cols: ["groupe", "unite", "annee", "region", "departement", "superficie", "feu", "bois", "eau", "frigos", "abris", "commentaire"] }
+};
+const lienHttps = v => /^https:\/\/[^\s"'<>\\]{4,1500}$/.test(String(v || "").trim()) ? String(v).trim() : "";
 async function requireAdmin(env, token) {
   const email = await sessionEmail(env, token);
   const u = await getUser(env, email);
@@ -486,6 +499,25 @@ export async function authRoute(req, env, url, json, erreur) {
       if (lot.length) await env.DB.batch(lot);
       return json(200, { ok: true, n: lot.length });
     }
+    // Contenu d'une rubrique de Documentation, DÉJÀ FILTRÉ selon la personne (rôle, groupe, unité). Simulation : admin seulement.
+    if (url.pathname === "/auth/rubrique") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      const email = r.comme ? cleanEmail(r.comme) : reel, def = RUBRIQUES[String(r.rubrique || "")];
+      if (!def) throw new Erreur("Rubrique inconnue.", 404);
+      const p = await profilVue(env, email), rang = ROLES.indexOf(p.role);
+      if (!p.membre || rang < ROLES.indexOf(def.min)) throw new Erreur("Cette rubrique ne vous est pas destinée.", 403);
+      const brut = await lireFeuille(env, "", "'" + def.feuille + "'!" + def.plage);
+      let portee = null; if (def.portee && p.role !== "admin" && rang < ROLES.indexOf("equipe_nationale")) { portee = await porteeDonnees(env, email); if (portee.acces === "aucun") throw new Erreur("Cette rubrique ne vous est pas destinée.", 403); }
+      const sortie = def.sortie || def.cols;
+      const lignes = brut.filter(l => l.some(c => String(c || "").trim())).filter(l => !def.filtre || def.filtre(l, rang)).filter(l => {
+        if (!portee || portee.acces === "tout") return true;
+        const g = slug(l[0]), u = slug(l[1]);   // « Lieux de camp » : Groupe, Unité en colonnes A et B
+        return g === portee.gk && (portee.acces === "groupe" || u === portee.uk);
+      }).map(l => { const o = {}; def.cols.forEach((c, i) => { if (sortie.includes(c)) o[c] = String(l[i] === undefined ? "" : l[i]).trim().slice(0, 4000); }); if (o.lien !== undefined) o.lien = lienHttps(o.lien); if (o.video !== undefined) o.video = lienHttps(o.video); return o; });
+      return json(200, { ok: true, rubrique: r.rubrique, colonnes: sortie, lignes, portee: portee ? portee.acces : "tout" });
+    }
     if (url.pathname === "/auth/entree/supprimer") {
       const r = await req.json().catch(() => ({}));
       await requireAdmin(env, r.token);
@@ -501,7 +533,8 @@ export async function authRoute(req, env, url, json, erreur) {
       const p = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
       const lignes = await lireFeuille(env, "", "Menu!A2:E100");
       const vis = v => { if (p.role === "admin") return true; const k = slug(v || "all") || "all"; return k === "all" ? p.membre : k === "equipe-nationale" ? p.membre && ROLES.indexOf(p.role) >= ROLES.indexOf("equipe_nationale") : false; };
-      return json(200, { ok: true, rubriques: lignes.filter(l => l[0] === rubrique && l[1] && vis(l[4])).map(l => ({ nom: String(l[1]).trim(), image: String(l[3] || "").trim().slice(0, 200) })) });
+      const lisible = nom => { const d = RUBRIQUES[nom]; return !d || p.role === "admin" || (p.membre && ROLES.indexOf(p.role) >= ROLES.indexOf(d.min)); };
+      return json(200, { ok: true, rubriques: lignes.filter(l => l[0] === rubrique && l[1] && vis(l[4]) && lisible(String(l[1]).trim())).map(l => ({ nom: String(l[1]).trim(), image: String(l[3] || "").trim().slice(0, 200) })) });
     }
     if (url.pathname === "/auth/admin/list") {
       await requireAdmin(env, (await req.json().catch(() => ({}))).token);

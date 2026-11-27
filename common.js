@@ -16,7 +16,7 @@
   const cachedUser = () => { try { if (simule()) return JSON.parse(sessionStorage.getItem(SIM_USER) || "null"); return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
   const cacheUser = u => { try { if (simule()) { u ? sessionStorage.setItem(SIM_USER, JSON.stringify(u)) : sessionStorage.removeItem(SIM_USER); return; } u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
   // Lectures qui acceptent « comme » (le serveur le refuse à tout autre que l'administrateur, et ne l'accepte jamais sur une écriture).
-  const LECTURES_COMME = new Set(["outils", "entrees", "menu"]);
+  const LECTURES_COMME = new Set(["outils", "entrees", "menu", "rubrique"]);
   // « adherent » remplace l'ancien « membre » (même rôle de base, nouveau nom) ; les comptes encore enregistrés sous
   // l'ancien nom sont traités comme « adherent » ci-dessous (normRole), indépendamment de la mise à jour du serveur.
   const ROLE_LABELS = { adherent: "Adhérent", parent: "Parent", chef_unite: "Chef d’unité", chef_groupe: "Chef de groupe", equipe_nationale: "Équipe nationale", admin: "Administrateur" };
@@ -77,7 +77,7 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", rubrique: "/auth/rubrique", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
       if (simule()) {

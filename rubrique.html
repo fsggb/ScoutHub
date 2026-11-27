@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <script>if (window.top !== window.self) document.documentElement.remove();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000761">
+  <meta name="robots" content="noindex">
+  <title>Documentation · ScoutHub</title>
+  <link rel="icon" type="image/png" href="assets/fsggb.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="hub.css">
+  <link rel="stylesheet" href="rubrique.css">
+</head>
+<body data-onglet="documentation">
+  <header class="topbar" id="bar"></header>
+  <main class="shell" id="main" hidden>
+    <div class="rb-titre"><h1 id="rb-h1">Documentation</h1><p class="muted" id="rb-sous"></p></div>
+    <div class="rb-outils" id="rb-outils">
+      <input id="rb-q" class="rb-recherche" type="search" placeholder="Chercher…" aria-label="Chercher dans cette rubrique" autocomplete="off">
+      <select id="rb-f1" aria-label="Filtre" hidden></select>
+      <select id="rb-f2" aria-label="Filtre" hidden></select>
+      <span id="rb-compte" class="rb-compte" role="status"></span>
+    </div>
+    <p class="rb-refus" id="rb-refus" role="status" hidden></p>
+    <div id="rb-contenu"></div>
+  </main>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="rubrique.js"></script>
+</body>
+</html>

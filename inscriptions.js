@@ -5,7 +5,8 @@
   // Ordre et libellés de l'ancien intranet (menu « Inscriptions »)
   const CARTES = [["Mineurs", "Mineurs"], ["Majeurs", "Majeurs"], ["Camps", "Camp"], ["Formulaires", "Formulaires d’inscription"], ["Cotisations", "Cotisations Mineurs"], ["Cotisations_Chefs", "Cotisations Majeurs"]];
   const user = await Hub.requireUser(); if (!user) return;
-  let moi = null, images = {};
+  const simule = () => (typeof Hub.simule === "function" ? Hub.simule() : "");
+  let moi = null, images = {}, cause = "";
   // Image de fond de la carte (Drive, servie par l'intranet) ; sans image ou hors intranet : le dégradé habituel.
   const fond = (carte, image) => {
     if (!image || !/^images\//i.test(image) || !window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET) return;
@@ -13,10 +14,11 @@
     im.onload = () => { carte.style.backgroundImage = "linear-gradient(180deg, rgba(0,7,97,.05) 30%, rgba(0,7,97,.78)), url(\"" + u + "\")"; carte.style.backgroundSize = "cover"; carte.style.backgroundPosition = "center"; carte.classList.add("avec-image"); };
     im.src = u;
   };
-  try { const r = await fetch(API + "/donnees/moi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: Hub.simule() || undefined }), cache: "no-store" }); moi = await r.json(); } catch {}
+  if (typeof Hub.simule !== "function") cause = "Votre navigateur utilise une ancienne version de la page : rechargez avec Ctrl + F5.";
+  try { const r = await fetch(API + "/donnees/moi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: simule() || undefined }), cache: "no-store" }); moi = await r.json(); if (!moi.ok) cause = (moi.error && moi.error.message) || "Erreur " + r.status; } catch (e) { cause = cause || "Serveur injoignable : vérifiez votre connexion."; }
   try { (await Hub.call("menu", { menu: "Inscriptions" })).rubriques.forEach(r => { images[r.nom.toLowerCase()] = r.image; }); } catch {}
   const zone = $("cartes"); zone.textContent = "";
-  if (!moi || !moi.ok) { $("ins-note").hidden = false; $("ins-note").textContent = "Les inscriptions sont momentanément indisponibles."; return; }
+  if (!moi || !moi.ok) { $("ins-note").hidden = false; $("ins-note").textContent = "Les inscriptions ne peuvent pas s’afficher : " + (cause || "réponse inattendue du serveur") + (/Session|expir/i.test(cause) ? " Reconnectez-vous." : ""); return; }
   const portee = moi.acces === "tout" ? "Tous les groupes" : moi.acces === "groupe" ? "Votre groupe" : moi.acces === "unite" ? "Votre unité" : "";
   const ok = new Set(moi.feuilles.map(f => f.nom));
   if (!ok.size) { $("ins-note").hidden = false; $("ins-note").textContent = "Aucune inscription ne vous concerne pour l’instant. Les chefs de groupe et d’unité y accèdent avec l’adresse enregistrée pour leur groupe ou leur unité."; }

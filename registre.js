@@ -17,7 +17,7 @@
   const norm = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   async function api(chemin, corps) {
-    let r; try { r = await fetch(API + chemin, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: Hub.simule() || undefined, feuille, ...corps }), cache: "no-store" }); } catch { throw new Error("Serveur injoignable."); }
+    let r; try { r = await fetch(API + chemin, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: (typeof Hub.simule === "function" ? Hub.simule() : "") || undefined, feuille, ...corps }), cache: "no-store" }); } catch { throw new Error("Serveur injoignable."); }
     let o; try { o = await r.json(); } catch { throw new Error("Réponse invalide du serveur."); }
     if (!o.ok) { if (r.status === 401) Hub.toLogin(); throw new Error(o.error && o.error.message || "Erreur."); }
     return o;

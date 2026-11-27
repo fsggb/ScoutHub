@@ -19,9 +19,11 @@
     if (admin) { try { g = await Entrees.groupesUnites(); } catch {} }
     zone.textContent = "";
     const parNom = new Map(ent.map(e => [norm(e.nom), e])), vus = new Set();
+    const DYNAMIQUES = new Set(["Bibliographie", "Administratif", "Revues", "Tutos", "Agenda Fédé", "Lieux de camp"]);
     const carte = (titre, e, image) => {
+      if (!e && DYNAMIQUES.has(titre)) e = { url: "rubrique.html?r=" + encodeURIComponent(titre), description: "Ouvrir", dyn: true };
       const c = document.createElement(e ? "a" : "div"); c.className = "dash-card" + (e ? "" : " a-venir");
-      if (e) { c.href = e.url; c.target = "_blank"; c.rel = "noopener noreferrer"; }
+      if (e) { c.href = e.url; if (!e.dyn) { c.target = "_blank"; c.rel = "noopener noreferrer"; } }
       const lib = document.createElement("span"); lib.className = "tile-label";
       lib.append(Object.assign(document.createElement("strong"), { textContent: titre }), Object.assign(document.createElement("span"), { className: "desc", textContent: e ? (e.description || "Ouvrir") : "Bientôt disponible" }));
       if (e && admin && e.audience) lib.append(Object.assign(document.createElement("span"), { className: "desc", textContent: "Public : " + Entrees.libelle(e.audience, g) }));
