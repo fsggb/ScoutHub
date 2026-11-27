@@ -97,6 +97,9 @@
     Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil", Hub.user);
     // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
     $("hello").textContent = "Bonjour, " + Hub.prenom(Hub.user);
+    // Images des boutons (feuille « Accueil » du classeur ; Outils n'y figure pas : image du menu des outils).
+    const IMG = { "outils.html": "Images/Menu_images/Gestion_unite" };
+    Hub.call("menu", { menu: "Accueil" }).then(o => { o.rubriques.forEach(r => { const n = r.nom.toLowerCase(); if (n === "documentation") IMG["documentation.html"] = r.image; if (n === "inscriptions") IMG["inscriptions.html"] = r.image; }); }).catch(() => {}).finally(() => document.querySelectorAll("#home a.dash-card").forEach(c => Hub.fondCarte(c, IMG[c.getAttribute("href")])));
   }
   async function enter() { await Hub.sessionIntranet(); if (!goNext()) showHome(); }
 

@@ -4,7 +4,7 @@
   const TOKEN_KEY = "scouthub.token";
   const store = {
     get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user")); } catch {} }
+    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user"), localStorage.removeItem("scouthub.portail.vue")); } catch {} }
   };
   // Racine du portail (adresse de ce script), pour que les pages dans des sous-dossiers (ChatGDB) retrouvent index.html.
   const ROOT = new URL(".", document.currentScript.src);
@@ -52,6 +52,15 @@
       try { await fetch("/_session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: store.get() }), credentials: "same-origin", cache: "no-store" }); } catch { /* sans réseau : sans importance */ }
     },
     simule,
+    // Image de fond d'une carte (Drive, servie par l'intranet seulement ; hors intranet : le dégradé habituel). Chargée en différé.
+    fondCarte(carte, image) {
+      if (!image || !/^images\//i.test(image) || !window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET) return;
+      const u = "/img/" + image.split("/").map(encodeURIComponent).join("/"), im = new Image();
+      im.onload = () => { carte.style.backgroundImage = "linear-gradient(180deg, rgba(0,7,97,.04) 35%, rgba(0,7,97,.75)), url(\"" + u + "\")"; carte.style.backgroundSize = "cover"; carte.style.backgroundPosition = "center"; carte.classList.add("avec-image"); };
+      im.src = u;
+    },
+    // Petit rond qui tourne + texte, pour toute zone en cours de chargement.
+    chargement(texte) { const d = document.createElement("div"); d.className = "zone-chargement"; d.setAttribute("role", "status"); d.append(Object.assign(document.createElement("span"), { className: "chargement" }), Object.assign(document.createElement("span"), { textContent: texte || "Chargement…" })); return d; },
     // Entrer dans la simulation : l'adresse est vérifiée par le serveur (administrateur seulement) avant de rien changer.
     async simulerComme(email) {
       const e = String(email || "").trim().toLowerCase(); if (!e) throw new Error("Choisissez une adresse.");

@@ -19,3 +19,9 @@
 .rb-table-wrap{overflow:auto;background:#fff;border:1px solid #e0dccd;border-radius:12px}.rb-table{width:100%;border-collapse:collapse;font-size:14px;color:#1f2430}
 .rb-table th{position:sticky;top:0;background:#efece4;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:10px 12px;white-space:nowrap}.rb-table td{padding:8px 12px;border-top:1px solid #efece4;vertical-align:top}
 details.rb-det summary{cursor:pointer;color:#000761;font-size:14px;margin-top:4px}details.rb-det p{margin:6px 0 0;white-space:pre-line;color:#3a3d4a;font-size:14px}
+
+.rb-vignette{flex:none;width:58px;height:78px;object-fit:cover;object-position:top;border:1px solid #e0dccd;border-radius:4px;background:#efece4}
+.rb-numeros{gap:14px}.rb-revue{display:flex;flex-direction:column;align-items:center;gap:6px;width:128px;color:#000761;text-decoration:none;font-size:14px}
+.rb-couv-cadre{position:relative;display:block;width:128px;height:170px;border:1px solid #d9d4c7;border-radius:6px;background:#efece4;overflow:hidden;box-shadow:0 1px 4px #0001;transition:transform .12s,box-shadow .12s}
+.rb-couv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;background:#fff;z-index:1}.rb-couv-vide{position:absolute;inset:0;display:grid;place-items:center;color:#9a9c9b;font-weight:700;letter-spacing:.1em}
+.rb-revue:hover .rb-couv-cadre{box-shadow:0 4px 14px #0003;transform:translateY(-2px)}.rb-revue:focus-visible{outline:2px solid #000761;outline-offset:3px;border-radius:6px}

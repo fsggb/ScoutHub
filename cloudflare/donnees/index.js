@@ -18,6 +18,7 @@ const PAGE = 100, PLAFOND_HEURE = 6000, SCAN_MAX = 1500;
 // ---------- chiffrement ----------
 const clesMemo = new Map();
 async function cleAes(env, kid) {
+  kid = String(kid).split(":")[0];
   if (clesMemo.has(kid)) return clesMemo.get(kid);
   const b64 = env["CLE_DONNEES_" + kid];
   if (!b64) throw new Error("Clé de chiffrement « " + kid + " » absente du serveur.");
@@ -91,20 +92,25 @@ async function synchroniser(env, nom) {
       await env.DB.prepare("UPDATE feuilles SET statut = 'inchangee', erreur = '' WHERE nom = ?1").bind(nom).run();
       return { statut: "inchangee", lignes: lignes.length };
     }
-    const preparees = [];
+    // Différentiel : chaque ligne porte l'empreinte de son contenu (« kid » = « 1:empreinte ») ; on n'écrit que ce qui change.
+    // Économise l'écriture en base (plan gratuit : 100 000 écritures par jour, index compris) : en régime normal, quelques lignes.
+    const existantes = new Map((await env.DB.prepare("SELECT rang, kid FROM lignes WHERE feuille = ?1").bind(nom).all()).results.map(r => [r.rang, r.kid]));
+    const lot = [], presentes = new Set(); let ecrites = 0;
     for (const l of lignes) {
+      presentes.add(l.rang);
+      const h = (await empreinte(env, JSON.stringify([entetes, l.cellules]))).replace(/[^A-Za-z0-9]/g, "").slice(0, 16), ancien = existantes.get(l.rang);
+      if (ancien && ancien.endsWith(":" + h)) continue;
       const clair = {}, secret = {};
-      entetes.forEach((h, i) => { const c = l.cellules[i]; if (c === undefined || c === "") return; (conf.clair.includes(h) ? clair : secret)[h] = c; });
-      const { secret: s, kid } = await chiffrer(env, JSON.stringify(secret), nom + "|" + l.rang);
-      // Rattachement (année, groupe, unité) : colonnes de filtrage lisibles, jamais de donnée de personne.
+      entetes.forEach((hh, i) => { const c = l.cellules[i]; if (c === undefined || c === "") return; (conf.clair.includes(hh) ? clair : secret)[hh] = c; });
+      const { secret: sc, kid } = await chiffrer(env, JSON.stringify(secret), nom + "|" + l.rang);
       const cel = n => { const i = entetes.indexOf(n); return i < 0 ? "" : String(l.cellules[i] === undefined ? "" : l.cellules[i]).trim(); };
-      preparees.push(env.DB.prepare("INSERT INTO lignes (feuille, rang, clair, secret, kid, an, gk, uk) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)").bind(nom, l.rang, JSON.stringify(clair), s, kid, conf.annee ? cel(conf.annee).slice(0, 20) : "", slug(cel("Groupe")), slug(cel("Unité"))));
+      lot.push(env.DB.prepare("INSERT INTO lignes (feuille, rang, clair, secret, kid, an, gk, uk) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(feuille, rang) DO UPDATE SET clair = excluded.clair, secret = excluded.secret, kid = excluded.kid, an = excluded.an, gk = excluded.gk, uk = excluded.uk")
+        .bind(nom, l.rang, JSON.stringify(clair), sc, kid + ":" + h, conf.annee ? cel(conf.annee).slice(0, 20) : "", slug(cel("Groupe")), slug(cel("Unité")))); ecrites++;
     }
-    // Remplacement atomique : toutes les instructions dans un seul lot (tout ou rien).
-    const lot = [env.DB.prepare("DELETE FROM lignes WHERE feuille = ?1").bind(nom), ...preparees,
-      env.DB.prepare("UPDATE feuilles SET lignes = ?2, maj = ?3, statut = 'ok', erreur = '', empreinte = ?4, entetes = ?5 WHERE nom = ?1").bind(nom, lignes.length, Date.now(), emp, JSON.stringify(entetes))];
-    await env.DB.batch(lot);
-    return { statut: "ok", lignes: lignes.length };
+    for (const rang of existantes.keys()) if (!presentes.has(rang)) { lot.push(env.DB.prepare("DELETE FROM lignes WHERE feuille = ?1 AND rang = ?2").bind(nom, rang)); ecrites++; }
+    lot.push(env.DB.prepare("UPDATE feuilles SET lignes = ?2, maj = ?3, statut = 'ok', erreur = '', empreinte = ?4, entetes = ?5 WHERE nom = ?1").bind(nom, lignes.length, Date.now(), emp, JSON.stringify(entetes)));
+    for (let i = 0; i < lot.length; i += 90) await env.DB.batch(lot.slice(i, i + 90));   // par lots (limite du nombre d'instructions)
+    return { statut: "ok", lignes: lignes.length, ecrites };
   } catch (e) {
     const msg = String(e && e.message || e).slice(0, 200);   // message technique seulement, jamais de contenu de la feuille
     await env.DB.prepare("UPDATE feuilles SET statut = 'erreur', erreur = ?2 WHERE nom = ?1").bind(nom, msg).run();
@@ -129,7 +135,12 @@ function portee_sql(p) {
   return { sql: "", binds: [] };
 }
 const cle = v => (typeof v === "string" && /^[a-z0-9-]{1,120}$/.test(v)) ? v : "";
-const journaliser = (env, email, action, feuille, n, comme) => env.DB.prepare("INSERT INTO journal (ts, email, action, feuille, n, comme) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(Date.now(), email, action, feuille || "", n || 0, comme || "").run();
+// Journal d'accès. Si la base refuse l'écriture (quota, panne), la trace est écrite dans les journaux du Worker (observabilité) :
+// la piste d'audit n'est jamais perdue, et une panne du journal n'empêche pas la lecture des personnes autorisées.
+const journaliser = async (env, email, action, feuille, n, comme) => {
+  try { await env.DB.prepare("INSERT INTO journal (ts, email, action, feuille, n, comme) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(Date.now(), email, action, feuille || "", n || 0, comme || "").run(); }
+  catch (e) { console.warn("AUDIT " + JSON.stringify({ ts: Date.now(), email, action, feuille: feuille || "", n: n || 0, comme: comme || "", base: String(e && e.message || e).slice(0, 80) })); }
+};
 
 export default {
   async fetch(req, env) {

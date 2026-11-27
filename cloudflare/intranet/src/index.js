@@ -53,7 +53,7 @@ async function session(req, env) {
 // uniquement en lecture. Résultat mémorisé 1 jour (cache Cloudflare) : le Drive n'est pas interrogé à chaque affichage.
 const echap = t => String(t).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 async function driveListe(jeton, q) {
-  const r = await fetch("https://www.googleapis.com/drive/v3/files?pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,mimeType,size)&q=" + encodeURIComponent(q), { headers: { authorization: "Bearer " + jeton } });
+  const r = await fetch("https://www.googleapis.com/drive/v3/files?pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,mimeType,size,thumbnailLink)&q=" + encodeURIComponent(q), { headers: { authorization: "Bearer " + jeton } });
   if (!r.ok) throw new Error("Drive " + r.status);
   return (await r.json()).files || [];
 }
@@ -74,9 +74,10 @@ async function imageDrive(env, chemin, ctx) {
     const trouves = (await driveListe(jeton, `'${echap(parent)}' in parents and name contains '${echap(feuille)}' and mimeType contains 'image/' and trashed = false`)).filter(f => /^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(f.mimeType));
     const f = trouves.find(x => x.name.toLowerCase() === segs[segs.length - 1].toLowerCase()) || trouves.find(x => x.name.toLowerCase().startsWith(feuille.toLowerCase() + ".")) || trouves[0];
     if (!f || (+f.size || 0) > 4e6) return erreur(404, "Image inconnue.");
-    const r = await fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(f.id) + "?alt=media&supportsAllDrives=true", { headers: { authorization: "Bearer " + jeton } });
-    if (!r.ok) return erreur(404, "Image inconnue.");
-    const rep = new Response(r.body, { headers: { "content-type": f.mimeType, "cache-control": "private, max-age=86400", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", ...SECURITE } });
+    let r = null, type = f.mimeType;
+    if (f.thumbnailLink && (+f.size || 0) > 150000) { const t = await fetch(f.thumbnailLink.replace(/=s\d+$/, "=s700"), { headers: { authorization: "Bearer " + jeton } }); if (t.ok) { r = t; type = t.headers.get("content-type") || "image/jpeg"; } }
+    if (!r) { r = await fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(f.id) + "?alt=media&supportsAllDrives=true", { headers: { authorization: "Bearer " + jeton } }); if (!r.ok) return erreur(404, "Image inconnue."); }
+    const rep = new Response(r.body, { headers: { "content-type": type, "cache-control": "private, max-age=86400", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", ...SECURITE } });
     ctx.waitUntil(cache.put(cle, rep.clone()));
     return rep;
   } catch { return erreur(502, "Image momentanément indisponible."); }
@@ -97,6 +98,36 @@ async function pdfDrive(env, chemin) {
     if (!r.ok) return erreur(404, "Document inconnu.");
     return new Response(r.body, { headers: { "content-type": "application/pdf", "content-disposition": "inline", "cache-control": "private, max-age=600", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; plugin-types application/pdf", ...SECURITE } });
   } catch { return erreur(502, "Document momentanément indisponible."); }
+}
+
+// Miniature de la 1re page d'un document (revue PDF, document Google) : SEULEMENT avec un jeton signé par le serveur d'identité,
+// délivré avec les lignes que la personne a le droit de voir. Aucun identifiant de fichier n'est accepté sans signature valide.
+const deb64u = t => Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+async function miniature(env, jetonMini, ctx) {
+  const [pl, sig] = String(jetonMini).split(".");
+  if (!env.MINIATURE_CLE || !pl || !sig || sig.length < 20 || pl.length > 300) return erreur(404, "Miniature inconnue.");
+  let payload; try { payload = new TextDecoder().decode(deb64u(pl)); } catch { return erreur(404, "Miniature inconnue."); }
+  const k = await crypto.subtle.importKey("raw", enc.encode(env.MINIATURE_CLE), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const attendu = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(payload))))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "").slice(0, 27);
+  if (attendu.length !== sig.length || [...attendu].reduce((d, c, i) => d | (c.charCodeAt(0) ^ sig.charCodeAt(i)), 0) !== 0) return erreur(404, "Miniature inconnue.");
+  const cle = new Request("https://mini.interne/" + encodeURIComponent(payload)), cache = caches.default;
+  const connue = await cache.match(cle); if (connue) return connue;
+  try {
+    const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/drive.readonly", "");
+    let f = null;
+    if (payload.startsWith("i:")) { const r = await fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(payload.slice(2)) + "?supportsAllDrives=true&fields=id,thumbnailLink", { headers: { authorization: "Bearer " + jeton } }); if (r.ok) f = await r.json(); }
+    else if (payload.startsWith("p:")) {
+      const segs = payload.slice(2).split("/"); if (segs.length !== 2 || segs[0].toLowerCase() !== "revues_files_") return erreur(404, "Miniature inconnue.");
+      const d = (await driveListe(jeton, `'${echap(env.DRIVE_IMAGES_ID)}' in parents and name = '${echap(segs[0])}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`))[0];
+      if (d) f = (await driveListe(jeton, `'${echap(d.id)}' in parents and name = '${echap(segs[1])}' and mimeType = 'application/pdf' and trashed = false`))[0];
+    }
+    if (!f || !f.thumbnailLink) return erreur(404, "Miniature indisponible.");
+    const t = await fetch(f.thumbnailLink.replace(/=s\d+$/, "=s480"), { headers: { authorization: "Bearer " + jeton } });
+    if (!t.ok) return erreur(404, "Miniature indisponible.");
+    const rep = new Response(t.body, { headers: { "content-type": t.headers.get("content-type") || "image/jpeg", "cache-control": "private, max-age=604800", "content-security-policy": "default-src 'none'", ...SECURITE } });
+    ctx.waitUntil(cache.put(cle, rep.clone()));
+    return rep;
+  } catch { return erreur(502, "Miniature momentanément indisponible."); }
 }
 
 export default {
@@ -149,6 +180,7 @@ export default {
     }
 
     if (p.startsWith("/img/") && lecture) return imageDrive(env, p.slice(5), ctx);
+    if (p.startsWith("/miniature/") && lecture) { if (s.user.fsggb === false) return erreur(403, "Réservé aux membres."); return miniature(env, p.slice(11), ctx); }
     if (p.startsWith("/fichier/") && lecture) {
       const ROLES = ["adherent", "parent", "chef_unite", "chef_groupe", "equipe_nationale", "admin"];
       if (s.user.fsggb === false || ROLES.indexOf(s.user.role) < ROLES.indexOf("chef_unite")) return erreur(403, "Document réservé aux chefs.");

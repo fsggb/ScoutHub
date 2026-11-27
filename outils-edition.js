@@ -1,140 +1,111 @@
-// Page Outils : l'administrateur organise les outils directement (glisser-déposer des outils ou des sections, noms de
-// section, noms et descriptions d'outils, sections côte à côte sur la même ligne).
-// Enregistrement en DEUX endroits, pour qu'un outil à public restreint ne passe JAMAIS dans la mise en page partagée :
-//  - mise en page partagée (sections + outils de config.js ou ajoutés à la main) : « portailEcrire », comme la console ;
-//  - outils dynamiques (feuille « Outils », outils ajoutés avec leur public) : section, ordre, nom/description, côté serveur
-//    (/auth/outils/disposer), renvoyés ensuite avec les seuls outils que chaque personne a le droit de voir.
+// Page Outils, pour l'administrateur : tout se déplace DIRECTEMENT, sans bouton « Organiser ».
+//  - un outil se glisse avant/après un autre, ou dans une autre section ;
+//  - une section se glisse par son titre : sur le CÔTÉ d'une autre elle se place à côté (même rangée), sur le haut/bas elle prend sa propre rangée ;
+//  - double-clic sur un titre : renommer ; ✎ sur un outil : nom et description ; tuile « + » : nouvel outil.
+// Chaque changement est enregistré tout seul, en base (section, rangée, ordre, noms) : rapide, et la mise en page partagée de
+// l'ancien serveur n'est pas touchée, donc aucun outil restreint n'y passe jamais.
 (() => {
   "use strict";
-  const { $ } = Hub, P = window.Portail;
-  let m = null, avant = "", drag = null, actif = false, retour = null;
-  const clone = o => JSON.parse(JSON.stringify(o));
-  const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
-  const btn = (t, title, fn) => { const b = el("button", { type: "button", textContent: t, title, onclick: fn }); b.setAttribute("aria-label", title); return b; };
-  const modifie = () => JSON.stringify(m) !== avant;
-  const marquer = () => { const s = $("oe-etat"); if (s) { s.textContent = modifie() ? "Modifications non enregistrées." : ""; } const e = $("oe-enreg"); if (e) e.disabled = !modifie(); };
+  const P = window.Portail, el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+  let drag = null, rendre = null, minuteur = null, supprimees = new Set();
+  const m = () => P.current();
 
-  function installer(entete, rerendre) {
-    retour = rerendre;
-    if (!Hub.user || Hub.user.role !== "admin" || Hub.simule() || $("organiser")) return;
-    entete.append(el("button", { id: "organiser", type: "button", className: "ghost", textContent: "Organiser", title: "Glisser-déposer, renommer, mettre côte à côte", onclick: ouvrir }));
+  // ---------- enregistrement automatique ----------
+  function etat(txt, erreur) {
+    let t = document.getElementById("oe-toast"); if (!t) { t = el("div", { id: "oe-toast", role: "status" }); document.body.append(t); }
+    t.textContent = txt; t.className = erreur ? "erreur" : ""; t.hidden = !txt; clearTimeout(t._h); if (txt && !erreur) t._h = setTimeout(() => { t.hidden = true; }, 2200);
   }
-
-  function ouvrir() {
-    m = clone(P.current()); m.apps.forEach(a => { a._nom0 = a.nom; a._desc0 = a.desc; });
-    avant = JSON.stringify(m); actif = true;
-    $("apps").hidden = false; $("none").hidden = true; $("voir-masquees").hidden = true;
-    for (const id of ["organiser", "ajout-app"]) { const b = $(id); if (b) b.hidden = true; }
-    dessiner();
+  const planifier = () => { clearTimeout(minuteur); etat("Enregistrement…"); minuteur = setTimeout(enregistrer, 700); };
+  async function enregistrer() {
+    const mm = m(), items = [], rangs = new Map();
+    mm.sections.forEach((s, i) => { if (!rangs.has(s.ligne)) rangs.set(s.ligne, "r" + (rangs.size + 1)); items.push({ cle: "s:" + s.id, nom: s.titre, section: rangs.get(s.ligne), ordre: i }); });
+    supprimees.forEach(id => items.push({ cle: "s:" + id, nom: "", section: "supprimee", ordre: 999 }));
+    mm.sections.forEach(s => mm.apps.filter(a => a.section === s.id).forEach((a, i) => items.push({ cle: a.cle || "a:" + String(a.id).toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 100), nom: a.nom, description: a.desc, section: s.id, ordre: i })));
+    try { await Hub.call("outilsDisposer", { items }); etat("Enregistré ✓"); try { localStorage.removeItem("scouthub.portail.vue"); } catch {} }
+    catch (e) { etat("Non enregistré : " + e.message, true); }
   }
-  function fermer() { actif = false; m = null; drag = null; const z = $("apps"); z.textContent = ""; for (const id of ["organiser", "ajout-app"]) { const b = $(id); if (b) b.hidden = false; } if (retour) retour(); }
-
-  // ---------- rendu ----------
-  function dessiner() {
-    const zone = $("apps"); zone.textContent = "";
-    zone.append(el("div", { className: "oe-barre" },
-      el("strong", { textContent: "Organisation des outils" }),
-      el("span", { className: "muted", textContent: " Glissez les outils ou les sections ; cochez « côte à côte » pour mettre une section sur la même ligne que la suivante." }),
-      el("span", { className: "oe-actions" }, el("span", { id: "oe-etat", className: "status", role: "status" }), btn("+ Section", "Ajouter une section", ajouterSection),
-        Object.assign(btn("Annuler", "Abandonner les modifications", () => { if (!modifie() || confirm("Abandonner les modifications ?")) fermer(); }), { className: "ghost" }),
-        Object.assign(btn("Enregistrer", "Enregistrer pour tout le monde", enregistrer), { id: "oe-enreg", className: "primary", disabled: true }))));
-    const boite = el("div", { id: "oe-secs", className: "pt-secs" });
-    let rangee = null;
-    m.sections.forEach((s, si) => {
-      const bloc = section(s, si);
-      if (s.haut) { if (!rangee) { rangee = el("div", { className: "oe-rangee" }); boite.append(rangee); } rangee.append(bloc); }
-      else { rangee = null; boite.append(bloc); }
-    });
-    zone.append(boite); marquer();
-  }
-  function section(s, si) {
-    const sec = el("section", { className: "pt-sec" });
-    const poignee = el("span", { className: "pt-handle", textContent: "⠿", title: "Glisser pour déplacer la section" });
-    poignee.onmousedown = () => { sec.draggable = true; }; poignee.onmouseup = () => { sec.draggable = false; };
-    const titre = el("input", { type: "text", value: s.titre, maxLength: 60 }); titre.setAttribute("aria-label", "Titre de la section"); titre.oninput = () => { s.titre = titre.value; marquer(); };
-    const cote = el("input", { type: "checkbox", checked: !!s.haut }); cote.onchange = () => { s.haut = cote.checked; dessiner(); };
-    const n = m.apps.filter(a => a.section === s.id).length;
-    const supp = Object.assign(btn("Supprimer", "Supprimer la section vide", () => { m.sections.splice(si, 1); dessiner(); }), { className: "ghost small", disabled: n > 0 });
-    sec.append(el("div", { className: "pt-head" }, poignee, titre, el("label", {}, cote, " côte à côte"), btn("↑", "Monter la section", () => deplacerSection(si, -1)), btn("↓", "Descendre la section", () => deplacerSection(si, 1)), supp));
-    const grille = el("div", { className: "pt-grid" });
-    m.apps.filter(a => a.section === s.id).forEach(a => grille.append(carte(a)));
-    if (!n) grille.append(el("p", { className: "muted", textContent: "Section vide : déposez un outil ici." }));
-    grille.ondragover = e => { if (drag && drag.type === "app" && e.target === grille) { e.preventDefault(); grille.classList.add("drop-end"); } };
-    grille.ondragleave = () => grille.classList.remove("drop-end");
-    grille.ondrop = e => { if (!drag || drag.type !== "app" || e.target !== grille) return; e.preventDefault(); deposerApp(drag.id, s.id, null, false); };
-    sec.append(grille);
-    sec.ondragstart = e => { if (e.target !== sec) return; drag = { type: "sec", id: s.id }; sec.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", s.id); };
-    sec.ondragend = () => { sec.draggable = false; sec.classList.remove("dragging"); effacer(); drag = null; };
-    sec.ondragover = e => { if (!drag || drag.type !== "sec" || drag.id === s.id) return; e.preventDefault(); const r = sec.getBoundingClientRect(), av = s.haut ? e.clientX < r.left + r.width / 2 : e.clientY < r.top + r.height / 2; effacer(); sec.classList.add(av ? "drop-before" : "drop-after"); };
-    sec.ondrop = e => { if (!drag || drag.type !== "sec" || drag.id === s.id) return; e.preventDefault(); const r = sec.getBoundingClientRect(); deposerSection(drag.id, s.id, s.haut ? e.clientX < r.left + r.width / 2 : e.clientY < r.top + r.height / 2); };
-    return sec;
-  }
-  function carte(a) {
-    const icone = P.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
-    const c = el("div", { className: "pt-app" + (a.masque ? " masque" : ""), draggable: true });
-    c.append(el("img", { src: icone, alt: "" }), el("span", { className: "t" }, el("b", { textContent: a.nom }), el("small", { textContent: (a.masque ? "Masquée · " : "") + (a.dyn ? "" : "") + (a.desc || "") })),
-      el("span", { className: "btns" }, ...(a.dyn ? [] : [btn(a.masque ? "👁‍🗨" : "👁", a.masque ? "Afficher pour tout le monde" : "Masquer aux autres", () => { a.masque = !a.masque; dessiner(); })]),
-        btn("←", "Reculer", () => deplacerApp(a, -1)), btn("→", "Avancer", () => deplacerApp(a, 1)), btn("✎", "Renommer / décrire", () => modifier(a))));
-    c.ondragstart = e => { drag = { type: "app", id: a.id }; c.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", a.id); e.stopPropagation(); };
-    c.ondragend = () => { c.classList.remove("dragging"); effacer(); drag = null; };
-    c.ondragover = e => { if (!drag || drag.type !== "app" || drag.id === a.id) return; e.preventDefault(); e.stopPropagation(); const r = c.getBoundingClientRect(); effacer(); c.classList.add(e.clientX < r.left + r.width / 2 ? "drop-before" : "drop-after"); };
-    c.ondrop = e => { if (!drag || drag.type !== "app") return; e.preventDefault(); e.stopPropagation(); const r = c.getBoundingClientRect(); deposerApp(drag.id, a.section, a.id, e.clientX < r.left + r.width / 2); };
-    return c;
-  }
-  const effacer = () => document.querySelectorAll(".drop-before,.drop-after,.drop-end").forEach(n => n.classList.remove("drop-before", "drop-after", "drop-end"));
 
   // ---------- déplacements ----------
-  function deplacerSection(i, d) { const j = i + d; if (j < 0 || j >= m.sections.length) return; [m.sections[i], m.sections[j]] = [m.sections[j], m.sections[i]]; dessiner(); }
-  function deposerSection(id, cibleId, avant_) {
-    const de = m.sections.findIndex(s => s.id === id), [s] = m.sections.splice(de, 1);
-    let vers = m.sections.findIndex(x => x.id === cibleId); if (!avant_) vers++; m.sections.splice(vers, 0, s); drag = null; dessiner();
-  }
-  function deplacerApp(a, d) { const memes = m.apps.filter(x => x.section === a.section), i = memes.indexOf(a), o = memes[i + d]; if (!o) return; const ia = m.apps.indexOf(a), io = m.apps.indexOf(o); m.apps[ia] = o; m.apps[io] = a; dessiner(); }
-  function deposerApp(id, sectionId, cibleId, avant_) {
-    const de = m.apps.findIndex(a => a.id === id); if (de < 0 || id === cibleId) return;
-    const [a] = m.apps.splice(de, 1); a.section = sectionId;
+  function deposerApp(id, sectionId, cibleId, avant) {
+    const mm = m(), de = mm.apps.findIndex(a => a.id === id); if (de < 0 || id === cibleId) return;
+    const [a] = mm.apps.splice(de, 1); a.section = sectionId; a.ordre = undefined;
     let vers;
-    if (cibleId) { vers = m.apps.findIndex(x => x.id === cibleId); if (!avant_) vers++; }
-    else { const dernier = m.apps.map(x => x.section).lastIndexOf(sectionId); vers = dernier < 0 ? m.apps.length : dernier + 1; }
-    m.apps.splice(vers, 0, a); drag = null; dessiner();
+    if (cibleId) { vers = mm.apps.findIndex(x => x.id === cibleId); if (!avant) vers++; }
+    else { const dernier = mm.apps.map(x => x.section).lastIndexOf(sectionId); vers = dernier < 0 ? mm.apps.length : dernier + 1; }
+    mm.apps.splice(vers, 0, a); rendre(); planifier();
   }
-  function ajouterSection() {
-    const t = prompt("Titre de la nouvelle section :"); if (!t || !t.trim()) return;
-    let id = P.slug(t) || "section", n = 1; while (m.sections.some(s => s.id === id)) id = P.slug(t) + "-" + (++n);
-    m.sections.push({ id, titre: t.trim().slice(0, 60), haut: false }); dessiner();
+  function deposerSection(id, cibleId, zone) {
+    const mm = m(), de = mm.sections.findIndex(s => s.id === id); if (de < 0 || id === cibleId) return;
+    const [S] = mm.sections.splice(de, 1), T = mm.sections.find(s => s.id === cibleId), iT = mm.sections.indexOf(T);
+    if (zone === "gauche" || zone === "droite") { S.ligne = T.ligne; mm.sections.splice(zone === "gauche" ? iT : iT + 1, 0, S); }   // à côté : même rangée
+    else {
+      S.ligne = "n" + Date.now().toString(36);   // sa propre rangée, au-dessus ou au-dessous de celle de la cible
+      const idx = mm.sections.map((s, i) => [s, i]).filter(([s]) => s.ligne === T.ligne).map(([, i]) => i);
+      mm.sections.splice(zone === "haut" ? Math.min(...idx) : Math.max(...idx) + 1, 0, S);
+    }
+    rendre(); planifier();
+  }
+  const effacer = () => document.querySelectorAll(".drop-av,.drop-ap,.drop-fin,.drop-gauche,.drop-droite,.drop-haut,.drop-bas").forEach(n => n.classList.remove("drop-av", "drop-ap", "drop-fin", "drop-gauche", "drop-droite", "drop-haut", "drop-bas"));
+  const zoneSection = (e, sec) => { const r = sec.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height; return x < 0.25 ? "gauche" : x > 0.75 ? "droite" : y < 0.5 ? "haut" : "bas"; };
+
+  function installer(zone, rerendre) {
+    rendre = rerendre; if (zone._ok) return; zone._ok = true;
+    zone.addEventListener("dragstart", e => {
+      const t = e.target.closest && e.target.closest("[data-app]"), h = e.target.closest && e.target.closest("[data-titre]");
+      if (t) drag = { type: "app", id: t.dataset.app }; else if (h) drag = { type: "sec", id: h.dataset.titre }; else return;
+      e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", drag.id); (t || h).classList.add("dragging");
+    });
+    zone.addEventListener("dragend", () => { document.querySelectorAll(".dragging").forEach(n => n.classList.remove("dragging")); effacer(); drag = null; });
+    zone.addEventListener("dragover", e => {
+      if (!drag) return; effacer();
+      if (drag.type === "app") {
+        const t = e.target.closest("[data-app]"), g = e.target.closest("[data-grille]");
+        if (t && t.dataset.app !== drag.id) { const r = t.getBoundingClientRect(); t.classList.add(e.clientX < r.left + r.width / 2 ? "drop-av" : "drop-ap"); e.preventDefault(); }
+        else if (g && !t) { g.classList.add("drop-fin"); e.preventDefault(); }
+      } else {
+        const sec = e.target.closest("[data-sec]"); if (sec && sec.dataset.sec !== drag.id) { sec.classList.add("drop-" + zoneSection(e, sec)); e.preventDefault(); }
+      }
+    });
+    zone.addEventListener("drop", e => {
+      if (!drag) return; e.preventDefault(); const d = drag; drag = null; effacer();
+      if (d.type === "app") {
+        const t = e.target.closest("[data-app]"), g = e.target.closest("[data-grille]");
+        if (t) { const r = t.getBoundingClientRect(); const sec = m().apps.find(a => a.id === t.dataset.app); if (sec) deposerApp(d.id, sec.section, t.dataset.app, e.clientX < r.left + r.width / 2); }
+        else if (g) deposerApp(d.id, g.dataset.grille, null, false);
+      } else { const sec = e.target.closest("[data-sec]"); if (sec) deposerSection(d.id, sec.dataset.sec, zoneSection(e, sec)); }
+    });
   }
 
-  // ---------- nom et description d'un outil ----------
-  function modifier(a) {
+  // ---------- titres, nouvelle section ----------
+  function renommer(s, h2, rerendre) {
+    const champ = el("input", { type: "text", value: s.titre, maxLength: 60, className: "oe-titre-champ" }); champ.setAttribute("aria-label", "Titre de la section");
+    h2.replaceWith(champ); champ.focus(); champ.select(); let fini = false;
+    const valider = ok => { if (fini) return; fini = true; if (ok && champ.value.trim() && champ.value.trim() !== s.titre) { s.titre = champ.value.trim().slice(0, 60); planifier(); } rerendre(); };
+    champ.onblur = () => valider(true); champ.onkeydown = e => { if (e.key === "Enter") valider(true); else if (e.key === "Escape") valider(false); };
+  }
+  function nouvelleSection(rerendre) {
+    const t = prompt("Titre de la nouvelle section :"); if (!t || !t.trim()) return;
+    const mm = m(); let id = P.slug(t) || "section", n = 1; while (mm.sections.some(s => s.id === id) || supprimees.has(id)) id = P.slug(t).slice(0, 50) + "-" + (++n);
+    mm.sections.push({ id: id.slice(0, 60), titre: t.trim().slice(0, 60), haut: false, ligne: "n" + Date.now().toString(36) }); rerendre(); planifier();
+  }
+
+  // ---------- nom et description d'un outil ; nouvel outil ----------
+  function modifier(a, rerendre) {
     const dlg = el("dialog", { className: "entree-dlg" }), f = el("form", { method: "dialog" });
     const nom = el("input", { id: "oe-nom", maxLength: 40, required: true, value: a.nom }), desc = el("input", { id: "oe-desc", maxLength: 140, value: a.desc || "" });
     const ok = el("button", { type: "submit", className: "primary", textContent: "Valider" }), non = el("button", { type: "button", className: "ghost", textContent: "Annuler" });
+    const plus = a.entree ? el("button", { type: "button", className: "ghost", textContent: "Adresse et public…", onclick: () => { dlg.close(); dlg.remove(); Entrees.dialogue("outils", a.entree, () => Portail.refresh(rerendre)); } }) : null;
     f.append(el("h2", { textContent: "Modifier l’outil" }), el("label", { htmlFor: "oe-nom", textContent: "Nom affiché" }), nom, el("label", { htmlFor: "oe-desc", textContent: "Description" }), desc,
-      a.entree ? el("p", { className: "hint", textContent: "Pour changer l’adresse ou le public de cet outil, quittez l’organisation puis utilisez ✎ sur sa tuile." }) : document.createTextNode(""),
-      el("div", { className: "dlg-actions" }, non, ok));
+      el("div", { className: "dlg-actions" }, ...(plus ? [plus] : []), non, ok));
     dlg.append(f); document.body.append(dlg); dlg.showModal();
     non.onclick = () => { dlg.close(); dlg.remove(); }; dlg.addEventListener("cancel", () => dlg.remove());
-    f.onsubmit = ev => { ev.preventDefault(); a.nom = nom.value.trim() || a.nom; a.desc = desc.value.trim(); dlg.close(); dlg.remove(); dessiner(); };
+    f.onsubmit = async ev => {
+      ev.preventDefault(); a.nom = nom.value.trim() || a.nom; a.desc = desc.value.trim(); dlg.close(); dlg.remove(); rerendre();
+      if (a.entree && a.entree.id) { try { await Hub.call("entreeEcrire", { section: "outils", id: a.entree.id, nom: a.nom, description: a.desc, url: a.url, audience: a.entree.audience }); } catch (e) { etat("Non enregistré : " + e.message, true); return; } }
+      planifier();
+    };
   }
+  function ajouter(sectionId, rerendre) { Entrees.dialogue("outils", null, () => Portail.refresh(rerendre), sectionId); }
 
-  // ---------- enregistrement ----------
-  async function enregistrer() {
-    const etat = $("oe-etat"), bt = $("oe-enreg"); bt.disabled = true; etat.textContent = "Enregistrement…"; etat.classList.remove("error");
-    try {
-      // 1. mise en page partagée : jamais un outil dynamique (il pourrait être réservé à certaines personnes)
-      const partage = { sections: m.sections.map(s => ({ id: s.id, titre: s.titre, haut: !!s.haut })), apps: m.apps.filter(a => !a.dyn).map(({ nouveau, entree, _nom0, _desc0, ...a }) => a) };
-      const o = await Hub.call("portailEcrire", { portail: partage });
-      try { localStorage.setItem("scouthub.portail", JSON.stringify(o.portail)); } catch {}
-      // 2. outils dynamiques : section, ordre (position dans la section), nom et description
-      const items = [];
-      m.sections.forEach(s => m.apps.filter(a => a.section === s.id).forEach((a, i) => { if (a.dyn) items.push({ cle: a.cle, nom: a.nom, description: a.desc, section: s.id, ordre: i }); }));
-      for (const a of m.apps.filter(x => x.dyn && x.entree && (x.nom !== x._nom0 || x.desc !== x._desc0)))   // outil ajouté : son nom/sa description sont sur l'entrée
-        await Hub.call("entreeEcrire", { section: "outils", id: a.entree.id, nom: a.nom, description: a.desc, url: a.url, audience: a.entree.audience });
-      if (items.length) await Hub.call("outilsDisposer", { items });
-      etat.textContent = "Enregistré."; avant = JSON.stringify(m);
-      setTimeout(() => location.reload(), 600);
-    } catch (e) { etat.textContent = e.message; etat.classList.add("error"); bt.disabled = false; }
-  }
-  addEventListener("beforeunload", e => { if (actif && m && modifie()) { e.preventDefault(); e.returnValue = ""; } });
-  window.OutilsEdition = { installer, actif: () => actif };
+  window.OutilsEdition = { installer, modifier, ajouter, renommer, nouvelleSection, actif: () => false };
 })();

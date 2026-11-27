@@ -4,16 +4,11 @@
   const { $ } = Hub, API = window.SCOUTHUB_DONNEES_API;
   // Ordre et libellés de l'ancien intranet (menu « Inscriptions »)
   const CARTES = [["Mineurs", "Mineurs"], ["Majeurs", "Majeurs"], ["Camps", "Camp"], ["Formulaires", "Formulaires d’inscription"], ["Cotisations", "Cotisations Mineurs"], ["Cotisations_Chefs", "Cotisations Majeurs"]];
+  const zone0 = $("cartes"); if (zone0) zone0.append(Hub.chargement("Chargement de vos inscriptions…"));
   const user = await Hub.requireUser(); if (!user) return;
   const simule = () => (typeof Hub.simule === "function" ? Hub.simule() : "");
   let moi = null, images = {}, cause = "";
-  // Image de fond de la carte (Drive, servie par l'intranet) ; sans image ou hors intranet : le dégradé habituel.
-  const fond = (carte, image) => {
-    if (!image || !/^images\//i.test(image) || !window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET) return;
-    const u = "/img/" + image.split("/").map(encodeURIComponent).join("/"); const im = new Image();
-    im.onload = () => { carte.style.backgroundImage = "linear-gradient(180deg, rgba(0,7,97,.05) 30%, rgba(0,7,97,.78)), url(\"" + u + "\")"; carte.style.backgroundSize = "cover"; carte.style.backgroundPosition = "center"; carte.classList.add("avec-image"); };
-    im.src = u;
-  };
+
   if (typeof Hub.simule !== "function") cause = "Votre navigateur utilise une ancienne version de la page : rechargez avec Ctrl + F5.";
   try { const r = await fetch(API + "/donnees/moi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: simule() || undefined }), cache: "no-store" }); moi = await r.json(); if (!moi.ok) cause = (moi.error && moi.error.message) || "Erreur " + r.status; } catch (e) { cause = cause || "Serveur injoignable : vérifiez votre connexion."; }
   try { (await Hub.call("menu", { menu: "Inscriptions" })).rubriques.forEach(r => { images[r.nom.toLowerCase()] = r.image; }); } catch {}
@@ -30,6 +25,6 @@
     if (vivante) carte.href = "registre.html?f=" + encodeURIComponent(nom);
     const lib = document.createElement("span"); lib.className = "tile-label";
     lib.append(Object.assign(document.createElement("strong"), { textContent: titre }), Object.assign(document.createElement("span"), { className: "desc", textContent: vivante ? portee : "Bientôt disponible" }));
-    carte.append(lib); zone.append(carte); fond(carte, images[titre.replace(/’/g, "'").toLowerCase()] || images[titre.toLowerCase()]);
+    carte.append(lib); zone.append(carte); Hub.fondCarte(carte, images[titre.replace(/’/g, "'").toLowerCase()] || images[titre.toLowerCase()]);
   }
 })();

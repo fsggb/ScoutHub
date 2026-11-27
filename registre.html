@@ -22,15 +22,8 @@
 
     <div class="rg-corps" id="rg-corps" hidden>
       <aside class="rg-lateral" id="rg-lateral" aria-label="Filtres">
-        <div class="rg-modes" role="tablist" aria-label="Trier par">
-          <button type="button" role="tab" id="m-annee" aria-selected="true">Par année</button>
-          <button type="button" role="tab" id="m-groupe" aria-selected="false">Par groupe</button>
-        </div>
-        <div class="rg-recherche-arbre"><input id="rg-filtre" type="search" placeholder="Chercher un groupe, une unité…" aria-label="Chercher un groupe ou une unité" autocomplete="off"><button class="rg-replier" type="button" id="rg-replier" title="Tout replier" aria-label="Tout replier">⊟</button></div>
-        <div class="rg-an-filtre" id="rg-an-filtre" hidden>
-          <label for="rg-an">Année</label><select id="rg-an"></select>
-        </div>
-        <div class="rg-arbre" id="rg-arbre" role="tree"></div>
+        <div class="rg-lat-tete"><strong>Filtrer</strong><button type="button" class="rg-fx-eff" id="rg-fx-reset" hidden>Tout effacer</button></div>
+        <div id="rg-facettes"></div>
       </aside>
       <div class="rg-poignee" id="rg-poignee" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau de filtres (flèches gauche et droite)"></div>
       <section class="rg-liste" aria-label="Liste">
@@ -38,6 +31,7 @@
           <input id="rg-q" class="rg-recherche" type="search" placeholder="Chercher un nom, une adresse…" aria-label="Chercher dans la sélection" autocomplete="off">
           <span id="rg-compte" class="rg-compte" role="status"></span>
         </div>
+        <div class="rg-actifs" id="rg-actifs" hidden aria-label="Filtres actifs"></div>
         <p class="rg-note" id="rg-note" hidden></p>
         <div class="rg-table-wrap"><table class="rg-table" id="rg-table"><thead></thead><tbody></tbody></table></div>
         <p class="rg-pager"><button class="ghost" type="button" id="rg-prec">← Précédent</button><span id="rg-page"></span><button class="ghost" type="button" id="rg-suiv">Suivant →</button></p>

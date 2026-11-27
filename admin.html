@@ -49,13 +49,12 @@
     </div>
 
     <div id="tab-simulation" hidden>
-      <div class="home-head"><div><h2>Voir le site comme une autre personne</h2><p class="muted">Choisissez une adresse : tout le site s’affiche exactement comme pour elle (menus, outils, documentation, inscriptions), en lecture seule. Un bandeau jaune rappelle la simulation et permet d’en sortir. Chaque ouverture est journalisée.</p></div></div>
+      <div class="home-head"><div><h2>Voir le site comme une autre personne</h2><p class="muted">Tapez son adresse e-mail : le site retrouve qui elle est, puis s’affiche exactement comme pour elle (menus, outils, documentation, inscriptions), en lecture seule. Un bandeau rappelle la simulation et permet d’en sortir. Chaque ouverture est journalisée.</p></div></div>
       <section class="panel stack">
-        <label for="sim-adresse">Adresse à simuler</label>
-        <input id="sim-adresse" list="sim-liste" type="email" placeholder="prenom.nom@fsggb.fr" autocomplete="off" aria-describedby="sim-aide">
-        <datalist id="sim-liste"></datalist>
-        <p class="hint left" id="sim-aide">Les adresses des chefs de groupe et d’unité (feuille « Groupes et unités ») sont proposées. Toute autre adresse @fsggb.fr s’affiche comme un simple membre.</p>
-        <p><button class="primary" type="button" id="sim-go">Voir le site comme cette personne</button></p>
+        <label for="sim-adresse">Adresse e-mail</label>
+        <input id="sim-adresse" type="email" placeholder="prenom.nom@fsggb.fr" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="sim-resultat">
+        <div id="sim-resultat" class="sim-carte" role="status" aria-live="polite" hidden></div>
+        <p><button class="primary" type="button" id="sim-go" disabled>Voir le site comme cette personne</button></p>
         <p id="sim-etat" class="status" role="status"></p>
       </section>
     </div>

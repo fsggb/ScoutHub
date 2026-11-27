@@ -44,8 +44,8 @@
   const cached = () => { try { const m = JSON.parse(localStorage.getItem(KEY) || "null"); return valid(m) ? m : null; } catch { return null; } };
   // Outils de la fédération : la feuille « Outils » du classeur est la référence (déjà filtrée par le serveur selon la
   // personne connectée) ; elle remplace la section « Outils fédération » de config.js, sans doublon avec une autre application.
-  function appliquerOutils(m, outils, entrees) {
-    if (!Array.isArray(outils) && !Array.isArray(entrees)) return;
+  function appliquerOutils(m, outils, entrees, layout) {
+    if (!Array.isArray(outils) && !Array.isArray(entrees)) { appliquerLayout(m, layout); return; }
     // Image Drive (servie par l'intranet seulement) : « Images/Menu_images/xxx » → /img/…, sinon le logo de la fédération.
     const icone = t => (t.image && /^images\//i.test(t.image) && window.SCOUTHUB_INTRANET && location.hostname === window.SCOUTHUB_INTRANET) ? "/img/" + t.image.split("/").map(encodeURIComponent).join("/") : "assets/fsggb.png";
     const titre = "Outils fédération", id = slug(titre), norm = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
@@ -67,38 +67,48 @@
       vus.add(norm(e.url));
       m.apps.push({ id: "entree-" + e.id, section: sect(e), nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: e.cle, ordre: e.ordre, entree: e.audience ? e : undefined });
     });
-    // Ordre : les outils dynamiques occupent la position enregistrée dans leur section ; les autres (mise en page partagée) comblent les places libres, dans leur ordre.
-    const resultat = [];
-    m.sections.forEach(sec => {
-      const liste = m.apps.filter(a => a.section === sec.id), n = liste.length, places = new Array(n).fill(null);
-      const dyn = liste.filter(a => a.dyn && a.ordre !== null && a.ordre !== undefined).sort((a, b) => a.ordre - b.ordre);
-      dyn.forEach(a => { let i = Math.min(a.ordre, n - 1); while (i < n && places[i]) i++; if (i >= n) { i = places.indexOf(null); } if (i >= 0) places[i] = a; });
-      const reste = liste.filter(a => !places.includes(a));
-      places.forEach((v, i) => { if (!v) places[i] = reste.shift(); });
-      resultat.push(...places.filter(Boolean), ...reste);
-    });
-    m.apps = [...resultat, ...m.apps.filter(a => !m.sections.some(sec => sec.id === a.section))];
+    appliquerLayout(m, layout);   // rangées, ordre et noms enregistrés par l'administrateur
   }
+  // Disposition enregistrée par l'administrateur (base de données, renvoyée avec les outils visibles) : sections, rangées, ordre, noms.
+  function appliquerLayout(m, layout) {
+    const L = layout || { sections: [], apps: [] };
+    L.sections.forEach(d => {
+      let sec = m.sections.find(x => x.id === d.id);
+      if (!sec) { if (!d.titre || d.ligne === "supprimee") return; m.sections.push(sec = { id: d.id, titre: d.titre, haut: false }); }
+      if (d.titre) sec.titre = d.titre; sec.ligne = d.ligne; sec.ordre = d.ordre;
+    });
+    m.sections = m.sections.filter(x => x.ligne !== "supprimee");
+    m.sections = [...m.sections.filter(x => x.ordre !== undefined).sort((a, b) => a.ordre - b.ordre), ...m.sections.filter(x => x.ordre === undefined)];
+    let prev = null;   // sans disposition : l'ancien réglage « ligne du haut » (sections consécutives) donne les rangées
+    m.sections.forEach(x => { if (!x.ligne) x.ligne = (x.haut && prev && prev.haut) ? prev.ligne : "r-" + x.id; prev = x; });
+    L.apps.forEach(d => { const a = m.apps.find(x => x.id === d.id); if (!a) return; if (d.section && m.sections.some(x => x.id === d.section)) a.section = d.section; if (d.nom) a.nom = d.nom; if (d.desc) a.desc = d.desc; a.ordre = d.ordre; });
+    // Ordre dans chaque section : positions enregistrées d'abord, puis les nouveaux venus.
+    const res = [];
+    m.sections.forEach(sec => { const l = m.apps.filter(a => a.section === sec.id), def = l.filter(a => a.ordre !== undefined && a.ordre !== null).sort((a, b) => a.ordre - b.ordre); res.push(...def, ...l.filter(a => a.ordre === undefined || a.ordre === null)); });
+    m.apps = [...res, ...m.apps.filter(a => !m.sections.some(x => x.id === a.section))];
+  }
+  // Dernière vue complète (outils visibles + disposition) de CETTE personne : affichage immédiat, sans attendre le serveur.
+  const VUE = "scouthub.portail.vue";
+  const vueCachee = () => { try { if (Hub.simule && Hub.simule()) return null; const c = JSON.parse(localStorage.getItem(VUE) || "null"); return c && c.m && c.e && c.e === (Hub.cachedUser() || {}).email && valid(c.m) ? c.m : null; } catch { return null; } };
   const P = window.Portail = {
     TOP, slug, safeUrl, safeIcon, safeRole, defaults, merge, valid, isAdmin: false, model: null,
-    current() { return P.model || (P.model = merge(cached() || defaults())); },
+    current() { return P.model || (P.model = vueCachee() || merge(cached() || defaults())); },
     // Connecté (compte @fsggb.fr) ? Sinon les applications protégées n'existent pas pour la personne (le serveur ne les envoie pas non plus).
     connected: () => !!(window.Hub && Hub.token && Hub.cachedUser()),
     // Interroge le serveur ; appelle onChange(modèle) si la mise en page diffère de celle affichée.
     async refresh(onChange) {
       try {
+        const connecte = P.connected();
+        // Les trois lectures partent EN MÊME TEMPS (la mise en page, les outils visibles, les outils ajoutés).
+        const pOutils = connecte ? Hub.call("outils").catch(() => null) : null, pEntrees = connecte ? Hub.call("entrees", { section: "outils" }).catch(() => null) : null;
         const o = await Hub.call("portailLire"); P.isAdmin = !!o.admin && !Hub.simule();   // en simulation : jamais les droits de l'administrateur
         const m = valid(o.portail) ? merge(o.portail) : merge(defaults());
-        if (P.connected()) {
-          let outils, entrees;
-          try { outils = (await Hub.call("outils")).outils; } catch { /* serveur indisponible : les outils de config.js restent affichés */ }
-          try { entrees = (await Hub.call("entrees", { section: "outils" })).entrees; } catch {}
-          appliquerOutils(m, outils, entrees);
-        }
+        if (connecte) { const ro = await pOutils, re = await pEntrees; appliquerOutils(m, ro && ro.outils, re && re.entrees, ro && ro.layout); }
         if (o.portail && valid(o.portail)) { try { localStorage.setItem(KEY, JSON.stringify(o.portail)); } catch {} }
         else { try { localStorage.removeItem(KEY); } catch {} }
         const changed = JSON.stringify(m) !== JSON.stringify(P.model);
-        P.model = m; if (changed && onChange) onChange(m);
+        P.model = m; if (connecte && !Hub.simule()) { try { localStorage.setItem(VUE, JSON.stringify({ e: (Hub.cachedUser() || {}).email, m })); } catch {} }
+        if (changed && onChange) onChange(m);
       } catch { /* hors ligne ou serveur à jour : on garde la mise en page connue */ }
     }
   };

@@ -9,7 +9,7 @@
   const libelle = (audience, g) => (audience || []).map(a => { const p = PUBLICS.find(x => x[0] === a); if (p) return p[1]; if (g) { if (a.startsWith("g:")) { const x = g.groupes.find(y => y.id === a.slice(2)); return x ? "Groupe : " + x.nom : a; } if (a.startsWith("u:")) { const x = g.unites.find(y => y.id === a.slice(2)); return x ? "Unité : " + x.nom : a; } } return a; }).join(" · ");
 
   // section : « outils » | « documentation » ; entree : null (ajout) ou { id, nom, description, url, audience: [...] } ; apres : rappelé après enregistrement.
-  async function dialogue(section, entree, apres) {
+  async function dialogue(section, entree, apres, sectionId) {
     let g; try { g = await groupesUnites(); } catch { g = { groupes: [], unites: [] }; }
     const dlg = el("dialog", { className: "entree-dlg" }), f = el("form", { method: "dialog" });
     const champ = (id, lib, props) => [el("label", { htmlFor: id, textContent: lib }), Object.assign(el("input", { id }), props)];
@@ -39,7 +39,9 @@
       ev.preventDefault(); enreg.disabled = true; etat.textContent = "Enregistrement…"; etat.classList.remove("error");
       const choix = type.value === "g" ? selG.value : type.value === "u" ? selU.value : type.value;
       const inchange = entree && note && choix === (entree.audience[0] || "") && type.value === (/^g:/.test(premier) ? "g" : /^u:/.test(premier) ? "u" : premier);
-      try { await Hub.call("entreeEcrire", { section, id: entree ? entree.id : undefined, nom: nom[1].value, description: desc[1].value, url: adr[1].value, audience: inchange ? entree.audience : [choix] }); fermer(); if (apres) apres(); }
+      try { const rep = await Hub.call("entreeEcrire", { section, id: entree ? entree.id : undefined, nom: nom[1].value, description: desc[1].value, url: adr[1].value, audience: inchange ? entree.audience : [choix] });
+        if (!entree && sectionId && rep && rep.id) { try { await Hub.call("outilsDisposer", { items: [{ cle: "e:" + rep.id, section: sectionId, ordre: 999 }] }); } catch {} }   // le nouvel outil arrive dans la section où on a cliqué sur « + »
+        fermer(); if (apres) apres(); }
       catch (e) { etat.textContent = e.message; etat.classList.add("error"); enreg.disabled = false; }
     };
     if (supp) supp.onclick = async () => { if (!confirm("Supprimer « " + entree.nom + " » ?")) return; try { await Hub.call("entreeSupprimer", { id: entree.id }); fermer(); if (apres) apres(); } catch (e) { etat.textContent = e.message; etat.classList.add("error"); } };

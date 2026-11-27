@@ -155,6 +155,15 @@ const RUBRIQUES = {
   "Agenda Fédé": { feuille: "Agenda Fédé", plage: "A2:F500", min: "equipe_nationale", cols: ["tache", "mois", "type", "description", "personne", "faite"] },
   "Lieux de camp": { feuille: "Lieux de camp", plage: "A2:L3000", min: "chef_unite", portee: true, cols: ["groupe", "unite", "annee", "region", "departement", "superficie", "feu", "bois", "eau", "frigos", "abris", "commentaire"] }
 };
+// Miniature d'un document : jeton signé (HMAC) délivré SEULEMENT avec les lignes que la personne a le droit de voir ; l'intranet ne
+// sert la miniature que si la signature est valide : aucun identifiant de fichier Drive n'est accepté sans cela.
+const b64u = u8 => btoa(String.fromCharCode(...new Uint8Array(u8))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+async function signerMini(env, payload) {
+  if (!env.MINIATURE_CLE) return "";
+  const k = await crypto.subtle.importKey("raw", enc.encode(env.MINIATURE_CLE), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64u(enc.encode(payload)) + "." + b64u(await crypto.subtle.sign("HMAC", k, enc.encode(payload))).slice(0, 27);
+}
+const idDrive = u => { const m = String(u || "").match(/^https:\/\/(?:drive|docs)\.google\.com\/(?:file|document|presentation|spreadsheets)\/d\/([\w-]{20,60})/); return m ? m[1] : ""; };
 const lienHttps = v => /^https:\/\/[^\s"'<>\\]{4,1500}$/.test(String(v || "").trim()) ? String(v).trim() : "";
 async function requireAdmin(env, token) {
   const email = await sessionEmail(env, token);
@@ -224,7 +233,18 @@ const jetonGmail = env => jetonGoogle(env, "https://www.googleapis.com/auth/gmai
 // service. SHEET_ID : identifiant de la feuille (dans son URL, après /d/) ; SHEET_SUB : compte @fsggb.fr usurpé
 // pour la lecture (doit avoir accès à la feuille).
 const CLASSEUR_PAR_DEFAUT = "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs";   // classeur « intranet » (var CLASSEUR_ID)
+const memoFeuilles = new Map();
 async function lireFeuille(env, sub, plage) {
+  // Cache court : mémoire de l'isolat 60 s, puis cache Cloudflare 3 min (données de configuration, pas de données de personnes).
+  const m = memoFeuilles.get(plage); if (m && m.exp > Date.now()) return m.v;
+  const cle = new Request("https://feuille.interne/" + encodeURIComponent((env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "|" + plage));
+  try { const c = await caches.default.match(cle); if (c) { const v = await c.json(); memoFeuilles.set(plage, { v, exp: Date.now() + 60000 }); return v; } } catch {}
+  const v = await lireFeuilleBrut(env, sub, plage);
+  memoFeuilles.set(plage, { v, exp: Date.now() + 60000 });
+  try { await caches.default.put(cle, new Response(JSON.stringify(v), { headers: { "cache-control": "public, max-age=180" } })); } catch {}
+  return v;
+}
+async function lireFeuilleBrut(env, sub, plage) {
   const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/spreadsheets.readonly", sub);
   const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + (env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
   const j = await res.json();
@@ -414,7 +434,9 @@ export async function authRoute(req, env, url, json, erreur) {
       const dispo = new Map((await env.DB.prepare("SELECT cle, nom, description, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
       const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]))
         .map(l => { const cle = "o:" + slug(l[0]), d = dispo.get(cle); return { cle, nom: (d && d.nom) || String(l[0]).trim(), desc: (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 200), section: d ? d.section : "", ordre: d ? d.ordre : null }; });
-      return json(200, { ok: true, outils });
+      const layout = { sections: [], apps: [] };
+      for (const [cle, d] of dispo) { if (cle.startsWith("s:")) layout.sections.push({ id: cle.slice(2), titre: d.nom, ligne: d.section, ordre: d.ordre }); else if (cle.startsWith("a:")) layout.apps.push({ id: cle.slice(2), nom: d.nom, desc: d.description, section: d.section, ordre: d.ordre }); }
+      return json(200, { ok: true, outils, layout });
     }
     // ---- Portée de lecture des données du registre (appelé par le Worker « donnees ») ----
     // Renvoie ce que la personne a le droit de voir : administrateur des données (DONNEES_ADMINS) = tout ; chef de groupe =
@@ -438,7 +460,10 @@ export async function authRoute(req, env, url, json, erreur) {
         const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first();
         u = { email, role: h ? h.role : "adherent", name: "", google: 0, picture: "", fsggb: estFsggb(env, email) ? 1 : 0, groupe_id: h ? h.groupe_id : null, unite_id: h ? h.unite_id : null };
       }
-      return json(200, { ok: true, user: { ...publicUser(u), simule: true } });
+      const g = u.groupe_id ? await env.DB.prepare("SELECT nom FROM groupes WHERE id = ?1").bind(u.groupe_id).first() : null;
+      const un = u.unite_id ? await env.DB.prepare("SELECT nom FROM unites WHERE id = ?1").bind(u.unite_id).first() : null;
+      const h = await env.DB.prepare("SELECT 1 AS x FROM habilitations WHERE email = ?1").bind(email).first();
+      return json(200, { ok: true, user: { ...publicUser(u), simule: true }, groupe_nom: g ? g.nom.trim() : "", unite_nom: un ? un.nom.trim() : "", connu: !!(await env.DB.prepare("SELECT 1 AS x FROM users WHERE email = ?1").bind(email).first()), chef: !!h });
     }
     // Adresses qu'un administrateur peut simuler : les accès chef déduits de la feuille « Groupes et unités ».
     if (url.pathname === "/auth/habilites") {
@@ -491,11 +516,13 @@ export async function authRoute(req, env, url, json, erreur) {
       const items = Array.isArray(r.items) ? r.items.slice(0, 300) : [];
       const lot = [];
       for (const it of items) {
-        const cle = String(it.cle || ""); if (!/^[oe]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu : " + cle.slice(0, 40));
+        const cle = String(it.cle || ""); if (!/^[oeas]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu : " + cle.slice(0, 40));
         const sec = String(it.section || "").slice(0, 60); if (sec && !/^[a-z0-9-]{1,60}$/.test(sec)) throw new Erreur("Section invalide.");
+        const nomLibre = cle.startsWith("o:") || cle.startsWith("a:") || cle.startsWith("s:");
         lot.push(env.DB.prepare("INSERT INTO disposition (cle, nom, description, section, ordre) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, section = excluded.section, ordre = excluded.ordre")
-          .bind(cle, cle.startsWith("o:") ? String(it.nom || "").trim().slice(0, 60) : "", cle.startsWith("o:") ? String(it.description || "").trim().slice(0, 200) : "", sec, Math.max(0, Math.min(999, parseInt(it.ordre, 10) || 0))));
+          .bind(cle, nomLibre ? String(it.nom || "").trim().slice(0, 60) : "", (cle.startsWith("o:") || cle.startsWith("a:")) ? String(it.description || "").trim().slice(0, 200) : "", sec, Math.max(0, Math.min(999, parseInt(it.ordre, 10) || 0))));
       }
+      for (const c of (Array.isArray(r.supprimer) ? r.supprimer.slice(0, 50) : [])) if (/^s:[a-z0-9-]{1,60}$/.test(String(c))) lot.push(env.DB.prepare("DELETE FROM disposition WHERE cle = ?1").bind(String(c)));
       if (lot.length) await env.DB.batch(lot);
       return json(200, { ok: true, n: lot.length });
     }
@@ -516,6 +543,10 @@ export async function authRoute(req, env, url, json, erreur) {
         const g = slug(l[0]), u = slug(l[1]);   // « Lieux de camp » : Groupe, Unité en colonnes A et B
         return g === portee.gk && (portee.acces === "groupe" || u === portee.uk);
       }).map(l => { const o = {}; def.cols.forEach((c, i) => { if (sortie.includes(c)) o[c] = String(l[i] === undefined ? "" : l[i]).trim().slice(0, 4000); }); if (o.lien !== undefined) o.lien = lienHttps(o.lien); if (o.video !== undefined) o.video = lienHttps(o.video); return o; });
+      for (const o of lignes) {   // jetons de miniature (1re page) pour les revues et les documents du Drive
+        if (r.rubrique === "Revues" && /^Revues_Files_\/[^/]+$/i.test(o.fichier || "")) o.mini = await signerMini(env, "p:" + o.fichier);
+        else if (r.rubrique === "Administratif" && idDrive(o.lien)) o.mini = await signerMini(env, "i:" + idDrive(o.lien));
+      }
       return json(200, { ok: true, rubrique: r.rubrique, colonnes: sortie, lignes, portee: portee ? portee.acces : "tout" });
     }
     if (url.pathname === "/auth/entree/supprimer") {
@@ -529,6 +560,11 @@ export async function authRoute(req, env, url, json, erreur) {
       const r = await req.json().catch(() => ({}));
       const reel = await sessionEmail(env, r.token);
       if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      if (r.menu === "Accueil") {   // images des boutons de la page d'accueil (feuille « Accueil » : nom, lien, image)
+        const pa = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
+        if (!pa.membre) return json(200, { ok: true, rubriques: [] });
+        return json(200, { ok: true, rubriques: (await lireFeuille(env, "", "Accueil!A2:C20")).filter(l => l[0]).map(l => ({ nom: String(l[0]).trim(), image: String(l[2] || "").trim().slice(0, 200) })) });
+      }
       const rubrique = ["Documentation", "Inscriptions"].includes(r.menu) ? r.menu : ""; if (!rubrique) throw new Erreur("Menu inconnu.");
       const p = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
       const lignes = await lireFeuille(env, "", "Menu!A2:E100");
