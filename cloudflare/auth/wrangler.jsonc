@@ -1,0 +1,30 @@
+{
+  // Worker d'identité : auth.fsggb.workers.dev. Déploiement : cd cloudflare/auth && npx wrangler deploy
+  // Même base D1 et même compte de service Google que le Worker « scouthub » (sessions et comptes communs).
+  "name": "auth",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "scouthub", "database_id": "1fbba344-d555-438e-b948-7bffefe30e5b" }
+  ],
+  "secrets_store_secrets": [
+    { "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }
+  ],
+  "vars": {
+    // Origines de navigateur autorisées à appeler l'API (portail et sites de la fédération)
+    "ORIGINES": "https://fsggb.github.io,https://intranet.fsggb.workers.dev",
+    // Applications qui peuvent recevoir un code d'échange (paramètre « aud ») : une valeur par application, à
+    // ajouter ici (et redéployer) pour brancher une nouvelle application. Les Apps Script prendront un nom court
+    // (ex. « boutique »), fixé identique des deux côtés.
+    "APPS_AUTORISEES": "fsggb.github.io,intranet.fsggb.workers.dev",
+    "GOOGLE_CLIENT_ID": "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com",
+    "GOOGLE_DOMAINE": "fsggb.fr",
+    "GMAIL_SENDER": "service-informatique@fsggb.fr",
+    "ADMIN_EMAIL": "jb.combet@fsggb.fr",
+    "ADMIN_GOOGLE": "service-informatique@fsggb.fr",
+    "SESSION_JOURS": "14",
+    "CODE_QUOTA_JOUR": "90",
+    "SITE_RETOUR": "https://fsggb.github.io/ScoutHub/"
+  }
+}

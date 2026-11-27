@@ -93,3 +93,22 @@ gain jugé trop faible. À reconsidérer seulement si un vrai besoin apparaît.
 3. Basculer `common.js`/`config.js` (`window.SCOUTHUB_API`) sur le Worker ; retirer `backend/Code.gs`
    seulement quand plus aucune route n'y renvoie.
 4. Dépôts privés + déploiement Cloudflare sur domaine propre : chantier séparé, pas commencé.
+
+## Worker d'identité `auth` (auth.fsggb.workers.dev) — ajouté le 27 novembre 2026
+
+Second Worker (`cloudflare/auth/`, déploiement : `cd cloudflare/auth && npx wrangler deploy`) qui sert `src/auth.js` tel
+quel, avec la même base D1 : comptes et sessions sont communs au Worker `scouthub`, qui garde ses routes `/auth/*` le
+temps que le client (`common.js`) bascule sur `auth.fsggb.workers.dev`, après quoi `auth.js` quittera `scouthub`.
+
+**Échange de code à usage unique** (applications hors domaine, dont Apps Script) :
+
+1. Le portail, session ouverte, appelle `POST /auth/echange/emettre` `{token, aud}` → `{code}` (60 s, une seule fois).
+2. Il renvoie la personne vers l'application avec `?code=…`.
+3. L'application appelle `POST /auth/echange/valider` `{code, aud}` (de serveur à serveur, sans en-tête Origin, c'est
+   permis pour cette seule route) → `{user}` ; avec `session: true`, elle reçoit aussi un jeton de session propre.
+
+`aud` doit figurer dans la variable `APPS_AUTORISEES` de `auth/wrangler.jsonc` (une entrée par application, à ajouter puis
+redéployer) ; le code est lié à son `aud` : un essai avec un autre `aud` le détruit. Table D1 : `echanges` (empreinte seule).
+
+**Pas encore fait** : bloquer l'accès aux pages dès le Worker (avant d'envoyer le HTML) pour ce que Cloudflare sert
+(`intranet.fsggb.workers.dev`) — impossible sur `fsggb.github.io` (zone GitHub). Bascule du client sur `auth.fsggb.workers.dev`.

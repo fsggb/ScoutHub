@@ -86,6 +86,8 @@ async function sessionEmail(env, token) {
   if (!(await getUser(env, s.email))) throw new Erreur("Session expirée : reconnectez-vous.", 401);
   return s.email;
 }
+// Applications autorisées à recevoir un code d'échange (var APPS_AUTORISEES, identifiants séparés par des virgules).
+const appAutorisee = (env, aud) => !!aud && String(env.APPS_AUTORISEES || "").split(",").map(s => s.trim()).filter(Boolean).includes(aud);
 async function requireAdmin(env, token) {
   const email = await sessionEmail(env, token);
   const u = await getUser(env, email);
@@ -280,6 +282,34 @@ export async function authRoute(req, env, url, json, erreur) {
       const r = await req.json().catch(() => ({}));
       const email = await sessionEmail(env, r.token);
       return json(200, { ok: true, user: publicUser(await getUser(env, email)) });
+    }
+    // ---- Échange de code à usage unique (SSO vers les applications hors domaine, dont Apps Script) ----
+    // 1) Le portail, session ouverte, demande un code pour une application précise (« aud », à lister dans
+    //    APPS_AUTORISEES : jamais une valeur libre, pour qu'un site tiers ne puisse pas s'en faire délivrer).
+    // 2) Il envoie la personne vers l'application avec ?code=… ; 3) l'application (navigateur ou serveur, ex. Apps
+    //    Script) appelle /auth/echange/valider avec ce code et le même aud : le code ne sert qu'une fois, 60 secondes.
+    if (url.pathname === "/auth/echange/emettre") {
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token);
+      const aud = String(r.aud || "");
+      if (!appAutorisee(env, aud)) throw new Erreur("Application non autorisée.", 403);
+      const code = (await sha256(crypto.randomUUID() + crypto.randomUUID())) + (await sha256(crypto.randomUUID()));
+      await env.DB.prepare("DELETE FROM echanges WHERE exp < ?1").bind(Date.now()).run();
+      await env.DB.prepare("INSERT INTO echanges (hash, email, aud, exp) VALUES (?1, ?2, ?3, ?4)").bind(await sha256(code), email, aud, Date.now() + 60000).run();
+      return json(200, { ok: true, code, expire_dans: 60 });
+    }
+    if (url.pathname === "/auth/echange/valider") {
+      const r = await req.json().catch(() => ({}));
+      const code = String(r.code || ""), aud = String(r.aud || "");
+      if (!code || !appAutorisee(env, aud)) throw new Erreur("Code ou application invalide.", 403);
+      // Suppression et lecture en une seule instruction : deux appels simultanés ne peuvent pas le consommer deux fois.
+      const e = await env.DB.prepare("DELETE FROM echanges WHERE hash = ?1 RETURNING email, aud, exp").bind(await sha256(code)).first();
+      if (!e || e.exp < Date.now() || e.aud !== aud) throw new Erreur("Ce code a expiré ou a déjà servi.", 403);
+      const u = await getUser(env, e.email);
+      if (!u) throw new Erreur("Compte introuvable.", 403);
+      const rep = { ok: true, user: publicUser(u) };
+      if (r.session) rep.token = await nouvelleSession(env, e.email);   // applications web hors domaine : leur propre session
+      return json(200, rep);
     }
     if (url.pathname === "/auth/logout") {
       const r = await req.json().catch(() => ({}));

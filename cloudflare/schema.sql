@@ -83,3 +83,12 @@ CREATE TABLE IF NOT EXISTS magic_links (
   exp INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS magic_links_email ON magic_links (email);
+
+-- Codes d'échange à usage unique (SSO vers les applications hors domaine) : seule l'empreinte du code est stockée,
+-- durée de vie 60 s, liés à une application précise (aud) ; supprimés à la première utilisation.
+CREATE TABLE IF NOT EXISTS echanges (
+  hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  aud TEXT NOT NULL,
+  exp INTEGER NOT NULL
+);
