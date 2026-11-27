@@ -98,7 +98,7 @@ async function sessionEmail(env, token) {
   if (!(await getUser(env, s.email))) throw new Erreur("Session expirée : reconnectez-vous.", 401);
   return s.email;
 }
-// Adresses autorisées à ouvrir les données sensibles (var DONNEES_ADMINS, par défaut l'administrateur ADMIN_EMAIL seul).
+// Adresses autorisées à ouvrir les données sensibles (var DONNEES_ADMINS, séparées par des virgules ; par défaut ADMIN_EMAIL seul).
 const adminDonnees = (env, email) => String(env.DONNEES_ADMINS || env.ADMIN_EMAIL || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean).includes(String(email || "").toLowerCase());
 // Applications autorisées à recevoir un code d'échange (var APPS_AUTORISEES, identifiants séparés par des virgules).
 const appAutorisee = (env, aud) => !!aud && String(env.APPS_AUTORISEES || "").split(",").map(s => s.trim()).filter(Boolean).includes(aud);
@@ -363,9 +363,13 @@ export async function authRoute(req, env, url, json, erreur) {
       const r = await req.json().catch(() => ({}));
       const email = await sessionEmail(env, r.token);
       if (!adminDonnees(env, email)) throw new Erreur("Accès aux données réservé à l'administrateur.", 403);
-      const info = await verifyGoogle(env, r.credential);
-      if (cleanEmail(info.email) !== email) throw new Erreur("Ce compte Google n'est pas celui de la session.", 403);
-      if (Date.now() / 1000 - Number(info.iat) > 300) throw new Erreur("Confirmation trop ancienne : recommencez.", 403);
+      // Par défaut la session administrateur (Google uniquement, 12 h) suffit : pas de reconnexion à chaque ouverture. Avec
+      // DONNEES_REAUTH=1 (ou si un jeton Google est fourni), une confirmation Google de moins de 5 minutes est exigée.
+      if (env.DONNEES_REAUTH === "1" || r.credential) {
+        const info = await verifyGoogle(env, r.credential);
+        if (cleanEmail(info.email) !== email) throw new Erreur("Ce compte Google n'est pas celui de la session.", 403);
+        if (Date.now() / 1000 - Number(info.iat) > 300) throw new Erreur("Confirmation trop ancienne : recommencez.", 403);
+      }
       const jeton = (await sha256(crypto.randomUUID() + crypto.randomUUID() + Date.now())) + (await sha256(crypto.randomUUID()));
       await env.DB.prepare("DELETE FROM sessions_donnees WHERE email = ?1 OR exp < ?2").bind(email, Date.now()).run();
       await env.DB.prepare("INSERT INTO sessions_donnees (hash, email, exp) VALUES (?1, ?2, ?3)").bind(await sha256(jeton), email, Date.now() + 900000).run();

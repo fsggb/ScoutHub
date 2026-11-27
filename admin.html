@@ -13,11 +13,11 @@
 <body>
   <header class="topbar" id="bar"></header>
   <main class="shell" id="main" hidden>
-    <p class="label">Administration · <a href="https://fsggb.github.io/ChatGDB/laboratoire.html">Laboratoire ChatGDB</a></p>
+    <h1>Administration</h1><p class="muted">Comptes, affichage du portail et données de la fédération · <a href="https://fsggb.github.io/ChatGDB/laboratoire.html">Laboratoire ChatGDB</a></p>
     <div class="atabs" role="tablist"><button type="button" role="tab" id="tb-comptes" aria-selected="true">Comptes</button><button type="button" role="tab" id="tb-portail" aria-selected="false">Affichage du portail</button><button type="button" role="tab" id="tb-donnees" aria-selected="false">Données</button></div>
     <div id="tab-comptes">
     <div class="home-head">
-      <div><h1>Comptes utilisateurs</h1></div>
+      <div><h2>Comptes utilisateurs</h2></div>
       <input id="filter" class="search" type="search" placeholder="Filtrer par adresse…" aria-label="Filtrer les comptes" autocomplete="off">
     </div>
     <div class="stats" id="stats" aria-live="polite"></div>
@@ -33,7 +33,7 @@
     </div>
 
     <div id="tab-portail" hidden>
-      <div class="home-head"><div><h1>Affichage du portail</h1><p class="muted">Glissez-déposez pour réordonner les sections et les applications. Les applications masquées restent visibles et utilisables par vous, signalées en pointillés ; les autres personnes ne les voient pas.</p></div>
+      <div class="home-head"><div><h2>Affichage du portail</h2><p class="muted">Glissez-déposez pour réordonner les sections et les applications. Les applications masquées restent visibles et utilisables par vous, signalées en pointillés ; les autres personnes ne les voient pas.</p></div>
         <div class="pt-actions"><button class="ghost" type="button" id="pt-reset">Valeurs d’origine</button><button class="ghost" type="button" id="pt-undo">Annuler les changements</button><button class="primary fit" type="button" id="pt-save">Enregistrer</button></div></div>
       <p id="pt-status" class="status" role="status"></p>
       <div id="pt-secs" class="pt-secs"></div>
@@ -42,10 +42,10 @@
 
 
     <div id="tab-donnees" hidden>
-      <div class="home-head"><div><h1>Données sensibles</h1><p class="muted">Copie chiffrée du classeur de la fédération. Visible de l’administrateur seul, après confirmation de son identité par Google (15 minutes). Rien n’est conservé sur cet appareil.</p></div></div>
+      <div class="home-head"><div><h2>Données sensibles</h2><p class="muted">Copie chiffrée du classeur de la fédération. Visible des administrateurs désignés seulement : l’accès est vérifié à partir de votre session administrateur, sans reconnexion. Rien n’est conservé sur cet appareil.</p></div></div>
       <section class="panel" id="dn-verrou">
-        <p id="dn-msg" class="status" role="status">Pour ouvrir les données, confirmez votre identité :</p>
-        <div id="dn-google"></div>
+        <p id="dn-msg" class="status" role="status">Ouverture des données…</p>
+        <p><button class="ghost" type="button" id="dn-rouvrir" hidden>Rouvrir les données</button></p>
       </section>
       <section id="dn-ouvert" hidden>
         <div class="dn-barre">

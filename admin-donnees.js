@@ -1,5 +1,6 @@
 // Onglet « Données » de l'administration : lecture des données sensibles (miroir chiffré, Worker donnees).
-// Accès : administrateur seul, après confirmation Google RÉCENTE ; le jeton de 15 minutes vit uniquement en mémoire
+// Accès : administrateurs listés (DONNEES_ADMINS) seulement, sur la base de leur session ; le jeton de 15 minutes, renouvelé
+// en silence tant que l'onglet est ouvert, vit uniquement en mémoire
 // (jamais dans localStorage ni dans l'adresse) et tout ce qui est affiché disparaît au verrouillage, à l'expiration
 // ou quand la page est quittée. Tout est écrit avec textContent (aucun HTML venant des données).
 (() => {
@@ -19,33 +20,27 @@
   $("tb-portail").addEventListener("click", () => onglet("portail"));
 
   async function appel(chemin, corps) {
+    if (jeton && expire - Date.now() < 300000) { try { await ouvrirAcces(); } catch { /* la requête dira si l'accès est fermé */ } }   // renouvellement silencieux
     let r; try { r = await fetch(API + chemin, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jeton, ...corps }), cache: "no-store" }); } catch { throw new Error("Serveur injoignable."); }
     let o; try { o = await r.json(); } catch { throw new Error("Réponse invalide."); }
     if (!o.ok) { const m = o.error && o.error.message || "Erreur."; if (r.status === 403) verrouiller(m); throw new Error(m); }
     return o;
   }
 
-  // ---------- verrou : confirmation Google ----------
-  let gsi = null;
-  function preparer() {
+  // ---------- ouverture : par la session administrateur (vérifiée côté serveur), sans reconnexion ----------
+  async function ouvrirAcces() {
+    const o = await Hub.call("donneesOuvrir"); jeton = o.jeton; expire = Date.now() + o.expire_dans * 1000;
+  }
+  async function preparer() {
     if (jeton) return;
-    $("dn-verrou").hidden = false; $("dn-ouvert").hidden = true;
-    if (!window.SCOUTHUB_GOOGLE_CLIENT_ID) { say($("dn-msg"), "Connexion Google non configurée.", true); return; }
-    const monter = () => {
-      google.accounts.id.initialize({ client_id: window.SCOUTHUB_GOOGLE_CLIENT_ID, auto_select: false, callback: async r => {
-        try { say($("dn-msg"), "Vérification…"); const o = await Hub.call("donneesOuvrir", { credential: r.credential }); jeton = o.jeton; expire = Date.now() + o.expire_dans * 1000; ouvrir(); }
-        catch (e) { say($("dn-msg"), e.message, true); }
-      } });
-      $("dn-google").textContent = ""; google.accounts.id.renderButton($("dn-google"), { theme: "outline", size: "large", text: "continue_with", locale: "fr", width: 300 });
-    };
-    if (window.google && google.accounts) return monter();
-    if (!gsi) { gsi = document.createElement("script"); gsi.src = "https://accounts.google.com/gsi/client"; gsi.async = true; gsi.onload = monter; document.head.append(gsi); }
+    $("dn-verrou").hidden = false; $("dn-ouvert").hidden = true; say($("dn-msg"), "Ouverture des données…");
+    try { await ouvrirAcces(); ouvrir(); } catch (e) { say($("dn-msg"), e.message, true); }
   }
 
   // ---------- ouverture / verrouillage ----------
   async function ouvrir() {
     $("dn-verrou").hidden = true; $("dn-ouvert").hidden = false;
-    clearInterval(minuteur); minuteur = setInterval(() => { if (Date.now() >= expire) verrouiller("Session de données expirée : confirmez à nouveau."); else say($("dn-etat"), (charge ? $("dn-etat").dataset.n : "") + " · verrouillage automatique dans " + Math.ceil((expire - Date.now()) / 60000) + " min"); }, 15000);
+    clearInterval(minuteur); minuteur = setInterval(() => { if (Date.now() >= expire) verrouiller("Accès fermé : rouvrez l'onglet."); else say($("dn-etat"), charge ? $("dn-etat").dataset.n : ""); }, 15000);
     try {
       const o = await appel("/donnees/etat", {});
       const sel = $("dn-feuille"); sel.textContent = "";
@@ -57,10 +52,11 @@
   function verrouiller(msg) {
     if (jeton) { const j = jeton; jeton = null; Hub.call("donneesFermer", { jeton: j }).catch(() => {}); }
     clearInterval(minuteur); vider(); expire = 0; charge = false;
-    $("dn-ouvert").hidden = true; $("dn-verrou").hidden = false; say($("dn-msg"), msg || "Verrouillé. Pour rouvrir les données, confirmez votre identité :", !!msg && /expir|fermé/i.test(msg));
-    if ($("tab-donnees").hidden === false) preparer();
+    $("dn-ouvert").hidden = true; $("dn-verrou").hidden = false; say($("dn-msg"), msg || "Données verrouillées.", !!msg && /fermé|réservé/i.test(msg));
+    if (!msg) { const b = $("dn-rouvrir"); b.hidden = false; }
   }
   $("dn-verrouiller").onclick = () => verrouiller();
+  $("dn-rouvrir").onclick = () => { $("dn-rouvrir").hidden = true; preparer(); };
   addEventListener("pagehide", () => { if (jeton) { const j = jeton; jeton = null; Hub.call("donneesFermer", { jeton: j }).catch(() => {}); } vider(); });
 
   // ---------- liste ----------

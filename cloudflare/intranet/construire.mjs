@@ -2,6 +2,7 @@
 // Usage : node construire.mjs   puis   npx wrangler deploy   (depuis cloudflare/intranet/)
 import { readdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { join, extname } from "node:path";
+import vm from "node:vm";
 const RACINE = new URL("../../", import.meta.url).pathname;
 const TEXTE = new Set([".html", ".js", ".css", ".svg", ".json", ".webmanifest"]);
 const fichiers = {};
@@ -11,6 +12,7 @@ function lire(dossier, prefixe) {
     if (statSync(chemin).isDirectory()) { if (rel === "assets" || rel.startsWith("assets/")) lire(rel, rel + "/"); continue; }
     const ext = extname(nom);
     if (![".html", ".js", ".css", ".svg", ".png", ".jpg", ".jpeg"].includes(ext)) continue;
+    if (ext === ".js") { try { new vm.Script(readFileSync(chemin, "utf8"), { filename: rel }); } catch (e) { console.error("ERREUR DE SYNTAXE dans " + rel + " : " + e.message); process.exit(1); } }   // jamais de déploiement d'une page cassée
     fichiers[rel] = TEXTE.has(ext) ? { type: "text", data: readFileSync(chemin, "utf8") } : { type: "b64", data: readFileSync(chemin).toString("base64") };
   }
 }

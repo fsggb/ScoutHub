@@ -133,7 +133,7 @@
       bar.textContent = "";
       if (!user) {
         bar.append(Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
-          Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: titre || "ScoutHub" }));
+          Object.assign(document.createElement("div"), { className: "tb-titre", textContent: "ScoutHub" }));
         const q = new URLSearchParams(location.search);
         if (!(Hub.here() === "index.html" && (q.has("connexion") || q.has("next")))) {
           const sp = document.createElement("span"); sp.className = "tb-spacer"; bar.append(sp);
@@ -169,7 +169,7 @@
       else avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
-        Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
+        Object.assign(document.createElement("div"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
         wrap, sp, refresh, avatar);
     },
 

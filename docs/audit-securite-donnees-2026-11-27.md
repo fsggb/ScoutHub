@@ -7,8 +7,8 @@ Objectif : **seul l'administrateur désigné (`DONNEES_ADMINS`) peut lire les do
 
 1. **Intranet** : aucune page n'est envoyée sans session valide (contrôle dans le Worker).
 2. **Session ordinaire** : jeton aléatoire de 128 caractères, seule son empreinte est en base ; **12 h pour un administrateur** (14 jours pour les autres).
-3. **Ouverture des données** : une session ordinaire, même administrateur, ne donne **aucun** accès. Il faut une **ré-authentification Google de moins de 5 minutes** (`/auth/donnees/ouvrir`) qui délivre un **jeton de données de 15 minutes**, en mémoire du navigateur uniquement, révocable (verrouillage, fermeture de la page).
-4. **Liste blanche** : l'adresse doit figurer dans `DONNEES_ADMINS` (contrôlée dans `auth` **et** dans `donnees`). Donner le rôle « admin » à un autre compte ne lui ouvre pas les données.
+3. **Ouverture des données** : l'accès passe par un **jeton de données de 15 minutes** (`/auth/donnees/ouvrir`), en mémoire du navigateur uniquement, renouvelé en silence tant que l'onglet est ouvert, révocable (verrouillage, fermeture de la page). Décision du 27/11 : la session administrateur (Google uniquement, 12 h) suffit à l'obtenir, sans reconnexion ; la ré-authentification Google récente reste disponible (`DONNEES_REAUTH=1`).
+4. **Liste blanche** : l'adresse doit figurer dans `DONNEES_ADMINS` (jb.combet, president et service-informatique @fsggb.fr ; contrôlée dans `auth` **et** dans `donnees`). Donner le rôle « admin » à un autre compte ne lui ouvre pas les données.
 5. **Lecture** : 100 lignes par appel, 2 000 par heure, journal de chaque lecture (qui, quoi, combien, jamais le contenu), refus journalisés.
 6. **Base** : séparée de celle des comptes, juridiction UE, colonnes personnelles **chiffrées AES-256-GCM** (liste blanche des colonnes en clair ; toute colonne nouvelle est chiffrée par défaut), clé dans un secret du Worker, jamais dans la base ni le dépôt. Les lignes sont liées à leur emplacement (AAD) : une ligne déplacée ne se déchiffre pas.
 
@@ -38,6 +38,6 @@ Sans jeton ; session administrateur ordinaire utilisée comme jeton de données 
 | R3 | Le compte de service a une délégation à l'échelle du domaine (Gmail, Drive) : s'il fuit, il agit pour n'importe quel compte. | Réduire dans la console Admin Google aux seules portées utiles (retirer Drive complet s'il ne sert pas). Non vérifiable depuis ici. |
 | R4 | Le portail (GitHub Pages) garde la session dans le navigateur et contient des scripts en ligne : une faille XSS pourrait la voler. L'impact sur les données est borné par le jeton de données séparé, mais pas nul pendant les 15 minutes d'ouverture. | Terme : retirer les scripts en ligne puis ajouter une CSP stricte ; servir le portail depuis l'intranet (Cloudflare) plutôt que GitHub Pages. |
 | R5 | Les anciennes versions de la base (Time Travel D1, 30 jours) conservent des copies **chiffrées** de personnes supprimées de la feuille. | À mentionner dans le registre RGPD ; la clé reste le seul moyen de les lire. |
-| R6 | Qui est « l'administrateur des données » ? Le classeur indique « Président : president@fsggb.fr » ; la configuration actuelle : `jb.combet@fsggb.fr`. | **À confirmer.** |
+| R6 | Trois adresses ouvrent les données (liste blanche `DONNEES_ADMINS`). Sans ré-authentification, un jeton de session administrateur volé suffit à les lire pendant 12 h. | Risque accepté par l'administrateur ; limité par le plafond de lecture et le journal. `DONNEES_REAUTH=1` le referme. |
 | R7 | Le chemin positif de la ré-authentification Google (bouton → jeton de données → lecture) n'a pas pu être testé automatiquement (il demande une vraie connexion). | À valider une fois par l'administrateur. |
 | R8 | Sauvegarde quotidienne vers le Drive non encore faite. | Prévue. |
