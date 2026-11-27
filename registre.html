@@ -16,19 +16,7 @@
 <body data-onglet="inscriptions">
   <header class="topbar" id="bar"></header>
   <main class="shell rg-shell" id="main" hidden>
-    <a class="rg-retour" href="inscriptions.html">← Inscriptions</a>
-    <h1 id="rg-h1">Inscriptions</h1>
-    <p class="muted" id="rg-portee"></p>
-
-    <section class="rg-admin" id="rg-admin" hidden aria-label="Simulation d’une adresse">
-      <label for="rg-comme">Voir comme :</label>
-      <select id="rg-comme"><option value="">Moi-même (administrateur)</option></select>
-      <span class="muted">Pour vérifier ce que verrait un chef, avec son adresse de connexion.</span>
-    </section>
-    <section class="rg-simule" id="rg-simule" hidden role="status">
-      <p><strong>Simulation</strong> : vous voyez exactement ce que verrait <b id="rg-sim-email"></b> (<span id="rg-sim-role"></span>). <button class="ghost" type="button" id="rg-sim-quitter">Quitter la simulation</button></p>
-      <p class="muted" id="rg-sim-outils"></p>
-    </section>
+    <div class="rg-titre"><h1 id="rg-h1">Inscriptions</h1><p class="muted" id="rg-portee"></p></div>
 
     <p class="rg-refus" id="rg-refus" role="status" hidden></p>
 
@@ -38,6 +26,7 @@
           <button type="button" role="tab" id="m-annee" aria-selected="true">Par année</button>
           <button type="button" role="tab" id="m-groupe" aria-selected="false">Par groupe</button>
         </div>
+        <div class="rg-recherche-arbre"><input id="rg-filtre" type="search" placeholder="Chercher un groupe, une unité…" aria-label="Chercher un groupe ou une unité" autocomplete="off"><button class="rg-replier" type="button" id="rg-replier" title="Tout replier" aria-label="Tout replier">⊟</button></div>
         <div class="rg-an-filtre" id="rg-an-filtre" hidden>
           <label for="rg-an">Année</label><select id="rg-an"></select>
         </div>

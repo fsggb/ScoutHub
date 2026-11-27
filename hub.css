@@ -154,9 +154,9 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tb-icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border:0;border-radius:50%;background:none;color:#d9dbf0;cursor:pointer;padding:0}
 .tb-icon:hover{background:rgba(255,255,255,.14);color:#fff}
 /* Photo de profil cliquable dans l'en-tête, façon Google : vraie photo si on l'a, sinon initiale sur fond clair. */
-.tb-avatar{display:grid;place-items:center;width:36px;height:36px;flex:none;margin-left:6px;border-radius:50%;background:#d9dbf0;color:var(--navy);font-weight:700;font-size:15px;text-decoration:none;overflow:hidden}
+.tb-avatar{position:relative;display:grid;place-items:center;width:38px;height:38px;flex:none;margin-left:6px;border-radius:50%;background:#c9a227;color:#000761;border:2px solid #fff;font-weight:700;font-size:14px;text-decoration:none;overflow:hidden}
 .tb-avatar:hover{box-shadow:0 0 0 2px rgba(255,255,255,.5)}
-.tb-avatar img{width:100%;height:100%;object-fit:cover}
+.tb-avatar img,.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.av-ini{letter-spacing:.02em;line-height:1}
 .tiroir-fond{position:fixed;inset:0;background:rgba(0,7,97,.35);z-index:29}
 .tiroir{position:fixed;top:0;left:0;bottom:0;width:min(300px,82vw);background:#fff;z-index:30;display:flex;flex-direction:column;box-shadow:4px 0 24px rgba(0,7,97,.25);overflow-y:auto;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
 .tiroir-entete{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid #e7e4dc}
@@ -189,7 +189,7 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .rail-item.actif{color:var(--navy);background:#eceafb}
 .tiroir-pied{margin-top:auto;display:flex;align-items:center;gap:10px;padding:16px 18px;border-top:1px solid #e7e4dc;font-size:13px;color:var(--text-secondary);text-decoration:none}
 .tiroir-pied:hover{background:#f6f4ee}
-.tiroir-pied .avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;flex:none;overflow:hidden}
+.tiroir-pied .avatar{position:relative;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#c9a227;color:#000761;font-weight:700;flex:none;overflow:hidden}
 .tiroir-pied .avatar img{width:100%;height:100%;object-fit:cover}
 .tiroir-pied-mail{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tiroir-pied-chevron{flex:none;color:#9a9c9b}
@@ -201,3 +201,21 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .entree-dlg{border:0;border-radius:16px;padding:22px 24px;max-width:min(520px,94vw);width:100%;background:#fff;color:#1f2430;box-shadow:0 20px 60px #0006}.entree-dlg::backdrop{background:#0008}
 .entree-dlg h2{margin:0 0 10px}.entree-dlg label{display:block;margin:12px 0 4px;font-size:14px}.entree-dlg input,.entree-dlg select{width:100%;font:inherit;color:#1f2430;background:#fff;border:1px solid #c9c5b6;border-radius:8px;padding:9px 10px;margin-bottom:4px}
 .entree-dlg .dlg-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+
+/* Gain de place en hauteur + fil d'Ariane façon explorateur + bandeau de simulation */
+.shell{padding-top:12px!important;padding-bottom:40px}
+.shell>h1,.shell>.home-head h1,.shell>.rg-titre h1{font-size:clamp(22px,2.6vw,28px);margin:2px 0 2px;line-height:1.2}
+.shell>h1+p.muted,.shell>.rg-titre p.muted,.shell>.home-head p.muted{margin:0 0 10px}
+.fil{display:flex;align-items:center;gap:2px;min-height:42px;margin:0 0 10px;padding:3px 8px;background:#fff;border:1px solid #e0dccd;border-radius:10px}
+.fil-btn{display:grid;place-items:center;width:34px;height:34px;flex:none;border:0;border-radius:8px;background:transparent;color:#3a3d4a;font-size:18px;line-height:1;cursor:pointer}
+.fil-btn:hover:not(:disabled){background:#eeeef8;color:#000761}.fil-btn:disabled{opacity:.35;cursor:default}.fil-btn:focus-visible,.crumb:focus-visible{outline:2px solid #000761;outline-offset:1px}
+.fil-sep{flex:none;width:1px;height:22px;background:#e0dccd;margin:0 6px}
+.fil-chemin{display:flex;align-items:center;flex-wrap:nowrap;gap:0;list-style:none;margin:0;padding:0;min-width:0;overflow:hidden;flex:1}
+.fil-chemin li{display:flex;align-items:center;min-width:0;flex:none;max-width:260px}.fil-chemin li:last-child{flex:0 1 auto;min-width:60px}
+.crumb{font:inherit;font-size:14px;color:#000761;background:transparent;border:0;border-radius:6px;padding:6px 8px;cursor:pointer;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+a.crumb:hover,button.crumb:hover{background:#eeeef8}.crumb.courant{color:#1f2430;font-weight:600;cursor:default}
+.fil-sep-chemin{color:#9a9c9b;padding:0 1px;flex:none}
+#sim-bandeau{position:sticky;top:0;z-index:30;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 16px;background:#fff1b8;color:#3b2f00;border-bottom:2px solid #e3c458;font-size:14px}
+#sim-bandeau button{margin-left:auto;font:inherit;font-size:13px;background:#000761;color:#fff;border:0;border-radius:999px;padding:6px 14px;cursor:pointer}
+
+.dash-card.avec-image .tile-label{background:rgba(255,255,255,.88)}

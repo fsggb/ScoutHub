@@ -5,8 +5,16 @@
   // Ordre et libellés de l'ancien intranet (menu « Inscriptions »)
   const CARTES = [["Mineurs", "Mineurs"], ["Majeurs", "Majeurs"], ["Camps", "Camp"], ["Formulaires", "Formulaires d’inscription"], ["Cotisations", "Cotisations Mineurs"], ["Cotisations_Chefs", "Cotisations Majeurs"]];
   const user = await Hub.requireUser(); if (!user) return;
-  let moi = null;
-  try { const r = await fetch(API + "/donnees/moi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token }), cache: "no-store" }); moi = await r.json(); } catch {}
+  let moi = null, images = {};
+  // Image de fond de la carte (Drive, servie par l'intranet) ; sans image ou hors intranet : le dégradé habituel.
+  const fond = (carte, image) => {
+    if (!image || !/^images\//i.test(image) || !window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET) return;
+    const u = "/img/" + image.split("/").map(encodeURIComponent).join("/"); const im = new Image();
+    im.onload = () => { carte.style.backgroundImage = "linear-gradient(180deg, rgba(0,7,97,.05) 30%, rgba(0,7,97,.78)), url(\"" + u + "\")"; carte.style.backgroundSize = "cover"; carte.style.backgroundPosition = "center"; carte.classList.add("avec-image"); };
+    im.src = u;
+  };
+  try { const r = await fetch(API + "/donnees/moi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: Hub.simule() || undefined }), cache: "no-store" }); moi = await r.json(); } catch {}
+  try { (await Hub.call("menu", { menu: "Inscriptions" })).rubriques.forEach(r => { images[r.nom.toLowerCase()] = r.image; }); } catch {}
   const zone = $("cartes"); zone.textContent = "";
   if (!moi || !moi.ok) { $("ins-note").hidden = false; $("ins-note").textContent = "Les inscriptions sont momentanément indisponibles."; return; }
   const portee = moi.acces === "tout" ? "Tous les groupes" : moi.acces === "groupe" ? "Votre groupe" : moi.acces === "unite" ? "Votre unité" : "";
@@ -20,6 +28,6 @@
     if (vivante) carte.href = "registre.html?f=" + encodeURIComponent(nom);
     const lib = document.createElement("span"); lib.className = "tile-label";
     lib.append(Object.assign(document.createElement("strong"), { textContent: titre }), Object.assign(document.createElement("span"), { className: "desc", textContent: vivante ? portee : "Bientôt disponible" }));
-    carte.append(lib); zone.append(carte);
+    carte.append(lib); zone.append(carte); fond(carte, images[titre.replace(/’/g, "'").toLowerCase()] || images[titre.toLowerCase()]);
   }
 })();

@@ -10,10 +10,12 @@
     const o = await r.json().catch(() => ({})); if (!o.ok) throw new Error(o.error && o.error.message || "Erreur."); return o;
   }
   function onglet(actif) {
-    for (const [id, p] of [["tb-comptes", "tab-comptes"], ["tb-portail", "tab-portail"], ["tb-donnees", "tab-donnees"]]) { const sel = id === "tb-" + actif; $(id).setAttribute("aria-selected", String(sel)); $(p).hidden = !sel; }
+    for (const n of ["comptes", "portail", "donnees", "simulation"]) { const sel = n === actif; $("tb-" + n).setAttribute("aria-selected", String(sel)); $("tab-" + n).hidden = !sel; }
     if (actif === "donnees") etat();
+    if (actif === "simulation") adressesSimulables();
   }
   $("tb-donnees").onclick = () => onglet("donnees");
+  $("tb-simulation").onclick = () => onglet("simulation");
   $("tb-comptes").addEventListener("click", () => onglet("comptes"));
   $("tb-portail").addEventListener("click", () => onglet("portail"));
   async function etat() {
@@ -37,4 +39,17 @@
     catch (e) { say($("dn-etat"), e.message, true); }
   }
   $("dn-tout").onclick = () => synchroniser();
+
+  // ---------- simulation : voir TOUT le site comme une adresse ----------
+  let chargees = false;
+  async function adressesSimulables() {
+    if (chargees) return;
+    try { const o = await api("/donnees/habilites"), l = $("sim-liste"); l.textContent = ""; o.habilites.forEach(h => l.append(Object.assign(document.createElement("option"), { value: h.email, label: (h.role === "chef_groupe" ? "Chef de groupe" : "Chef d’unité") + " · " + (h.groupe || "?") + (h.unite && h.role === "chef_unite" ? " · " + h.unite : "") }))); chargees = true; }
+    catch (e) { say($("sim-etat"), e.message === "Réservé à l'administrateur." ? "Seuls les administrateurs désignés peuvent simuler une adresse." : "Liste indisponible : " + e.message, true); }
+  }
+  $("sim-go").onclick = async () => {
+    say($("sim-etat"), "Vérification…");
+    try { await Hub.simulerComme($("sim-adresse").value); location.href = "index.html"; }
+    catch (e) { say($("sim-etat"), e.message, true); }
+  };
 })();

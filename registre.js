@@ -1,6 +1,7 @@
 // Registre des inscriptions (Mineurs, Majeurs, Camp, Cotisations) : liste lisible, panneau latéral de filtres réglable
-// (par année puis groupe puis unité, ou par groupe puis unité), fiche détaillée. Chaque personne ne reçoit du serveur
-// QUE les lignes de sa portée (administrateur : tout ; chef de groupe : son groupe ; chef d'unité : son unité).
+// (par année puis groupe puis unité, ou par groupe puis unité), fil d'Ariane façon explorateur, fiche détaillée.
+// Chaque personne ne reçoit du serveur QUE les lignes de sa portée (administrateur : tout ; chef de groupe : son groupe ;
+// chef d'unité : son unité). Pendant une simulation (administrateur), le serveur applique la portée de l'adresse simulée.
 // Rien n'est conservé sur l'appareil, sauf la largeur du panneau. Tout est écrit avec textContent.
 (async () => {
   "use strict";
@@ -10,42 +11,71 @@
   const user = await Hub.requireUser(); if (!user) return;
   Hub.renderBar(user, "Inscriptions"); Hub.renderTabs("inscriptions", user);
 
-  let comme = "", moi = null, meta = null, arbre = [], mode = "annee", sel = { an: "", gk: "", uk: "" }, anFiltre = "";
-  let ouverts = new Set(), q = "", debut = 0, total = 0, minuteur = null, sequence = 0;
+  let moi = null, meta = null, arbre = [], mode = "annee", sel = { an: "", gk: "", uk: "" }, anFiltre = "", titre = "Inscriptions";
+  let ouverts = new Set(), q = "", debut = 0, total = 0, minuteur = null, sequence = 0, restaure = false;
   const el = (tag, props, ...enfants) => { const e = Object.assign(document.createElement(tag), props || {}); e.append(...enfants); return e; };
+  const norm = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   async function api(chemin, corps) {
-    let r; try { r = await fetch(API + chemin, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: comme || undefined, feuille, ...corps }), cache: "no-store" }); } catch { throw new Error("Serveur injoignable."); }
+    let r; try { r = await fetch(API + chemin, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, comme: Hub.simule() || undefined, feuille, ...corps }), cache: "no-store" }); } catch { throw new Error("Serveur injoignable."); }
     let o; try { o = await r.json(); } catch { throw new Error("Réponse invalide du serveur."); }
     if (!o.ok) { if (r.status === 401) Hub.toLogin(); throw new Error(o.error && o.error.message || "Erreur."); }
     return o;
   }
   const refus = t => { $("rg-corps").hidden = true; $("rg-refus").hidden = false; $("rg-refus").textContent = t; };
 
-  // ---------- qui je suis, ce que je vois ----------
+  // ---------- noms (pour le fil d'Ariane) ----------
+  const nomGroupe = gk => { const r = arbre.find(x => x.gk === gk); return r ? (r.g || "(sans groupe)") : gk; };
+  const nomUnite = (gk, uk) => { const r = arbre.find(x => x.gk === gk && x.uk === uk); return r ? (r.u || "(sans unité)") : uk; };
+
+  // ---------- fil d'Ariane + historique (précédent / suivant / monter / actualiser) ----------
+  function fil() {
+    const items = [{ label: "Accueil", href: "index.html" }, { label: "Inscriptions", href: "inscriptions.html" }];
+    const tous = { an: "", gk: "", uk: "" }, vide = !sel.an && !sel.gk && !sel.uk;
+    const ajouter = (label, s) => items.push({ label, onClick: () => choisir(s) });
+    ajouter(titre, tous);
+    if (sel.an) ajouter(sel.an, { an: sel.an, gk: "", uk: "" });
+    if (sel.gk) ajouter(nomGroupe(sel.gk), { an: sel.an, gk: sel.gk, uk: "" });
+    if (sel.uk) ajouter(nomUnite(sel.gk, sel.uk), { an: sel.an, gk: sel.gk, uk: sel.uk });
+    if (mode === "groupe" && anFiltre) items.push({ label: "année " + anFiltre, onClick: () => { $("rg-an").value = ""; anFiltre = ""; debut = 0; dessiner(); lister(); } });
+    // la position courante n'est pas un lien : on ne garde le clic que sur les niveaux précédents
+    const dernier = items[items.length - 1]; delete dernier.onClick; delete dernier.href;
+    Hub.renderFil(items, { rafraichir: () => recharger(), haut: vide ? { href: "inscriptions.html" } : undefined });
+  }
+  const etat = () => ({ rg: 1, sel: { ...sel }, mode, anFiltre });
+  function pousser() { try { history.pushState(etat(), ""); } catch {} }
+  addEventListener("popstate", e => {
+    const s = e.state && e.state.rg ? e.state : { sel: { an: "", gk: "", uk: "" }, mode: mode, anFiltre: "" };
+    restaure = true; sel = { ...s.sel }; anFiltre = s.anFiltre || ""; debut = 0;
+    if (s.mode !== mode) reglerMode(s.mode); else { $("rg-an").value = anFiltre; dessiner(); }
+    lister(); fil(); restaure = false;
+  });
+
+  // ---------- démarrage ----------
   async function demarrer() {
     $("rg-refus").hidden = true;
     try { moi = await api("/donnees/moi"); } catch (e) { return refus(e.message); }
-    $("rg-admin").hidden = !moi.admin;
-    $("rg-simule").hidden = !moi.simule;
-    if (moi.simule) { $("rg-sim-email").textContent = moi.email; $("rg-sim-role").textContent = (Hub.ROLE_LABELS[moi.role] || moi.role) + (moi.groupe ? " · " + moi.groupe : "") + (moi.unite && moi.acces === "unite" ? " · " + moi.unite : ""); outilsSimules(); }
     const f = moi.feuilles.find(x => x.nom === feuille);
-    $("rg-h1").textContent = f ? f.titre : "Inscriptions"; document.title = (f ? f.titre : "Inscriptions") + " · ScoutHub";
-    $("rg-portee").textContent = moi.acces === "tout" ? "Vous voyez tous les groupes." : moi.acces === "groupe" ? "Vous voyez uniquement votre groupe : " + moi.groupe + "." : moi.acces === "unite" ? "Vous voyez uniquement votre unité : " + moi.unite + "." : "";
-    if (!f) return refus(moi.acces === "aucun" ? "Aucune donnée d’inscription ne vous concerne." : "Ces données ne vous concernent pas.");
-    try {
-      const a = await api("/donnees/arbre"); meta = a; arbre = a.arbre;
-    } catch (e) { return refus(e.message); }
+    titre = f ? f.titre : "Inscriptions"; $("rg-h1").textContent = titre; document.title = titre + " · ScoutHub";
+    $("rg-portee").textContent = moi.acces === "tout" ? "Tous les groupes" : moi.acces === "groupe" ? "Votre groupe : " + moi.groupe : moi.acces === "unite" ? "Votre unité : " + moi.unite : "";
+    if (!f) { fil(); return refus(moi.acces === "aucun" ? "Aucune donnée d’inscription ne vous concerne." : "Ces données ne vous concernent pas."); }
+    try { meta = await api("/donnees/arbre"); arbre = meta.arbre; } catch (e) { return refus(e.message); }
     $("rg-corps").hidden = false;
     const avecAnnee = meta.annee && arbre.some(r => r.an);
     $("m-annee").hidden = !avecAnnee; if (!avecAnnee) mode = "groupe";
-    sel = { an: "", gk: "", uk: "" }; anFiltre = ""; q = ""; $("rg-q").value = ""; debut = 0; ouverts = new Set();
-    const ans = annees(); if (ans.length && mode === "annee") ouverts.add("a:" + ans[0]);
-    reglerMode(mode); lister();
+    sel = { an: "", gk: "", uk: "" }; anFiltre = ""; q = ""; $("rg-q").value = ""; $("rg-filtre").value = ""; debut = 0; ouverts = new Set();
+    ouvrirParDefaut(); reglerMode(mode); lister(); fil();
+    try { history.replaceState(etat(), ""); } catch {}
   }
-  async function outilsSimules() {
-    $("rg-sim-outils").textContent = "";
-    try { const o = await Hub.call("outils", { comme }); $("rg-sim-outils").textContent = "Outils qu’elle voit : " + (o.outils.map(x => x.nom).join(", ") || "aucun") + "."; } catch { /* facultatif */ }
+  // Moins de clics : l'année en cours est dépliée, et un niveau qui n'a qu'un seul enfant l'est aussi (chef de groupe, chef d'unité).
+  function ouvrirParDefaut() {
+    const ans = annees();
+    if (mode === "annee" && ans.length) { ouverts.add("a:" + ans[0]); const gs = [...new Set(arbre.filter(r => r.an === ans[0]).map(r => r.gk))]; if (gs.length === 1) ouverts.add("a:" + ans[0] + "|g:" + gs[0]); }
+    if (mode === "groupe") { const gs = [...new Set(arbre.map(r => r.gk))]; if (gs.length === 1) ouverts.add("g:" + gs[0]); }
+  }
+  async function recharger() {   // ⟳ : on garde la sélection
+    try { moi = await api("/donnees/moi"); meta = await api("/donnees/arbre"); arbre = meta.arbre; } catch (e) { return refus(e.message); }
+    dessiner(); lister(); fil();
   }
 
   // ---------- panneau latéral ----------
@@ -55,56 +85,75 @@
   const nomG = rs => rs[0].g || "(sans groupe)", nomU = rs => rs[0].u || "(sans unité)";
   const tri = (a, b) => a.localeCompare(b, "fr");
 
-  function noeud({ cle, niveau, libelle, n, choisi, actuelle, aEnfants, onChoisir }) {
-    const ouvert = ouverts.has(cle);
-    const chev = el("button", { type: "button", className: "rg-chev" + (aEnfants ? "" : " vide"), textContent: ouvert ? "▼" : "▶" });
-    chev.setAttribute("aria-label", (ouvert ? "Replier " : "Déplier ") + libelle); chev.tabIndex = aEnfants ? 0 : -1;
+  function noeud({ cle, niveau, libelle, n, choisi, actuelle, aEnfants, onChoisir, force }) {
+    const ouvert = force || ouverts.has(cle);
+    const chev = el("button", { type: "button", className: "rg-chev" + (aEnfants ? "" : " vide"), textContent: ouvert ? "▼" : "▶", tabIndex: -1 });
+    chev.setAttribute("aria-label", (ouvert ? "Replier " : "Déplier ") + libelle);
     chev.onclick = () => { ouvert ? ouverts.delete(cle) : ouverts.add(cle); dessiner(); };
-    const lib = el("button", { type: "button", className: "rg-lib", textContent: libelle }); lib.onclick = () => { if (aEnfants && !ouvert) ouverts.add(cle); onChoisir(); };
+    // Un clic sélectionne ET déplie : plus besoin de viser la petite flèche.
+    const lib = el("button", { type: "button", className: "rg-lib", textContent: libelle }); lib.dataset.cle = cle;
+    lib.onclick = () => { if (aEnfants) ouverts.add(cle); onChoisir(); };
     const ligne = el("div", { className: "rg-n" + (choisi ? " sel" : "") + (actuelle ? " actuelle" : "") }, chev, lib);
-    if (actuelle) ligne.insertBefore(el("span", { className: "rg-tag", textContent: "en cours" }), ligne.lastChild.nextSibling);
+    if (actuelle) ligne.append(el("span", { className: "rg-tag", textContent: "en cours" }));
     ligne.append(el("span", { className: "rg-cnt", textContent: n.toLocaleString("fr-FR") }));
     ligne.dataset.niv = niveau; ligne.setAttribute("role", "treeitem"); if (aEnfants) ligne.setAttribute("aria-expanded", String(ouvert)); if (choisi) ligne.setAttribute("aria-selected", "true");
     return ligne;
   }
   function dessiner() {
     const racine = $("rg-arbre"); racine.textContent = "";
-    const rs = mode === "groupe" && anFiltre ? arbre.filter(r => r.an === anFiltre) : arbre;
+    const f = norm($("rg-filtre").value.trim()), force = !!f;   // un filtre de texte déplie tout ce qui correspond
+    let rs = mode === "groupe" && anFiltre ? arbre.filter(r => r.an === anFiltre) : arbre;
+    if (f) rs = rs.filter(r => norm((r.g || "") + " " + (r.u || "")).includes(f));
     const aucun = !sel.an && !sel.gk && !sel.uk;
     racine.append(noeud({ cle: "tous", niveau: 0, libelle: "Tous", n: somme(rs), choisi: aucun, aEnfants: false, onChoisir: () => choisir({ an: "", gk: "", uk: "" }) }));
-    const unites = (liste, base, gk) => [...grouper(liste, r => r.uk).values()].sort((a, b) => tri(nomU(a), nomU(b))).forEach(us => {
-      racine.append(noeud({ cle: base + "|u:" + us[0].uk, niveau: 2, libelle: nomU(us), n: somme(us), choisi: sel.uk === us[0].uk && sel.gk === gk && (mode === "groupe" || sel.an === base.slice(2, base.indexOf("|"))), aEnfants: false, onChoisir: () => choisir({ an: mode === "annee" ? base.slice(2, base.indexOf("|")) : "", gk, uk: us[0].uk }) }));
-    });
+    const unites = (liste, an, gk) => [...grouper(liste, r => r.uk).values()].sort((a, b) => tri(nomU(a), nomU(b))).forEach(us =>
+      racine.append(noeud({ cle: "u:" + an + "|" + gk + "|" + us[0].uk, niveau: 2, libelle: nomU(us), n: somme(us), choisi: sel.uk === us[0].uk && sel.gk === gk && (mode === "groupe" || sel.an === an), aEnfants: false, onChoisir: () => choisir({ an: mode === "annee" ? an : "", gk, uk: us[0].uk }) })));
     if (mode === "annee") {
-      const ans = annees(), courante = ans[0];
-      for (const an of ans) {
-        const ra = rs.filter(r => r.an === an), ka = "a:" + an + "|";
-        racine.append(noeud({ cle: "a:" + an, niveau: 0, libelle: an, n: somme(ra), choisi: sel.an === an && !sel.gk, actuelle: an === courante, aEnfants: true, onChoisir: () => choisir({ an, gk: "", uk: "" }) }));
-        if (!ouverts.has("a:" + an)) continue;
+      const courante = annees()[0];
+      for (const an of [...new Set(rs.map(r => r.an).filter(Boolean))].sort().reverse()) {
+        const ra = rs.filter(r => r.an === an);
+        racine.append(noeud({ cle: "a:" + an, niveau: 0, libelle: an, n: somme(ra), choisi: sel.an === an && !sel.gk, actuelle: an === courante, aEnfants: true, force, onChoisir: () => choisir({ an, gk: "", uk: "" }) }));
+        if (!force && !ouverts.has("a:" + an)) continue;
         [...grouper(ra, r => r.gk).values()].sort((a, b) => tri(nomG(a), nomG(b))).forEach(gs => {
           const kg = "a:" + an + "|g:" + gs[0].gk;
-          racine.append(noeud({ cle: kg, niveau: 1, libelle: nomG(gs), n: somme(gs), choisi: sel.an === an && sel.gk === gs[0].gk && !sel.uk, aEnfants: true, onChoisir: () => choisir({ an, gk: gs[0].gk, uk: "" }) }));
-          if (ouverts.has(kg)) unites(gs, "a:" + an + "|g:" + gs[0].gk, gs[0].gk);
+          racine.append(noeud({ cle: kg, niveau: 1, libelle: nomG(gs), n: somme(gs), choisi: sel.an === an && sel.gk === gs[0].gk && !sel.uk, aEnfants: true, force, onChoisir: () => choisir({ an, gk: gs[0].gk, uk: "" }) }));
+          if (force || ouverts.has(kg)) unites(gs, an, gs[0].gk);
         });
       }
     } else {
       [...grouper(rs, r => r.gk).values()].sort((a, b) => tri(nomG(a), nomG(b))).forEach(gs => {
         const kg = "g:" + gs[0].gk;
-        racine.append(noeud({ cle: kg, niveau: 1, libelle: nomG(gs), n: somme(gs), choisi: sel.gk === gs[0].gk && !sel.uk, aEnfants: true, onChoisir: () => choisir({ an: "", gk: gs[0].gk, uk: "" }) }));
-        if (ouverts.has(kg)) unites(gs, kg, gs[0].gk);
+        racine.append(noeud({ cle: kg, niveau: 1, libelle: nomG(gs), n: somme(gs), choisi: sel.gk === gs[0].gk && !sel.uk, aEnfants: true, force, onChoisir: () => choisir({ an: "", gk: gs[0].gk, uk: "" }) }));
+        if (force || ouverts.has(kg)) unites(gs, "", gs[0].gk);
       });
     }
+    if (f && racine.children.length <= 1) racine.append(el("p", { className: "rg-vide", textContent: "Aucun groupe ni unité ne correspond." }));
   }
-  function choisir(s) { sel = s; debut = 0; dessiner(); lister(); }
+  function choisir(s) { sel = s; debut = 0; dessiner(); lister(); fil(); if (!restaure) pousser(); }
   function reglerMode(m) {
     mode = m; for (const [id, v] of [["m-annee", "annee"], ["m-groupe", "groupe"]]) $(id).setAttribute("aria-selected", String(v === m));
-    const ans = annees(); const f = $("rg-an-filtre"); f.hidden = !(m === "groupe" && ans.length);
+    const ans = annees(), f = $("rg-an-filtre"); f.hidden = !(m === "groupe" && ans.length);
     const s = $("rg-an"); s.textContent = ""; s.append(el("option", { value: "", textContent: "Toutes les années" })); ans.forEach(a => s.append(el("option", { value: a, textContent: a + (a === ans[0] ? " (en cours)" : "") }))); s.value = anFiltre;
-    dessiner();
+    dessiner(); fil();
   }
-  $("m-annee").onclick = () => { sel = { an: "", gk: "", uk: "" }; anFiltre = ""; debut = 0; reglerMode("annee"); lister(); };
-  $("m-groupe").onclick = () => { sel = { an: "", gk: "", uk: "" }; debut = 0; reglerMode("groupe"); lister(); };
-  $("rg-an").onchange = () => { anFiltre = $("rg-an").value; debut = 0; dessiner(); lister(); };
+  const changerMode = m => { sel = { an: "", gk: "", uk: "" }; anFiltre = ""; debut = 0; ouverts = new Set(); mode = m; ouvrirParDefaut(); reglerMode(m); lister(); if (!restaure) pousser(); };
+  $("m-annee").onclick = () => changerMode("annee");
+  $("m-groupe").onclick = () => changerMode("groupe");
+  $("rg-an").onchange = () => { anFiltre = $("rg-an").value; debut = 0; dessiner(); lister(); fil(); pousser(); };
+  $("rg-filtre").oninput = () => dessiner();
+  $("rg-replier").onclick = () => { ouverts.clear(); $("rg-filtre").value = ""; dessiner(); };
+  // Clavier : ↑ ↓ pour parcourir, → déplier, ← replier, Entrée pour choisir.
+  $("rg-arbre").onkeydown = e => {
+    const libs = [...$("rg-arbre").querySelectorAll(".rg-lib")], i = libs.indexOf(document.activeElement); if (i < 0) return;
+    if (e.key === "ArrowDown") { (libs[i + 1] || libs[i]).focus(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { (libs[i - 1] || libs[i]).focus(); e.preventDefault(); }
+    else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      const ligne = document.activeElement.parentElement, cle = document.activeElement.dataset.cle, ouvert = ligne.getAttribute("aria-expanded");
+      if (ouvert === null) return;
+      if (e.key === "ArrowRight" && ouvert === "false") ouverts.add(cle); else if (e.key === "ArrowLeft" && ouvert === "true") ouverts.delete(cle); else return;
+      dessiner(); const nv = [...$("rg-arbre").querySelectorAll(".rg-lib")].find(x => x.dataset.cle === cle); if (nv) nv.focus(); e.preventDefault();
+    }
+  };
 
   // ---------- poignée : largeur du panneau réglable (souris, doigt, clavier) ----------
   const corps = $("rg-corps"), poignee = $("rg-poignee");
@@ -116,7 +165,6 @@
   poignee.onkeydown = e => { const l = $("rg-lateral").getBoundingClientRect().width; if (e.key === "ArrowLeft") { largeur(l - 24); e.preventDefault(); } if (e.key === "ArrowRight") { largeur(l + 24); e.preventDefault(); } };
 
   // ---------- liste ----------
-  // Colonnes de la liste : celles de la « vue » de la feuille (même si l'ordre complet n'est pas encore connu du serveur).
   const colonnes = () => { const c = meta.colonnes || [], v = (meta.vue || []).filter(x => !c.length || c.includes(x)); return v.length ? v : c.slice(0, 8); };
   async function lister() {
     const mon = ++sequence; $("rg-compte").textContent = "Chargement…";
@@ -146,8 +194,7 @@
   function fiche(l) {
     const ordre = (meta.colonnes && meta.colonnes.length) ? meta.colonnes : [...colonnes(), ...Object.keys(l).filter(k => k !== "rang" && !colonnes().includes(k))];
     const cols = ordre.filter(c => l[c] !== undefined && l[c] !== "");
-    const v = colonnes().slice(0, 2).map(c => l[c]).filter(Boolean).join(" ");
-    $("rg-fiche-titre").textContent = v || "Fiche";
+    $("rg-fiche-titre").textContent = colonnes().slice(0, 2).map(c => l[c]).filter(Boolean).join(" ") || "Fiche";
     const dl = $("rg-fiche-champs"); dl.textContent = "";
     cols.forEach(c => { const val = String(l[c]); dl.append(el("dt", { textContent: c }), el("dd", {}, /^https:\/\/[^\s"'<>]{4,500}$/.test(val) ? el("a", { href: val, target: "_blank", rel: "noopener noreferrer", textContent: "Ouvrir le lien" }) : document.createTextNode(val))); });
     $("rg-fiche").showModal();
@@ -156,16 +203,5 @@
   $("rg-fiche").addEventListener("click", e => { if (e.target === $("rg-fiche")) $("rg-fiche").close(); });
   addEventListener("pagehide", () => { try { $("rg-table").tBodies[0].textContent = ""; $("rg-fiche-champs").textContent = ""; } catch {} });
 
-  // ---------- administrateur : voir comme une adresse ----------
-  async function preparerAdmin() {
-    try {
-      const o = await api("/donnees/habilites"); const s = $("rg-comme");
-      o.habilites.forEach(h => s.append(el("option", { value: h.email, textContent: h.email + " — " + (h.role === "chef_groupe" ? "chef de groupe" : "chef d’unité") + " · " + (h.groupe || "?") + (h.unite && h.role === "chef_unite" ? " · " + h.unite : "") })));
-    } catch { /* pas administrateur */ }
-  }
-  $("rg-comme").onchange = () => { comme = $("rg-comme").value; demarrer(); };
-  $("rg-sim-quitter").onclick = () => { comme = ""; $("rg-comme").value = ""; demarrer(); };
-
   await demarrer();
-  if (moi && moi.admin) preparerAdmin();
 })();

@@ -6,10 +6,14 @@
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
   "services": [{ "binding": "AUTH", "service": "auth" }],
+  // Compte de service Google (lecture seule du dossier d'images Drive)
+  "secrets_store_secrets": [{ "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }],
   "vars": {
     "SELF_ORIGIN": "https://intranet.fsggb.workers.dev",
     "GOOGLE_CLIENT_ID": "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com",
     "SESSION_JOURS": "14",
+    // Dossier Drive des images (contient aussi la base AppSheet : lecture seule, sous-dossier Images/ uniquement)
+    "DRIVE_IMAGES_ID": "1DSywQqe-QnEDSO7q1Pb2-HD33Maafm7p",
     // Applications extérieures branchées sur la connexion unifiée : identifiant (= « aud » de auth/wrangler.jsonc) → adresse de base.
     "APPS_EXTERNES": "{}"
   }

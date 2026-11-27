@@ -10,6 +10,7 @@
 // La session est un cookie HttpOnly/Secure/SameSite=Lax qui contient le jeton de session ; il est revérifié auprès
 // d'auth (mémorisé 20 s) à chaque requête : une déconnexion ou une suppression de compte coupe l'accès aussitôt.
 import FICHIERS from "./files.json";
+import { jetonGoogle } from "../../src/auth.js";
 
 const VERSION = "1.0.0", COOKIE = "sh_session", PROD = "https://fsggb.github.io/ScoutHub/";
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
@@ -45,8 +46,43 @@ async function session(req, env) {
   return s;
 }
 
+// ---------- images du Drive (lecture seule) ----------
+// Le dossier Drive (DRIVE_IMAGES_ID) contient aussi la base de données de l'ancienne application AppSheet : on n'y touche JAMAIS.
+// Portée « drive.readonly » (aucune écriture possible), uniquement le sous-dossier « Images/ », uniquement des fichiers image,
+// uniquement en lecture. Résultat mémorisé 1 jour (cache Cloudflare) : le Drive n'est pas interrogé à chaque affichage.
+const echap = t => String(t).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function driveListe(jeton, q) {
+  const r = await fetch("https://www.googleapis.com/drive/v3/files?pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,mimeType,size)&q=" + encodeURIComponent(q), { headers: { authorization: "Bearer " + jeton } });
+  if (!r.ok) throw new Error("Drive " + r.status);
+  return (await r.json()).files || [];
+}
+async function imageDrive(env, chemin, ctx) {
+  const segs = chemin.split("/").filter(Boolean);
+  if (!env.DRIVE_IMAGES_ID || segs.length < 2 || segs.length > 5 || segs[0].toLowerCase() !== "images" || segs.some(x => x === "." || x === ".." || !/^[^\\<>:"|?*\u0000-\u001f]{1,120}$/.test(x))) return erreur(404, "Image inconnue.");
+  const cle = new Request("https://img.interne/" + encodeURIComponent(segs.join("/"))), cache = caches.default;
+  const connue = await cache.match(cle); if (connue) return connue;
+  try {
+    const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/drive.readonly", "");
+    let parent = env.DRIVE_IMAGES_ID;
+    for (const seg of segs.slice(0, -1)) {
+      const d = (await driveListe(jeton, `'${echap(parent)}' in parents and name = '${echap(seg)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`))[0];
+      if (!d) return erreur(404, "Image inconnue.");
+      parent = d.id;
+    }
+    const feuille = segs[segs.length - 1].replace(/\.(png|jpe?g|webp|svg|gif)$/i, "");
+    const trouves = (await driveListe(jeton, `'${echap(parent)}' in parents and name contains '${echap(feuille)}' and mimeType contains 'image/' and trashed = false`)).filter(f => /^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(f.mimeType));
+    const f = trouves.find(x => x.name.toLowerCase() === segs[segs.length - 1].toLowerCase()) || trouves.find(x => x.name.toLowerCase().startsWith(feuille.toLowerCase() + ".")) || trouves[0];
+    if (!f || (+f.size || 0) > 4e6) return erreur(404, "Image inconnue.");
+    const r = await fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(f.id) + "?alt=media&supportsAllDrives=true", { headers: { authorization: "Bearer " + jeton } });
+    if (!r.ok) return erreur(404, "Image inconnue.");
+    const rep = new Response(r.body, { headers: { "content-type": f.mimeType, "cache-control": "private, max-age=86400", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", ...SECURITE } });
+    ctx.waitUntil(cache.put(cle, rep.clone()));
+    return rep;
+  } catch { return erreur(502, "Image momentanément indisponible."); }
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     let p = decodeURIComponent(url.pathname);
     const lecture = req.method === "GET" || req.method === "HEAD";
@@ -93,6 +129,8 @@ export default {
       const cible = new URL(vers); cible.searchParams.set("code", o.code); cible.searchParams.set("aud", aud);
       return new Response(null, { status: 302, headers: { location: cible.href, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
     }
+
+    if (p.startsWith("/img/") && lecture) return imageDrive(env, p.slice(5), ctx);
 
     // ----- pages et fichiers -----
     if (!lecture) return erreur(405, "Méthode refusée.");

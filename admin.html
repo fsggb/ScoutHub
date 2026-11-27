@@ -14,7 +14,7 @@
   <header class="topbar" id="bar"></header>
   <main class="shell" id="main" hidden>
     <h1>Administration</h1><p class="muted">Comptes, affichage du portail et données de la fédération · <a href="https://fsggb.github.io/ChatGDB/laboratoire.html">Laboratoire ChatGDB</a></p>
-    <div class="atabs" role="tablist"><button type="button" role="tab" id="tb-comptes" aria-selected="true">Comptes</button><button type="button" role="tab" id="tb-portail" aria-selected="false">Affichage du portail</button><button type="button" role="tab" id="tb-donnees" aria-selected="false">Données</button></div>
+    <div class="atabs" role="tablist"><button type="button" role="tab" id="tb-comptes" aria-selected="true">Comptes</button><button type="button" role="tab" id="tb-portail" aria-selected="false">Affichage du portail</button><button type="button" role="tab" id="tb-donnees" aria-selected="false">Données</button><button type="button" role="tab" id="tb-simulation" aria-selected="false">Simulation</button></div>
     <div id="tab-comptes">
     <div class="home-head">
       <div><h2>Comptes utilisateurs</h2></div>
@@ -46,6 +46,18 @@
         <div class="pt-actions"><button class="primary" type="button" id="dn-tout">Tout synchroniser</button></div></div>
       <p id="dn-etat" class="status" role="status"></p>
       <div class="table-wrap"><table class="users"><thead><tr><th>Feuille</th><th>Lignes</th><th>Dernière synchronisation</th><th>État</th><th>Lignes sans groupe connu</th><th class="right">Action</th></tr></thead><tbody id="dn-corps"></tbody></table></div>
+    </div>
+
+    <div id="tab-simulation" hidden>
+      <div class="home-head"><div><h2>Voir le site comme une autre personne</h2><p class="muted">Choisissez une adresse : tout le site s’affiche exactement comme pour elle (menus, outils, documentation, inscriptions), en lecture seule. Un bandeau jaune rappelle la simulation et permet d’en sortir. Chaque ouverture est journalisée.</p></div></div>
+      <section class="panel stack">
+        <label for="sim-adresse">Adresse à simuler</label>
+        <input id="sim-adresse" list="sim-liste" type="email" placeholder="prenom.nom@fsggb.fr" autocomplete="off" aria-describedby="sim-aide">
+        <datalist id="sim-liste"></datalist>
+        <p class="hint left" id="sim-aide">Les adresses des chefs de groupe et d’unité (feuille « Groupes et unités ») sont proposées. Toute autre adresse @fsggb.fr s’affiche comme un simple membre.</p>
+        <p><button class="primary" type="button" id="sim-go">Voir le site comme cette personne</button></p>
+        <p id="sim-etat" class="status" role="status"></p>
+      </section>
     </div>
 
     <dialog id="dlg-app">

@@ -399,7 +399,7 @@ export async function authRoute(req, env, url, json, erreur) {
       const lignes = await lireFeuille(env, "", "Outils!A2:E100");
       const lien = l => /^https?:\/\//i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
       const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]))
-        .map(l => ({ nom: String(l[0]).trim(), desc: l[1] || "", lien: lien(String(l[3]).trim()) }));
+        .map(l => ({ nom: String(l[0]).trim(), desc: l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 200) }));
       return json(200, { ok: true, outils });
     }
     // ---- Portée de lecture des données du registre (appelé par le Worker « donnees ») ----
@@ -411,6 +411,20 @@ export async function authRoute(req, env, url, json, erreur) {
       const reel = await sessionEmail(env, r.token);
       if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
       return json(200, { ok: true, reel, admin_reel: adminDonnees(env, reel), ...(await porteeDonnees(env, r.comme ? cleanEmail(r.comme) : reel)), simule: !!r.comme });
+    }
+    // Profil d'une adresse, pour qu'un administrateur voie TOUT le site comme cette personne (lecture seule : le serveur
+    // n'accepte « comme » que sur des lectures, jamais sur une écriture). Réservé à DONNEES_ADMINS.
+    if (url.pathname === "/auth/profil") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (!adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      const email = cleanEmail(r.comme);
+      let u = await effectif(env, email);
+      if (!u) {
+        const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first();
+        u = { email, role: h ? h.role : "adherent", name: "", google: 0, picture: "", fsggb: estFsggb(env, email) ? 1 : 0, groupe_id: h ? h.groupe_id : null, unite_id: h ? h.unite_id : null };
+      }
+      return json(200, { ok: true, user: { ...publicUser(u), simule: true } });
     }
     // Adresses qu'un administrateur peut simuler : les accès chef déduits de la feuille « Groupes et unités ».
     if (url.pathname === "/auth/habilites") {
@@ -468,7 +482,7 @@ export async function authRoute(req, env, url, json, erreur) {
       const p = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
       const lignes = await lireFeuille(env, "", "Menu!A2:E100");
       const vis = v => { if (p.role === "admin") return true; const k = slug(v || "all") || "all"; return k === "all" ? p.membre : k === "equipe-nationale" ? p.membre && ROLES.indexOf(p.role) >= ROLES.indexOf("equipe_nationale") : false; };
-      return json(200, { ok: true, rubriques: lignes.filter(l => l[0] === rubrique && l[1] && vis(l[4])).map(l => ({ nom: String(l[1]).trim() })) });
+      return json(200, { ok: true, rubriques: lignes.filter(l => l[0] === rubrique && l[1] && vis(l[4])).map(l => ({ nom: String(l[1]).trim(), image: String(l[3] || "").trim().slice(0, 200) })) });
     }
     if (url.pathname === "/auth/admin/list") {
       await requireAdmin(env, (await req.json().catch(() => ({}))).token);
