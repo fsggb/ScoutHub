@@ -5,7 +5,7 @@
   "use strict";
   const titre = document.querySelector("h1").textContent;
   const actif = document.body.dataset.onglet || "";
-  { const connu = Hub.cachedUser(); if (connu) { Hub.renderBar(connu, titre); Hub.renderTabs(actif, connu); } }      // affichage tout de suite, sans attendre le serveur
+  { const connu = Hub.cachedUser(); if (connu) { Hub.renderBar(connu, titre); Hub.renderTabs(actif, connu); Hub.montrerMain(); } }      // affichage tout de suite, sans attendre le serveur
   const user = await Hub.requireUser(); if (!user) return;
   Hub.renderBar(user, titre); Hub.renderTabs(actif, user);
 })();

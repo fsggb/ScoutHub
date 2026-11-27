@@ -1,7 +1,7 @@
 (async () => {
   "use strict";
   const { $, say } = Hub;
-  { const connu = Hub.cachedUser(); if (connu) { Hub.renderBar(connu, "Mon compte"); Hub.renderTabs("compte", connu); } }      // affichage tout de suite, sans attendre le serveur
+  { const connu = Hub.cachedUser(); if (connu) { Hub.renderBar(connu, "Mon compte"); Hub.renderTabs("compte", connu); Hub.montrerMain(); } }      // affichage tout de suite, sans attendre le serveur
   const user = await Hub.requireUser(); if (!user) return;
   Hub.renderBar(user, "Mon compte"); Hub.renderTabs("compte", user);
   $("c-email").textContent = user.email;

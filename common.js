@@ -80,12 +80,21 @@
       store.set(null); location.replace(ROOT.href + "index.html");
     },
 
-    // Vérifie la session ; renvoie l'utilisateur ou redirige vers la connexion.
+    // Pages réservées (documentation/inscriptions/compte/administration/aide) : <main id="main" hidden> dans le
+    // HTML, affiché seulement une fois la connexion confirmée — jamais par défaut. Sans ça, taper l'adresse
+    // d'une page réservée l'affiche brièvement avant la redirection (contournement repéré le 27/11) : inoffensif
+    // tant que ces pages n'ont que des espaces réservés, mais plus du tout une fois de vraies données posées —
+    // toute donnée sensible doit être récupérée par un appel serveur authentifié (comme la liste des comptes de
+    // l'administration), jamais écrite dans le HTML statique de la page.
+    montrerMain() { const m = $("main"); if (m) m.hidden = false; },
+
+    // Vérifie la session ; renvoie l'utilisateur ou redirige vers la connexion. N'affiche <main> qu'en cas de succès.
     async requireUser({ admin = false } = {}) {
       if (!store.get()) { Hub.toLogin(); return null; }
       try { Hub.user = (await Hub.call("me")).user; cacheUser(Hub.user); }
       catch { Hub.toLogin(); return null; }
       if (admin && Hub.user.role !== "admin") { location.replace(ROOT.href + "index.html"); return null; }
+      Hub.montrerMain();
       return Hub.user;
     },
 
