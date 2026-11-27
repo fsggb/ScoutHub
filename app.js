@@ -76,8 +76,6 @@
 
   function showAuth() {
     setupGoogle();
-    // « Avec mon compte Boutique GDB » : la boutique renverra ici (même page, même « next »), connecté
-    const bq = $("bq-login"); if (bq) bq.href = "https://boutique.fsggb.fr/?sso=scouthub&retour=" + encodeURIComponent(location.origin + location.pathname + location.search);
     if (new URLSearchParams(location.search).has("diag")) {   // ?diag=1 : montre ce que la page envoie à Google
       const id = window.SCOUTHUB_GOOGLE_CLIENT_ID || "(aucun)";
       $("g-diag").hidden = false; $("g-diag").textContent = "Diagnostic Google — identifiant : " + id + " · origine du site : " + location.origin + " (à déclarer dans « Origines JavaScript autorisées »)";
@@ -120,7 +118,7 @@
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Hub.estFederation(Hub.user)) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";
@@ -151,16 +149,9 @@
   function enter() { if (!goNext()) showHome(); }
 
   // ---------- démarrage ----------
-  // Retour de la boutique (« Avec mon compte Boutique ») : un code à usage unique ouvre la session ScoutHub.
-  const retourBoutique = new URLSearchParams(location.search).get("boutique");
-  if (retourBoutique && /^[0-9a-f]{48}$/.test(retourBoutique) && window.SCOUTHUB_API) {
-    const q = new URLSearchParams(location.search); q.delete("boutique");
-    history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
-    Hub.call("boutique", { code: retourBoutique })
-      .then(out => { store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); enter(); })
-      .catch(e => { showAuth(); say($("auth-status"), e.message, true); });
-    return;
-  }
+  // « Avec mon compte Boutique GDB » retiré (26/11) : ne fonctionnait pas, seule la connexion Google ou par
+  // e-mail @fsggb.fr reste proposée (Boutique → ScoutHub). Le sens inverse (clic sur la tuile Boutique GDB une
+  // fois connecté à ScoutHub, ScoutHub → Boutique) est conservé plus haut (tile()).
   const wantLogin = new URLSearchParams(location.search).has("connexion") || new URLSearchParams(location.search).has("next");
   if (store.get() && window.SCOUTHUB_API) {
     // Affichage immédiat avec l'utilisateur mémorisé, vérification de la session en arrière-plan.

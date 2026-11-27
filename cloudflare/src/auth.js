@@ -27,19 +27,22 @@ async function getUser(env, email) {
   const u = await env.DB.prepare("SELECT * FROM users WHERE email = ?1").bind(email).first();
   if (u) { const p = await portee(env, email); return { ...u, groupe_id: p.groupe_id, unite_id: p.unite_id }; }
   if (email === env.ADMIN_EMAIL) {
-    await env.DB.prepare("INSERT OR IGNORE INTO users (email, role, name, google, created) VALUES (?1, 'admin', '', 0, ?2)").bind(email, Date.now()).run();
-    return { email, role: "admin", name: "", google: 0, created: Date.now(), groupe_id: null, unite_id: null };
+    await env.DB.prepare("INSERT OR IGNORE INTO users (email, role, name, google, fsggb, created) VALUES (?1, 'admin', '', 0, 1, ?2)").bind(email, Date.now()).run();
+    return { email, role: "admin", name: "", google: 0, fsggb: 1, created: Date.now(), groupe_id: null, unite_id: null };
   }
   return null;
 }
 async function saveUser(env, email, base) {
   const role = adminProtege(env, email) ? "admin" : normRole(base.role);
   await env.DB.prepare(
-    "INSERT INTO users (email, role, name, google, picture, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6) " +
-    "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google, picture = excluded.picture"
-  ).bind(email, role, base.name || "", base.google ? 1 : 0, base.picture || "", base.created || Date.now()).run();
+    "INSERT INTO users (email, role, name, google, picture, fsggb, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) " +
+    "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google, picture = excluded.picture, fsggb = excluded.fsggb"
+  ).bind(email, role, base.name || "", base.google ? 1 : 0, base.picture || "", base.fsggb ? 1 : 0, base.created || Date.now()).run();
 }
-function publicUser(u) { return { email: u.email, role: normRole(u.role), name: u.name || "", google: !!u.google, picture: u.picture || "", groupe_id: u.groupe_id || null, unite_id: u.unite_id || null }; }
+// fsggb : compte @fsggb.fr (Google Workspace de la fédération, ou code e-mail) ; false pour un compte Google
+// personnel externe (ACCÈS MEMBRE ouvert à tous, voir /auth/google) — réserve les applications « protege » aux
+// membres réels de la fédération, pas à quiconque possède un compte Google.
+function publicUser(u) { return { email: u.email, role: normRole(u.role), name: u.name || "", google: !!u.google, picture: u.picture || "", fsggb: u.fsggb === undefined ? true : !!u.fsggb, groupe_id: u.groupe_id || null, unite_id: u.unite_id || null }; }
 async function portee(env, email) { return (await env.DB.prepare("SELECT groupe_id, unite_id FROM portees WHERE email = ?1").bind(email).first()) || { groupe_id: null, unite_id: null }; }
 
 // ---------- portée d'un compte : quel groupe/quelle unité voit-il (préparation des futures données sensibles) ----------
@@ -77,7 +80,10 @@ async function sessionEmail(env, token) {
   const h = await sha256(String(token));
   const s = await env.DB.prepare("SELECT * FROM sessions WHERE hash = ?1").bind(h).first();
   if (!s || s.exp < Date.now()) { if (s) await env.DB.prepare("DELETE FROM sessions WHERE hash = ?1").bind(h).run(); throw new Erreur("Session expirée : reconnectez-vous.", 401); }
-  if (!estFsggb(env, s.email) || !(await getUser(env, s.email))) throw new Erreur("Session expirée : reconnectez-vous.", 401);
+  // Compte existant = session valide, qu'il soit @fsggb.fr ou un compte Google externe (ACCÈS MEMBRE) : le
+  // domaine ne conditionne plus la validité de la session, seulement l'accès aux applications « protege »
+  // (filtré côté client avec Hub.estFederation, à partir de user.fsggb renvoyé par publicUser).
+  if (!(await getUser(env, s.email))) throw new Erreur("Session expirée : reconnectez-vous.", 401);
   return s.email;
 }
 async function requireAdmin(env, token) {
@@ -87,11 +93,11 @@ async function requireAdmin(env, token) {
   return email;
 }
 // Ouvre le compte au premier passage (adresse déjà prouvée par Google ou par le code) puis ouvre une session.
-async function provisionner(env, email, nom, google, photo) {
+async function provisionner(env, email, nom, google, photo, fsggb) {
   const u = await getUser(env, email);
-  if (!u) await saveUser(env, email, { role: "adherent", created: Date.now(), name: nom || "", google: !!google, picture: photo || "" });
+  if (!u) await saveUser(env, email, { role: "adherent", created: Date.now(), name: nom || "", google: !!google, picture: photo || "", fsggb: fsggb !== false });
   else if ((google && !u.google) || (!u.name && nom) || (photo && photo !== u.picture))
-    await saveUser(env, email, { role: u.role, created: u.created, name: u.name || nom || "", google: !!u.google || !!google, picture: photo || u.picture || "" });
+    await saveUser(env, email, { role: u.role, created: u.created, name: u.name || nom || "", google: !!u.google || !!google, picture: photo || u.picture || "", fsggb: u.fsggb === undefined ? fsggb !== false : !!u.fsggb });
   return nouvelleSession(env, email);
 }
 
@@ -192,9 +198,13 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!env.GOOGLE_CLIENT_ID) throw new Erreur("La connexion Google n'est pas encore activée.", 503);
       const info = await verifyGoogle(env, r.credential);
       const email = cleanEmail(info.email);
-      if (!estFsggb(env, email) || String(info.hd || "").toLowerCase() !== (env.GOOGLE_DOMAINE || "fsggb.fr")) throw new Erreur("La connexion est réservée aux adresses @" + (env.GOOGLE_DOMAINE || "fsggb.fr") + ".");
+      // Accès ouvert (26/11) à tout compte Google vérifié par Google (« ACCÈS MEMBRE ») : seul un compte @fsggb.fr
+      // réellement Google Workspace de la fédération (hd confirmé, pas seulement l'allure de l'adresse) devient
+      // membre de la fédération (fsggb=true, donne accès aux applications « protege » : ChatGDB, bibliothèque…).
+      // Le code par e-mail (/auth/code/*) reste lui réservé aux adresses @fsggb.fr, inchangé.
+      const estMembreFede = estFsggb(env, email) && String(info.hd || "").toLowerCase() === (env.GOOGLE_DOMAINE || "fsggb.fr");
       const photo = /^https:\/\/[^\s"<>]{1,500}$/.test(String(info.picture || "")) ? info.picture : "";
-      const token = await provisionner(env, email, info.name, true, photo);
+      const token = await provisionner(env, email, info.name, true, photo, estMembreFede);
       return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
     }
     if (url.pathname === "/auth/code/demander") {
@@ -345,7 +355,10 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!u) throw new Erreur("Compte introuvable.");
       if (!ROLES.includes(r.role)) throw new Erreur("Rôle inconnu.");
       if (adminProtege(env, email) && r.role !== "admin") throw new Erreur("Ce compte administrateur garde son rôle.");
-      await saveUser(env, email, { role: r.role, created: u.created, name: u.name, google: u.google });
+      // Un compte Google externe (fsggb=false, ACCÈS MEMBRE ouvert à tous) ne peut pas devenir chef/équipe
+      // nationale/admin : ces rôles supposent un vrai compte @fsggb.fr de la fédération.
+      if (!u.fsggb && r.role !== "adherent" && r.role !== "parent") throw new Erreur("Ce compte n'est pas un compte @fsggb.fr : il ne peut pas recevoir ce rôle.");
+      await saveUser(env, email, { role: r.role, created: u.created, name: u.name, google: u.google, picture: u.picture, fsggb: u.fsggb });
       return json(200, { ok: true });
     }
     if (url.pathname === "/auth/admin/delete") {
