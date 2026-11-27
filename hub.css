@@ -8,7 +8,6 @@
 .home-head h1{margin:0;color:var(--navy);font-weight:500;font-size:clamp(26px,4vw,36px)}
 .search{width:min(320px,100%);padding:11px 14px;border:1px solid #cfcabd;border-radius:10px;font:inherit;background:#fff}
 .search:focus{outline:2px solid var(--gold);border-color:var(--gold-dark)}
-.shell.narrow{max-width:720px}.shell.narrow h1{margin:0 0 20px;color:var(--navy);font-weight:500}
 .stack{margin-bottom:18px}.stack h2{margin:0 0 12px;color:var(--navy);font-weight:500;font-size:20px}
 .facts{margin:0}.facts div{display:grid;grid-template-columns:160px 1fr;gap:12px;padding:10px 0;border-top:1px solid #efece4}
 .facts div:first-child{border-top:0}.facts dt{color:#6a6c79;font-size:13px}.facts dd{margin:0;word-break:break-word}
@@ -23,7 +22,7 @@
 .right{text-align:right!important}.users td.right{white-space:nowrap}.users td.right>*{margin-left:8px}
 .ghost.small{padding:5px 10px;font-size:12px}.hint.left{text-align:left}
 @media(max-width:640px){
-  .topbar{height:auto;min-height:56px;padding:8px 14px;flex-wrap:wrap;row-gap:6px}
+  .topbar{height:auto;min-height:56px;padding:8px 14px;gap:8px}
   .brand strong{display:none}
   .topnav{flex:1;justify-content:flex-end;flex-wrap:nowrap;gap:2px;overflow-x:auto}
   .nav-link{padding:10px 9px;font-size:13px;white-space:nowrap}.nav-btn{padding:9px 10px;white-space:nowrap}
@@ -47,7 +46,7 @@
 .nav-btn{text-decoration:none;display:inline-block}
 .role-select{padding:5px 8px;border:1px solid #cfcabd;border-radius:8px;font:inherit;font-size:13px;background:#fff}
 .users .google::after{content:" · Google";color:#6a6c79;font-size:11px}
-.g-block{margin:0 0 6px}.bq-login{display:block;text-align:center;border:1px solid #d6d3c9;border-radius:999px;padding:10px 14px;margin:6px 0 12px;color:#0b1a6b;text-decoration:none;font-weight:600;background:#fff}.bq-login:hover{border-color:#0b1a6b}.g-btn{display:flex;justify-content:center;min-height:44px}
+.g-block{margin:0 0 6px}.g-btn{display:flex;justify-content:center;min-height:44px}
 .g-or{display:flex;align-items:center;gap:10px;margin:14px 0 4px;color:#6a6c79;font-size:12px}
 .g-or::before,.g-or::after{content:"";flex:1;height:1px;background:#e7e4dc}
 
@@ -111,6 +110,25 @@ a.primary{display:inline-block;text-decoration:none;text-align:center}
 .panel a:not(.primary),.shell p a:not(.primary){color:var(--navy);text-decoration-color:var(--gold)}
 .lead{margin:0 0 18px;font-size:17px;color:var(--text-secondary)}
 body{display:flex;flex-direction:column}main{flex:1}footer{color:#5a6676}
+
+/* Barre du bas à 4 onglets (Accueil/Documentation/Inscriptions/Outils), reprise de l'ancien intranet */
+body:has(.bottom-tabs){padding-bottom:58px}
+.bottom-tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,1fr);background:var(--navy);box-shadow:0 -2px 10px rgba(0,7,97,.18)}
+.bottom-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px 10px;gap:2px;color:#b9bce3;font-size:12px;text-decoration:none;text-align:center}
+.bottom-tab.actif{color:#fff;box-shadow:inset 0 2px 0 var(--gold)}
+.bottom-tab:hover{color:#fff}
+
+/* Tableau de bord de l'accueil et pages Documentation/Inscriptions (structure reprise de l'ancien intranet) */
+/* Tuiles « photo » (fond plein, étiquette en surimpression en bas à gauche) : même composition que l'ancien
+   intranet. Fond en dégradé tant qu'aucune vraie photo n'est fournie (voir conversation du 26/11/2026). */
+.dash-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin:18px 0}
+.dash-card{position:relative;display:flex;align-items:flex-end;min-height:140px;padding:0;border:0;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,7,97,.08);color:var(--text);text-decoration:none;transition:transform .15s,box-shadow .15s;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-soft) 55%,var(--gold-dark) 150%)}
+.dash-cards>*:nth-child(3n+2){background:linear-gradient(135deg,var(--navy-soft) 0%,var(--navy) 60%,#4a3a14 150%)}
+.dash-cards>*:nth-child(3n+3){background:linear-gradient(135deg,#1e2472 0%,#000761 55%,var(--gold-text) 160%)}
+a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.14)}
+.dash-card .tile-label{display:flex;flex-direction:column;gap:2px;margin:12px;padding:8px 12px;max-width:calc(100% - 24px);background:rgba(255,255,255,.9);border-radius:8px}
+.dash-card strong{color:var(--navy);font-size:15px;line-height:1.25}.dash-card .desc{color:#4e505d;font-size:12px}
+.dash-card.a-venir{opacity:.7}.dash-card.a-venir .tile-label{background:rgba(255,255,255,.72)}
 .app-tile:focus-visible,.nav-link:focus-visible,.nav-btn:focus-visible,.ghost:focus-visible,.primary:focus-visible,.text-button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .pt-actions{align-items:center}.pt-actions .primary{margin:0}#pt-status{margin:0 0 12px}
 .pt-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}.pt-app small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6a6c79}
@@ -119,3 +137,60 @@ body{display:flex;flex-direction:column}main{flex:1}footer{color:#5a6676}
 .stack .muted{margin:0 0 12px}.code-links .text-button:disabled{color:#6a6c79}
 .app-tile .hidden-flag{top:-9px;right:10px;box-shadow:0 0 0 2px var(--bg,#fafafc)}
 @media(max-width:640px){.topnav .nav-link:first-child{display:none}.stat span{font-size:10.5px;letter-spacing:.02em}.stat b{font-size:22px}}
+
+/* En-tête façon ancien intranet (☰, logo, titre, recherche/actualiser) et tiroir latéral.
+   Comme sur le vrai « ACCES CHEFS » : l'en-tête et la navigation (onglets du bas, rail d'ordinateur) restent
+   toujours visibles, c'est le contenu qui défile en dessous. */
+.topbar{height:72px;gap:16px;padding:0 24px;position:sticky;top:0;z-index:25}
+.tb-logo{width:36px;height:36px;object-fit:contain;flex:none;margin-right:2px}
+.tb-titre{margin:0;min-width:0;color:#fff;font-size:19px;font-weight:600;letter-spacing:.01em;font-family:system-ui,-apple-system,Segoe UI,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-spacer{flex:1}
+/* Recherche toujours visible (pas une icône qui l'ouvre), avec une loupe dessinée dans le champ lui-même. */
+.tb-search-wrap{position:relative;display:flex;align-items:center;min-width:0;flex:1;max-width:360px;margin:0 8px;color:#b9bce3}
+.tb-search-wrap svg{position:absolute;left:14px;pointer-events:none}
+.tb-search{width:100%;min-width:0;padding:10px 14px 10px 40px;border:0;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-size:14px}
+.tb-search::placeholder{color:#b9bce3}
+.tb-search:focus{outline:2px solid var(--gold);background:rgba(255,255,255,.22)}
+.tb-icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border:0;border-radius:50%;background:none;color:#d9dbf0;cursor:pointer;padding:0}
+.tb-icon:hover{background:rgba(255,255,255,.14);color:#fff}
+/* Photo de profil cliquable dans l'en-tête, façon Google : vraie photo si on l'a, sinon initiale sur fond clair. */
+.tb-avatar{display:grid;place-items:center;width:36px;height:36px;flex:none;margin-left:6px;border-radius:50%;background:#d9dbf0;color:var(--navy);font-weight:700;font-size:15px;text-decoration:none;overflow:hidden}
+.tb-avatar:hover{box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+.tb-avatar img{width:100%;height:100%;object-fit:cover}
+.tiroir-fond{position:fixed;inset:0;background:rgba(0,7,97,.35);z-index:29}
+.tiroir{position:fixed;top:0;left:0;bottom:0;width:min(300px,82vw);background:#fff;z-index:30;display:flex;flex-direction:column;box-shadow:4px 0 24px rgba(0,7,97,.25);overflow-y:auto;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+.tiroir-entete{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid #e7e4dc}
+.tiroir-entete img{width:34px;height:34px;object-fit:contain}
+.tiroir-entete strong{color:var(--navy);font-size:17px}
+.tiroir-lien{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:14px 18px;border:0;border-top:1px solid #efece4;background:none;color:var(--text);font:inherit;font-size:15px;cursor:pointer;text-decoration:none}
+.tiroir-lien svg{flex:none;color:#6a6c79}
+.tiroir-lien:hover{background:#f6f4ee}
+.tiroir-lien.actif{color:var(--navy);font-weight:600}.tiroir-lien.actif svg{color:var(--navy)}
+
+/* Barre latérale (ordinateur) : icônes seules, fond clair ; seul le bandeau du haut reste navy (comme l'ancien
+   intranet : rail blanc à gauche, pas de barre du bas). Le bandeau du haut (.topbar) reste pleine largeur dans
+   tous les cas : seul le contenu (<main>) se décale/se réduit selon la largeur du rail, jamais l'en-tête — sinon
+   un angle de l'en-tête n'est plus couvert. Cliquer sur ☰ étend le rail en place (icônes + libellés, comme
+   « ACCES CHEFS ») : ça réduit le contenu, ça ne le recouvre pas d'un tiroir par-dessus. */
+.rail{display:none}
+@media(min-width:880px){
+  .bottom-tabs{display:none}
+  body:has(.bottom-tabs){padding-bottom:0}
+  .rail{display:flex;flex-direction:column;align-items:stretch;gap:2px;position:fixed;top:72px;left:0;bottom:0;width:58px;padding:10px 8px;background:#fff;border-right:1px solid #e7e4dc;z-index:15;overflow-x:hidden;overflow-y:auto;transition:width .15s}
+  .rail.etendu{width:240px}
+  body:has(.rail) main{padding-left:58px;transition:padding-left .15s}
+  body:has(.rail.etendu) main{padding-left:240px}
+}
+.rail-item{display:flex;align-items:center;gap:12px;width:100%;height:42px;padding:0 10px;flex:none;border:0;border-radius:10px;background:none;color:#6a6c79;cursor:pointer;text-decoration:none;white-space:nowrap}
+.rail-item svg{flex:none}
+.rail-item span{display:none;font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.rail.etendu .rail-item span{display:inline}
+.rail-item:hover{background:#f6f4ee;color:var(--navy)}
+.rail-item.actif{color:var(--navy);background:#eceafb}
+.tiroir-pied{margin-top:auto;display:flex;align-items:center;gap:10px;padding:16px 18px;border-top:1px solid #e7e4dc;font-size:13px;color:var(--text-secondary);text-decoration:none}
+.tiroir-pied:hover{background:#f6f4ee}
+.tiroir-pied .avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;flex:none;overflow:hidden}
+.tiroir-pied .avatar img{width:100%;height:100%;object-fit:cover}
+.tiroir-pied-mail{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tiroir-pied-chevron{flex:none;color:#9a9c9b}
+.bottom-tab svg{display:block;margin:0 auto}

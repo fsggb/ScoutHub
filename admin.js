@@ -1,9 +1,9 @@
 (async () => {
   "use strict";
   const { $, say } = Hub;
-  { const connu = Hub.cachedUser(); if (connu) Hub.renderBar(connu); }      // barre affichée tout de suite, sans attendre le serveur
+  { const connu = Hub.cachedUser(); if (connu) { Hub.renderBar(connu, "Administration"); Hub.renderTabs("administration", connu); if (connu.role === "admin") Hub.montrerMain(); } }      // affichage tout de suite, sans attendre le serveur (jamais avant d'avoir confirmé le rôle admin, même en cache)
   const user = await Hub.requireUser({ admin: true }); if (!user) return;
-  Hub.renderBar(user);
+  Hub.renderBar(user, "Administration"); Hub.renderTabs("administration", user);
   let users = [], target = null;
   const date = t => t ? new Date(t).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 

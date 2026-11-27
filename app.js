@@ -65,6 +65,8 @@
         callback: async resp => {
           say($("auth-status"), "Un instant…");
           try {
+            // Photo de compte Google (out.user.picture) : vérifiée et renvoyée par le serveur (auth.js), qui l'a
+            // lue dans le jeton Google et conservée en base — pas besoin de la relire côté client.
             const out = await Hub.call("google", { credential: resp.credential });
             store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); enter();
           } catch (e) { say($("auth-status"), e.message, true); }
@@ -78,98 +80,38 @@
 
   function showAuth() {
     setupGoogle();
-    // « Avec mon compte Boutique GDB » : la boutique renverra ici (même page, même « next »), connecté
-    const bq = $("bq-login"); if (bq) bq.href = "https://boutique.fsggb.fr/?sso=scouthub&retour=" + encodeURIComponent(location.origin + location.pathname + location.search);
     if (new URLSearchParams(location.search).has("diag")) {   // ?diag=1 : montre ce que la page envoie à Google
       const id = window.SCOUTHUB_GOOGLE_CLIENT_ID || "(aucun)";
       $("g-diag").hidden = false; $("g-diag").textContent = "Diagnostic Google — identifiant : " + id + " · origine du site : " + location.origin + " (à déclarer dans « Origines JavaScript autorisées »)";
     }
-    Hub.renderBar(null);
+    Hub.renderBar(null, "Connexion");
     $("home").hidden = true; $("auth").hidden = false;
     if (!window.SCOUTHUB_API) say($("auth-status"), "Le serveur ScoutHub n’est pas encore configuré (config.js).", true);
     setTimeout(() => $("email").focus(), 0);
   }
 
-  // ---------- accueil ----------
-  // « Mon compte » et « Administration » sont déjà dans la barre du haut : pas de tuile en plus (une seule ligne en tête).
-  function tile(a) {
-    const link = document.createElement("a");
-    link.className = "app-tile" + (a.featured ? " featured" : "") + (a.masque ? " is-hidden" : "") + (a.admin && Portail.isAdmin ? " is-admin" : ""); link.href = Portail.safeUrl(a.url) ? a.url : "#";
-    if (!a.local) { link.target = "_blank"; link.rel = "noopener"; }
-    // La boutique : la personne connectée à ScoutHub y arrive connectée (code à usage unique, jamais la session).
-    let hote = ""; try { hote = new URL(a.url, location.href).host; } catch {}
-    if (hote === "boutique.fsggb.fr") link.addEventListener("click", ev => {
-      if (!store.get() || !window.SCOUTHUB_API) return;
-      ev.preventDefault();
-      const w = window.open("about:blank", "_blank");
-      const aller = u => { if (w) w.location.href = u; else location.href = u; };
-      Hub.call("passe").then(o => { const u = new URL(a.url); u.searchParams.set("sh", o.code); aller(u.href); }).catch(() => aller(a.url));
-    });
-    let badge; const icon = Portail.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
-    if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${icon}")`; }
-    else { badge = document.createElement("img"); badge.className = "app-badge"; badge.alt = ""; badge.decoding = "async"; badge.loading = "eager"; badge.src = icon; badge.onerror = () => { if (icon !== "assets/fsggb.png") badge.src = "assets/fsggb.png"; }; }
-    const text = document.createElement("span");
-    const strong = Object.assign(document.createElement("strong"), { textContent: a.nom });
-    const small = Object.assign(document.createElement("small"), { textContent: a.desc });
-    text.append(strong, small); link.append(badge, text);
-    if (Portail.isAdmin && (a.admin || a.masque || a.protege)) link.append(Object.assign(document.createElement("em"), { className: "hidden-flag", textContent: a.admin ? "Administrateur" : a.masque ? "Masquée pour les autres" : "Réservée aux @fsggb.fr" }));
-    return link;
-  }
-
-  function renderApps() {
-    const plat = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();      // « creation » trouve « Création »
-    const q = plat($("search").value.trim()), box = $("apps"); box.textContent = "";
-    const m = Portail.current(), shown = [];
-    let row = null, prevTop = false;
-    m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
-      if (!items.length) return;
-      shown.push(...items);
-      const section = document.createElement("section"); section.className = "app-group";
-      if (s.haut && items.length > 1) section.classList.add("wide");
-      const grid = document.createElement("div"); grid.className = "grid-apps";
-      items.forEach(a => grid.append(tile(a)));
-      section.append(Object.assign(document.createElement("h2"), { textContent: s.titre }), grid);
-      // Sections « ligne du haut » consécutives : une seule ligne, pour gagner de la place en hauteur.
-      if (s.haut) { if (!prevTop || !row) { row = document.createElement("div"); row.className = "group-row"; box.append(row); } row.append(section); prevTop = true; }
-      else { box.append(section); prevTop = false; }
-    });
-    $("none").hidden = shown.length > 0;
-  }
-  $("search").addEventListener("input", renderApps);
-
-  // L'accueil est accessible sans compte ; la connexion n'est demandée que pour ScoutCloud et l'enregistrement cloud.
-  async function showHome() {
+  // ---------- accueil : tableau de bord léger (raccourcis). La grille d'applications vit désormais sur outils.html,
+  // la structure (Accueil/Documentation/Inscriptions/Outils) reprend l'ancien intranet (Hub.renderTabs, common.js). ----------
+  function showHome() {
     $("auth").hidden = true; $("home").hidden = false;
-    Hub.renderBar(Hub.user);
-    const prenom = Hub.user ? Hub.user.email.split("@")[0].split(/[._-]+/)[0] : "";
-    $("hello").textContent = Hub.user ? "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1) : "Vos applications";
-    $("guest-note").hidden = !!Hub.user;
-    // Première visite (pas encore de mise en page en cache) : on attend la vraie mise en page du serveur avant de peindre,
-    // pour éviter que les icônes ou l'organisation des sections changent juste après l'affichage (sinon il faut recharger pour que ça se stabilise).
-    if (!Portail.model && !localStorage.getItem('scouthub.portail')) { await Portail.refresh(() => {}); renderApps(); Portail.refresh(renderApps); }
-    else { renderApps(); Portail.refresh(renderApps); }
+    Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil", Hub.user);
+    // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
+    const prenom = Hub.user.email.split("@")[0].split(/[._-]+/)[0];
+    $("hello").textContent = "Bonjour, " + prenom.charAt(0).toUpperCase() + prenom.slice(1);
   }
   function enter() { if (!goNext()) showHome(); }
 
   // ---------- démarrage ----------
-  // Retour de la boutique (« Avec mon compte Boutique ») : un code à usage unique ouvre la session ScoutHub.
-  const retourBoutique = new URLSearchParams(location.search).get("boutique");
-  if (retourBoutique && /^[0-9a-f]{48}$/.test(retourBoutique) && window.SCOUTHUB_API) {
-    const q = new URLSearchParams(location.search); q.delete("boutique");
-    history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
-    Hub.call("boutique", { code: retourBoutique })
-      .then(out => { store.set(out.token); Hub.user = out.user; Hub.cacheUser(out.user); enter(); })
-      .catch(e => { showAuth(); say($("auth-status"), e.message, true); });
-    return;
-  }
-  const wantLogin = new URLSearchParams(location.search).has("connexion") || new URLSearchParams(location.search).has("next");
+  // « Avec mon compte Boutique GDB » retiré (26/11) : ne fonctionnait pas, seule la connexion Google ou par
+  // e-mail @fsggb.fr reste proposée.
+  // Seul l'onglet Outils reste accessible sans compte (outils.html/outils.js, inchangé) : l'accueil (tableau de
+  // bord) demande désormais une connexion, comme Documentation et Inscriptions (onglet.js).
   if (store.get() && window.SCOUTHUB_API) {
     // Affichage immédiat avec l'utilisateur mémorisé, vérification de la session en arrière-plan.
     Hub.user = Hub.cachedUser();
-    if (Hub.user && !wantLogin) showHome(); // sinon : on attend la vérification de la session
-    Hub.call("me").then(o => { Hub.user = o.user; Hub.cacheUser(o.user); if (wantLogin) enter(); else showHome(); })
-      .catch(() => { store.set(null); Hub.user = null; wantLogin ? showAuth() : showHome(); });
-  } else if (wantLogin) showAuth();
-  else showHome();
+    if (Hub.user) showHome(); // sinon : on attend la vérification de la session (showAuth déjà affiché ci-dessous)
+    else showAuth();
+    Hub.call("me").then(o => { Hub.user = o.user; Hub.cacheUser(o.user); enter(); })
+      .catch(() => { store.set(null); Hub.user = null; showAuth(); });
+  } else showAuth();
 })();
