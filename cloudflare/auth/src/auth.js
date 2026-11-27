@@ -20,6 +20,8 @@ function cleanEmail(v) {
 }
 function estFsggb(env, email) { return new RegExp("^[^@\\s+]+@" + (env.GOOGLE_DOMAINE || "fsggb.fr").replace(/\./g, "\\.") + "$").test(String(email || "")); }
 function adminProtege(env, email) { return email === env.ADMIN_EMAIL || String(env.ADMIN_GOOGLE || "").split(",").map(s => s.trim()).includes(email); }
+// Clés des applications autorisées à échanger un code SSO : secret SSO_CLES (JSON {"app":"clé"}), absent = aucune.
+function ssoCles(env) { try { const o = JSON.parse(env.SSO_CLES || "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; } }
 class Erreur extends Error { constructor(msg, code = 400) { super(msg); this.code = code; } }
 
 // ---------- utilisateurs (D1 remplace PropertiesService « u: ») ----------
@@ -275,6 +277,38 @@ export async function authRoute(req, env, url, json, erreur) {
       await env.DB.prepare("DELETE FROM magic_links WHERE hash = ?1").bind(h).run();
       const token2 = await provisionner(env, l.email, "", false);
       return json(200, { ok: true, token: token2, user: publicUser(await getUser(env, l.email)) });
+    }
+    // ---------- Échange de code à usage unique (SSO des applications hors du domaine, ex. Apps Script) ----------
+    // 1) Le portail (navigateur, session valide) demande un code pour une application : /auth/sso/emettre.
+    //    Le code vit 60 s, ne sert qu'une fois et n'est valable que pour l'application demandée ; seule son empreinte
+    //    est stockée. Le navigateur l'envoie à l'application dans l'adresse (?code=…).
+    // 2) Le SERVEUR de l'application (UrlFetchApp d'Apps Script : pas de navigateur, donc pas d'origine) l'échange
+    //    contre l'identité : /auth/sso/echanger, authentifié par la clé propre à l'application (secret SSO_CLES,
+    //    JSON {"app":"clé"}). L'application ouvre alors sa propre session ; le jeton de session du portail ne lui est
+    //    jamais transmis. Applications autorisées : les identifiants présents dans SSO_CLES.
+    if (url.pathname === "/auth/sso/emettre") {
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token);
+      const app = String(r.app || "");
+      if (!(app in ssoCles(env))) throw new Erreur("Application inconnue.", 404);
+      const code = (await sha256(crypto.randomUUID() + crypto.randomUUID())) + (await sha256(crypto.randomUUID()));
+      const maintenant = Date.now();
+      await env.DB.prepare("DELETE FROM sso_codes WHERE exp < ?1").bind(maintenant).run();
+      await env.DB.prepare("INSERT INTO sso_codes (hash, email, app, exp) VALUES (?1, ?2, ?3, ?4)").bind(await sha256(code), email, app, maintenant + 60000).run();
+      return json(200, { ok: true, code, expire_dans: 60 });
+    }
+    if (url.pathname === "/auth/sso/echanger") {
+      const r = await req.json().catch(() => ({}));
+      const app = String(r.app || ""), cles = ssoCles(env);
+      if (!(app in cles) || !egal(String(req.headers.get("x-sso-cle") || ""), cles[app])) throw new Erreur("Application ou clé refusée.", 403);
+      const code = String(r.code || "");
+      if (code.length < 64 || code.length > 200) throw new Erreur("Code invalide ou déjà utilisé.", 400);
+      // Suppression et lecture en une seule instruction : deux échanges simultanés ne peuvent pas réussir tous les deux.
+      const l = await env.DB.prepare("DELETE FROM sso_codes WHERE hash = ?1 AND app = ?2 AND exp > ?3 RETURNING email").bind(await sha256(code), app, Date.now()).first();
+      if (!l) throw new Erreur("Code invalide ou déjà utilisé.", 400);
+      const u = await getUser(env, l.email);
+      if (!u) throw new Erreur("Compte introuvable.", 404);
+      return json(200, { ok: true, user: publicUser(u) });
     }
     if (url.pathname === "/auth/me") {
       const r = await req.json().catch(() => ({}));

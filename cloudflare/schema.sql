@@ -83,3 +83,11 @@ CREATE TABLE IF NOT EXISTS magic_links (
   exp INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS magic_links_email ON magic_links (email);
+
+-- Codes SSO à usage unique (Worker d'identité, /auth/sso/*) : 60 s, liés à une application, seule l'empreinte est stockée.
+CREATE TABLE IF NOT EXISTS sso_codes (
+  hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  app TEXT NOT NULL,
+  exp INTEGER NOT NULL
+);

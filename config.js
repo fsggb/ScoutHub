@@ -18,7 +18,7 @@ window.SCOUTHUB_CHATGDB = {
 window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlrF2CdMNFbkUhXvihwNoTMm67IH0wOk7QZZL_nIfMhWaQinR9j-oFQ/exec";
 // Identité (Google, code, comptes) : nouveau serveur Cloudflare (cloudflare/src/auth.js), qui remplace Apps Script
 // pour ces actions précises. Common.js route automatiquement vers l'une ou l'autre adresse selon l'action appelée.
-window.SCOUTHUB_AUTH_API = "https://scouthub.fsggb.workers.dev";
+window.SCOUTHUB_AUTH_API = "https://auth.fsggb.workers.dev";
 // Applications proposées dans le portail : une seule entrée par application, sous son nom d’origine.
 (() => {
 const O = "https://fsggb.github.io/";

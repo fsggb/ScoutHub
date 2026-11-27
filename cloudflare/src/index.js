@@ -3,7 +3,7 @@
 // ce fichier ne contient plus de logique métier, seulement le routage, le CORS et l'habillage des réponses.
 //
 //   Adresse                          Module              Rôle
-//   /auth/*                          auth.js             Identité et sessions (Google, code e-mail, admin)
+//   /auth/*                          (déménagé)          Worker d'identité séparé : cloudflare/auth/ (auth.fsggb.workers.dev)
 //   /chat, /credits, /claude/modeles, /dictee
 //                                    chatgdb.js           Relais Claude, crédits, dictée vocale pour tous
 //   /ia/*                            laboratoire.js       Modèles Workers AI gratuits (administrateur)
@@ -14,7 +14,6 @@
 //   (cron, */15 min)                 synchro.js           Relance la synchronisation des applications (GitHub Actions)
 //
 // Secrets : ANTHROPIC_KEY (clé Claude), RELAIS_SECRET (jeton signé par Apps Script, voir chatgdb.js:verifierJeton).
-import { authRoute } from "./auth.js";
 import { cors } from "./commun.js";
 import { verifierJeton, famille, ADMIN_SEUL, PRIX_FAMILLE, MAX_JETONS, dernieresVersions, etatCredits, enregistrer, cleClaude, entetesClaude, dicteeServeur } from "./chatgdb.js";
 import { laboratoire } from "./laboratoire.js";
@@ -39,8 +38,8 @@ export default {
     const erreur = (status, message) => json(status, { type: "error", error: { message } });
     if (req.method !== "POST") return erreur(405, "Méthode refusée.");
     if (!String(env.ORIGINES || "").split(",").map(s => s.trim()).includes(origine)) return erreur(403, "Origine refusée.");
-    // Identité et sessions (rupture avec Apps Script) : jeton de session propre au Worker, pas celui signé par Code.gs.
-    if (url.pathname.startsWith("/auth/")) return authRoute(req, env, url, json, erreur);
+    // /auth/* : déménagé dans le Worker d'identité (cloudflare/auth/, auth.fsggb.workers.dev).
+    if (url.pathname.startsWith("/auth/")) return erreur(410, "L'identité est désormais servie par auth.fsggb.workers.dev.");
     const qui = await verifierJeton(req.headers.get("x-scouthub-jeton"), env.RELAIS_SECRET);
     if (!qui) return erreur(401, "Session ScoutHub invalide ou expirée : rechargez la page.");
     const admin = qui.r === "admin";

@@ -93,3 +93,18 @@ gain jugé trop faible. À reconsidérer seulement si un vrai besoin apparaît.
 3. Basculer `common.js`/`config.js` (`window.SCOUTHUB_API`) sur le Worker ; retirer `backend/Code.gs`
    seulement quand plus aucune route n'y renvoie.
 4. Dépôts privés + déploiement Cloudflare sur domaine propre : chantier séparé, pas commencé.
+
+## Worker d'identité séparé (`auth.fsggb.workers.dev`)
+
+`cloudflare/auth/` : tout `/auth/*` (Google, code e-mail, lien magique, administration, outils) a déménagé du Worker `scouthub`
+dans un Worker à part, sur la même base D1. Le portail l'appelle via `SCOUTHUB_AUTH_API` (`config.js`) ; `scouthub` répond
+410 sur `/auth/*`. Déploiement : `cd cloudflare/auth && npx wrangler deploy`.
+
+**SSO par échange de code** (applications hors du domaine, p. ex. Apps Script) :
+1. le portail appelle `POST /auth/sso/emettre {token, app}` (navigateur) → code de 60 s, usage unique, lié à `app` ;
+2. le navigateur envoie le code à l'application (`?code=`) ;
+3. le serveur de l'application appelle `POST /auth/sso/echanger {app, code}` avec l'en-tête `x-sso-cle` → `{user}` (e-mail, rôle, `fsggb`…).
+   Pas d'en-tête Origin requis (UrlFetchApp) : la clé de l'application fait foi.
+
+Les clés sont le secret du Worker `SSO_CLES` (JSON `{"boutique":"clé"}`, `npx wrangler secret put SSO_CLES` depuis `cloudflare/auth/`) ;
+une application absente de ce secret ne peut ni recevoir ni échanger de code. Table D1 : `sso_codes` (voir `schema.sql`).
