@@ -39,6 +39,16 @@ async function saveUser(env, email, base) {
     "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google, picture = excluded.picture, fsggb = excluded.fsggb"
   ).bind(email, role, base.name || "", base.google ? 1 : 0, base.picture || "", base.fsggb ? 1 : 0, base.created || Date.now()).run();
 }
+// Accès chef fondé sur l'adresse de connexion : la table « habilitations » (remplie à chaque synchronisation de la feuille
+// « Groupes et unités » par le Worker donnees) donne le rôle et la portée d'une adresse. Valeur CALCULÉE à la volée, jamais
+// recopiée dans « users » : retirer l'adresse de la feuille retire l'accès. Ne diminue jamais un rôle plus élevé.
+async function effectif(env, email) {
+  const u = await getUser(env, email);
+  if (!u || adminProtege(env, email) || !estFsggb(env, email)) return u;
+  const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first();
+  if (!h || ROLES.indexOf(h.role) <= ROLES.indexOf(normRole(u.role))) return u;
+  return { ...u, role: h.role, groupe_id: u.groupe_id || h.groupe_id, unite_id: u.unite_id || h.unite_id };
+}
 // fsggb : compte @fsggb.fr (Google Workspace de la fédération, ou code e-mail) ; false pour un compte Google
 // personnel externe (ACCÈS MEMBRE ouvert à tous, voir /auth/google) — réserve les applications « protege » aux
 // membres réels de la fédération, pas à quiconque possède un compte Google.
@@ -71,8 +81,10 @@ async function adminGoogleSeul(env, email) { const u = await getUser(env, email)
 // ---------- sessions (D1 remplace PropertiesService « s: » + CacheService) ----------
 async function nouvelleSession(env, email) {
   const token = (await sha256(crypto.randomUUID() + crypto.randomUUID() + Date.now())) + (await sha256(crypto.randomUUID()));
-  const h = await sha256(token), jours = +env.SESSION_JOURS || 14;
-  await env.DB.prepare("INSERT INTO sessions (hash, email, exp, created) VALUES (?1, ?2, ?3, ?4)").bind(h, email, Date.now() + jours * 864e5, Date.now()).run();
+  const h = await sha256(token), u = await getUser(env, email);
+  // Un administrateur reste connecté 12 h seulement : un jeton volé ne sert pas longtemps (les autres : SESSION_JOURS, 14 par défaut).
+  const duree = (u && normRole(u.role) === "admin") || adminProtege(env, email) ? 12 * 36e5 : (+env.SESSION_JOURS || 14) * 864e5;
+  await env.DB.prepare("INSERT INTO sessions (hash, email, exp, created) VALUES (?1, ?2, ?3, ?4)").bind(h, email, Date.now() + duree, Date.now()).run();
   return token;
 }
 async function sessionEmail(env, token) {
@@ -86,6 +98,8 @@ async function sessionEmail(env, token) {
   if (!(await getUser(env, s.email))) throw new Erreur("Session expirée : reconnectez-vous.", 401);
   return s.email;
 }
+// Adresses autorisées à ouvrir les données sensibles (var DONNEES_ADMINS, par défaut l'administrateur ADMIN_EMAIL seul).
+const adminDonnees = (env, email) => String(env.DONNEES_ADMINS || env.ADMIN_EMAIL || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean).includes(String(email || "").toLowerCase());
 // Applications autorisées à recevoir un code d'échange (var APPS_AUTORISEES, identifiants séparés par des virgules).
 const appAutorisee = (env, aud) => !!aud && String(env.APPS_AUTORISEES || "").split(",").map(s => s.trim()).filter(Boolean).includes(aud);
 async function requireAdmin(env, token) {
@@ -155,10 +169,10 @@ const jetonGmail = env => jetonGoogle(env, "https://www.googleapis.com/auth/gmai
 // Workspace (Sécurité > Contrôles des API > Délégation à l'échelle du domaine), pour le client du compte de
 // service. SHEET_ID : identifiant de la feuille (dans son URL, après /d/) ; SHEET_SUB : compte @fsggb.fr usurpé
 // pour la lecture (doit avoir accès à la feuille).
-const SHEET_ID = "1e5aqzBPsl4wOs4anjAeKeSPzRDm_dbRuPXLyIqzYQDU";
+const CLASSEUR_PAR_DEFAUT = "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs";   // classeur « intranet » (var CLASSEUR_ID)
 async function lireFeuille(env, sub, plage) {
   const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/spreadsheets.readonly", sub);
-  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + SHEET_ID + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
+  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + (env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
   const j = await res.json();
   if (!res.ok) throw new Erreur("Lecture de la feuille refusée : " + (j.error?.message || res.status), 502);
   return j.values || [];
@@ -207,7 +221,7 @@ export async function authRoute(req, env, url, json, erreur) {
       const estMembreFede = estFsggb(env, email) && String(info.hd || "").toLowerCase() === (env.GOOGLE_DOMAINE || "fsggb.fr");
       const photo = /^https:\/\/[^\s"<>]{1,500}$/.test(String(info.picture || "")) ? info.picture : "";
       const token = await provisionner(env, email, info.name, true, photo, estMembreFede);
-      return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
+      return json(200, { ok: true, token, user: publicUser(await effectif(env, email)) });
     }
     if (url.pathname === "/auth/code/demander") {
       const r = await req.json().catch(() => ({}));
@@ -244,7 +258,7 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!egal(await sha256(c.sel + ":" + email + ":" + code), c.hash)) { await env.DB.prepare("UPDATE login_codes SET essais = essais + 1 WHERE email = ?1").bind(email).run(); throw new Erreur("Code incorrect."); }
       await env.DB.prepare("DELETE FROM login_codes WHERE email = ?1").bind(email).run();
       const token = await provisionner(env, email, "", false);
-      return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
+      return json(200, { ok: true, token, user: publicUser(await effectif(env, email)) });
     }
     if (url.pathname === "/auth/magic/demander") {
       const r = await req.json().catch(() => ({}));
@@ -276,12 +290,12 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!l) throw new Erreur("Ce lien a expiré ou a déjà servi : redemandez-en un.");
       await env.DB.prepare("DELETE FROM magic_links WHERE hash = ?1").bind(h).run();
       const token2 = await provisionner(env, l.email, "", false);
-      return json(200, { ok: true, token: token2, user: publicUser(await getUser(env, l.email)) });
+      return json(200, { ok: true, token: token2, user: publicUser(await effectif(env, l.email)) });
     }
     if (url.pathname === "/auth/me") {
       const r = await req.json().catch(() => ({}));
       const email = await sessionEmail(env, r.token);
-      return json(200, { ok: true, user: publicUser(await getUser(env, email)) });
+      return json(200, { ok: true, user: publicUser(await effectif(env, email)) });
     }
     // ---- Échange de code à usage unique (SSO vers les applications hors domaine, dont Apps Script) ----
     // 1) Le portail, session ouverte, demande un code pour une application précise (« aud », à lister dans
@@ -307,7 +321,7 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!e || e.exp < Date.now() || e.aud !== aud) throw new Erreur("Ce code a expiré ou a déjà servi.", 403);
       const u = await getUser(env, e.email);
       if (!u) throw new Erreur("Compte introuvable.", 403);
-      const rep = { ok: true, user: publicUser(u) };
+      const rep = { ok: true, user: publicUser(await effectif(env, e.email)) };
       if (r.session) rep.token = await nouvelleSession(env, e.email);   // applications web hors domaine : leur propre session
       return json(200, rep);
     }
@@ -321,10 +335,52 @@ export async function authRoute(req, env, url, json, erreur) {
     // publique, les données elles-mêmes (liste des outils) ne sont pas sensibles. SHEET_SUB est provisoire : à
     // ajuster si le compte usurpé n'a pas accès à la feuille (voir le commentaire au-dessus de lireFeuille).
     if (url.pathname === "/auth/outils") {
-      const SHEET_SUB = "jb.combet@fsggb.fr";
-      const lignes = await lireFeuille(env, SHEET_SUB, "Outils!A2:E20");
-      const outils = lignes.filter(l => l[0]).map(l => ({ nom: l[0] || "", desc: l[1] || "", image: l[2] || "", lien: l[3] || "", visibilite: l[4] || "" }));
+      // Outils de la fédération : feuille « Outils » du classeur, lue par le compte de service. Visibilité par outil :
+      // « All » = tout membre de la fédération connecté (@fsggb.fr) ; « Equipe nationale » = ce rôle et au-dessus ;
+      // autre valeur (une ou plusieurs, séparées par des virgules) = nom d'un groupe ou d'une unité (le chef ou le membre de cette portée).
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token), u = await effectif(env, email);
+      const role = normRole(u.role), membre = u.fsggb === undefined ? true : !!u.fsggb, admin = role === "admin";
+      const g = u.groupe_id ? await env.DB.prepare("SELECT nom FROM groupes WHERE id = ?1").bind(u.groupe_id).first() : null;
+      const un = u.unite_id ? await env.DB.prepare("SELECT nom FROM unites WHERE id = ?1").bind(u.unite_id).first() : null;
+      const miens = new Set([g && slug(g.nom), un && slug(un.nom)].filter(Boolean));
+      const visible = v => {
+        if (admin) return true;
+        const vals = String(v || "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
+        if (!vals.length) return false;   // visibilité vide : jamais montré par défaut
+        return vals.some(x => { const k = slug(x); return k === "all" ? membre : k === "equipe-nationale" ? ROLES.indexOf(role) >= ROLES.indexOf("equipe_nationale") && membre : miens.has(k); });
+      };
+      const lignes = await lireFeuille(env, "", "Outils!A2:E100");
+      const lien = l => /^https?:\/\//i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
+      const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]))
+        .map(l => ({ nom: String(l[0]).trim(), desc: l[1] || "", lien: lien(String(l[3]).trim()) }));
       return json(200, { ok: true, outils });
+    }
+    // ---- Ouverture des données sensibles : ré-authentification Google RÉCENTE + jeton de 15 minutes ----
+    // Réservé aux adresses de DONNEES_ADMINS (par défaut ADMIN_EMAIL seul). Le jeton de session ordinaire ne suffit jamais :
+    // un jeton de session volé ne permet donc pas de lire les données.
+    if (url.pathname === "/auth/donnees/ouvrir") {
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token);
+      if (!adminDonnees(env, email)) throw new Erreur("Accès aux données réservé à l'administrateur.", 403);
+      const info = await verifyGoogle(env, r.credential);
+      if (cleanEmail(info.email) !== email) throw new Erreur("Ce compte Google n'est pas celui de la session.", 403);
+      if (Date.now() / 1000 - Number(info.iat) > 300) throw new Erreur("Confirmation trop ancienne : recommencez.", 403);
+      const jeton = (await sha256(crypto.randomUUID() + crypto.randomUUID() + Date.now())) + (await sha256(crypto.randomUUID()));
+      await env.DB.prepare("DELETE FROM sessions_donnees WHERE email = ?1 OR exp < ?2").bind(email, Date.now()).run();
+      await env.DB.prepare("INSERT INTO sessions_donnees (hash, email, exp) VALUES (?1, ?2, ?3)").bind(await sha256(jeton), email, Date.now() + 900000).run();
+      return json(200, { ok: true, jeton, expire_dans: 900 });
+    }
+    if (url.pathname === "/auth/donnees/verifier") {   // appelé par le Worker donnees (liaison de service)
+      const r = await req.json().catch(() => ({}));
+      const l = r.jeton ? await env.DB.prepare("SELECT email, exp FROM sessions_donnees WHERE hash = ?1").bind(await sha256(String(r.jeton))).first() : null;
+      if (!l || l.exp < Date.now() || !adminDonnees(env, l.email)) throw new Erreur("Accès aux données fermé : confirmez votre identité.", 403);
+      return json(200, { ok: true, email: l.email, expire: l.exp });
+    }
+    if (url.pathname === "/auth/donnees/fermer") {
+      const r = await req.json().catch(() => ({}));
+      if (r.jeton) await env.DB.prepare("DELETE FROM sessions_donnees WHERE hash = ?1").bind(await sha256(String(r.jeton))).run();
+      return json(200, { ok: true });
     }
     if (url.pathname === "/auth/admin/list") {
       await requireAdmin(env, (await req.json().catch(() => ({}))).token);
@@ -407,7 +463,7 @@ export async function authRoute(req, env, url, json, erreur) {
 // Pour les autres routes du Worker, une fois la bascule faite : vérifie un jeton de session /auth/* (remplace verifierJeton).
 export async function quiEstCe(env, token) {
   const email = await sessionEmail(env, token);
-  const u = await getUser(env, email);
+  const u = await effectif(env, email);
   return { e: email, r: normRole(u.role), n: u.name || "", groupe_id: u.groupe_id, unite_id: u.unite_id };
 }
 // Pour les futures routes de données sensibles (fiches sanitaires, listes d'adhérents…) : filtrer AVANT d'envoyer,

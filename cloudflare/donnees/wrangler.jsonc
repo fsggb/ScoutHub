@@ -7,11 +7,17 @@
   "observability": { "enabled": true },
   "triggers": { "crons": ["15 3 * * *"] },
   "services": [{ "binding": "AUTH", "service": "auth" }],
-  "d1_databases": [{ "binding": "DB", "database_name": "scouthub-donnees", "database_id": "b2ee1f16-e53f-4742-af9b-057d0995807e" }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "scouthub-donnees", "database_id": "b2ee1f16-e53f-4742-af9b-057d0995807e" },
+    // Base des comptes : écriture des habilitations chef (accès déduit de la feuille « Groupes et unités ») et des groupes/unités
+    { "binding": "AUTH_DB", "database_name": "scouthub", "database_id": "1fbba344-d555-438e-b948-7bffefe30e5b" }
+  ],
   "secrets_store_secrets": [{ "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }],
   "vars": {
     "CLASSEUR_ID": "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs",
     "CLE_ACTIVE": "1",
+    // Seule adresse autorisée à lire les données sensibles (vérifiée ici ET dans le Worker auth)
+    "DONNEES_ADMINS": "jb.combet@fsggb.fr",
     "SELF_ORIGIN": "https://fsggb.github.io",
     "ORIGINES": "https://fsggb.github.io,https://intranet.fsggb.workers.dev"
   }

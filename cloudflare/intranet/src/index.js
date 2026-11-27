@@ -13,7 +13,7 @@ import { pageConnexion } from "./connexion.js";
 
 const VERSION = "1.0.0", COOKIE = "sh_session", PROD = "https://fsggb.github.io/ScoutHub/";
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
-const SECURITE = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin", "x-frame-options": "SAMEORIGIN", "strict-transport-security": "max-age=31536000" };
+const SECURITE = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin", "x-frame-options": "SAMEORIGIN", "strict-transport-security": "max-age=31536000", "content-security-policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" };
 const CSP_CONNEXION = "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; frame-src https://accounts.google.com/gsi/; connect-src 'self' https://accounts.google.com/gsi/; img-src 'self' data: https:";
 const b64ToBytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 const extOf = p => { const i = p.lastIndexOf("."); return i < 0 ? "" : p.slice(i); };
@@ -66,7 +66,7 @@ export default {
     if (p === "/_etat") return reponseJson(200, { ok: true, service: "intranet", version: VERSION });
     if (p === "/connexion" && lecture) {
       const html = pageConnexion(env.GOOGLE_CLIENT_ID || "", retourSur(url.searchParams.get("retour")));
-      return new Response(req.method === "HEAD" ? null : html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": CSP_CONNEXION, ...SECURITE } });
+      return new Response(req.method === "HEAD" ? null : html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...SECURITE, "content-security-policy": CSP_CONNEXION } });
     }
     if (p === "/assets/fsggb.png" && lecture) return fichier("assets/fsggb.png", false);
     if (p.startsWith("/_connexion/") && req.method === "POST") return connexion(req, env, p.slice("/_connexion/".length));

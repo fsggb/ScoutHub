@@ -92,3 +92,18 @@ CREATE TABLE IF NOT EXISTS echanges (
   aud TEXT NOT NULL,
   exp INTEGER NOT NULL
 );
+
+-- Accès chef déduit de la feuille « Groupes et unités » (remplie par le Worker donnees à chaque synchronisation).
+CREATE TABLE IF NOT EXISTS habilitations (
+  email TEXT PRIMARY KEY,
+  role TEXT NOT NULL,                     -- chef_groupe | chef_unite
+  groupe_id TEXT,
+  unite_id TEXT,
+  maj INTEGER NOT NULL
+);
+-- Ouverture des données sensibles : jeton de 15 minutes obtenu par ré-authentification Google récente (empreinte seule).
+CREATE TABLE IF NOT EXISTS sessions_donnees (
+  hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  exp INTEGER NOT NULL
+);

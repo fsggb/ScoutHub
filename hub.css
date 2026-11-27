@@ -194,3 +194,8 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tiroir-pied-mail{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tiroir-pied-chevron{flex:none;color:#9a9c9b}
 .bottom-tab svg{display:block;margin:0 auto}
+
+/* Données sensibles (admin-donnees.js) */
+.dn-barre{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}.dn-barre select,.dn-barre .search{font:inherit;padding:8px 10px;border:1px solid #d9d4c7;border-radius:8px;background:#fff;max-width:100%}
+#dn-table td{max-width:260px;overflow-wrap:anywhere;font-size:13px}.dn-pager{display:flex;gap:12px;align-items:center;justify-content:center;margin:14px 0}
+@media (prefers-color-scheme:dark){.dn-barre select,.dn-barre .search{background:#1d232c;color:inherit;border-color:#323b48}}

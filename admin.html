@@ -14,7 +14,7 @@
   <header class="topbar" id="bar"></header>
   <main class="shell" id="main" hidden>
     <p class="label">Administration · <a href="https://fsggb.github.io/ChatGDB/laboratoire.html">Laboratoire ChatGDB</a></p>
-    <div class="atabs" role="tablist"><button type="button" role="tab" id="tb-comptes" aria-selected="true">Comptes</button><button type="button" role="tab" id="tb-portail" aria-selected="false">Affichage du portail</button></div>
+    <div class="atabs" role="tablist"><button type="button" role="tab" id="tb-comptes" aria-selected="true">Comptes</button><button type="button" role="tab" id="tb-portail" aria-selected="false">Affichage du portail</button><button type="button" role="tab" id="tb-donnees" aria-selected="false">Données</button></div>
     <div id="tab-comptes">
     <div class="home-head">
       <div><h1>Comptes utilisateurs</h1></div>
@@ -38,6 +38,28 @@
       <p id="pt-status" class="status" role="status"></p>
       <div id="pt-secs" class="pt-secs"></div>
       <p><button class="ghost" type="button" id="pt-add-sec">+ Ajouter une section</button> <button class="ghost" type="button" id="pt-add-app">+ Ajouter un lien d’application</button></p>
+    </div>
+
+
+    <div id="tab-donnees" hidden>
+      <div class="home-head"><div><h1>Données sensibles</h1><p class="muted">Copie chiffrée du classeur de la fédération. Visible de l’administrateur seul, après confirmation de son identité par Google (15 minutes). Rien n’est conservé sur cet appareil.</p></div></div>
+      <section class="panel" id="dn-verrou">
+        <p id="dn-msg" class="status" role="status">Pour ouvrir les données, confirmez votre identité :</p>
+        <div id="dn-google"></div>
+      </section>
+      <section id="dn-ouvert" hidden>
+        <div class="dn-barre">
+          <select id="dn-feuille" aria-label="Feuille"></select>
+          <select id="dn-groupe" aria-label="Groupe"><option value="">Tous les groupes</option></select>
+          <select id="dn-unite" aria-label="Unité"><option value="">Toutes les unités</option></select>
+          <input id="dn-q" class="search" type="search" placeholder="Chercher dans cette page…" aria-label="Chercher dans la page affichée" autocomplete="off">
+          <button class="ghost" type="button" id="dn-sync">Synchroniser</button>
+          <button class="ghost" type="button" id="dn-verrouiller">Verrouiller</button>
+        </div>
+        <p id="dn-etat" class="status" role="status"></p>
+        <div class="table-wrap"><table class="users" id="dn-table"><thead></thead><tbody></tbody></table></div>
+        <p class="dn-pager"><button class="ghost" type="button" id="dn-prec">← Précédent</button> <span id="dn-page"></span> <button class="ghost" type="button" id="dn-suiv">Suivant →</button></p>
+      </section>
     </div>
 
     <dialog id="dlg-app">
@@ -68,6 +90,7 @@
   <script src="portail.js"></script>
   <script src="admin.js"></script>
   <script src="admin-portail.js"></script>
+  <script src="admin-donnees.js"></script>
   <!-- ChatGDB se publie seul depuis le changement « liens directs » (#17) : adresse absolue, sinon 404 ici. -->
   <script src="https://fsggb.github.io/ChatGDB/panneau.js" data-contexte="administration"></script>
 </body>

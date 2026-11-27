@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS feuilles (
   tentative INTEGER NOT NULL DEFAULT 0,    -- dernière tentative (ms)
   statut TEXT NOT NULL DEFAULT 'jamais',   -- ok | inchangee | erreur | jamais
   erreur TEXT NOT NULL DEFAULT '',         -- message technique, jamais de donnée de la feuille
-  empreinte TEXT NOT NULL DEFAULT ''       -- HMAC du contenu : saute la réécriture si rien n'a changé
+  empreinte TEXT NOT NULL DEFAULT '',      -- HMAC du contenu : saute la réécriture si rien n'a changé
+  entetes TEXT NOT NULL DEFAULT '[]'       -- noms des colonnes, dans l'ordre de la feuille (jamais de contenu)
 );
 CREATE TABLE IF NOT EXISTS lignes (
   feuille TEXT NOT NULL,

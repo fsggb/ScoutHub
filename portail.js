@@ -6,7 +6,7 @@
   const KEY = "scouthub.portail";
   const TOP = ["Mon espace", "Assistant", "Boutique"];
   const slug = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "x";
-  const safeUrl = u => typeof u === "string" && (/^https:\/\/[^\s"'<>\\]{3,300}$/.test(u) || /^[A-Za-z0-9][\w.\-\/]{0,120}(\?[\w=&%.\-]{0,160})?$/.test(u));
+  const safeUrl = u => typeof u === "string" && (/^https:\/\/[^\s"'<>\\]{3,1500}$/.test(u) || /^[A-Za-z0-9][\w.\-\/]{0,120}(\?[\w=&%.\-]{0,160})?$/.test(u));
   const safeIcon = i => typeof i === "string" && (/^assets\/icons\/[\w.\-]{1,60}$/.test(i) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]{20,200000}$/.test(i));
   // Rôle minimum pour voir l'application (en plus de « protege », qui ne demande qu'un compte @fsggb.fr quelconque) :
   // "" = personne de particulier exigé, sinon un rôle de Hub.ROLE_ORDER (vérifié par Hub.can).
@@ -42,6 +42,21 @@
   }
   function valid(m) { return m && Array.isArray(m.sections) && Array.isArray(m.apps) && m.apps.every(a => a && safeUrl(a.url) && safeIcon(a.icone) && typeof a.nom === "string" && safeRole(a.role)); }
   const cached = () => { try { const m = JSON.parse(localStorage.getItem(KEY) || "null"); return valid(m) ? m : null; } catch { return null; } };
+  // Outils de la fédération : la feuille « Outils » du classeur est la référence (déjà filtrée par le serveur selon la
+  // personne connectée) ; elle remplace la section « Outils fédération » de config.js, sans doublon avec une autre application.
+  function appliquerOutils(m, outils) {
+    if (!Array.isArray(outils)) return;
+    const titre = "Outils fédération", id = slug(titre), norm = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
+    let s = m.sections.find(x => x.titre === titre);
+    if (!s) m.sections.push(s = { id, titre, haut: false });
+    m.apps = m.apps.filter(a => a.section !== s.id);
+    const vus = new Set(m.apps.map(a => norm(a.url)));
+    outils.forEach(t => {
+      if (!safeUrl(t.lien) || vus.has(norm(t.lien))) return;
+      vus.add(norm(t.lien));
+      m.apps.push({ id: slug(t.nom), section: s.id, nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "" });
+    });
+  }
   const P = window.Portail = {
     TOP, slug, safeUrl, safeIcon, safeRole, defaults, merge, valid, isAdmin: false, model: null,
     current() { return P.model || (P.model = merge(cached() || defaults())); },
@@ -52,6 +67,7 @@
       try {
         const o = await Hub.call("portailLire"); P.isAdmin = !!o.admin;
         const m = valid(o.portail) ? merge(o.portail) : merge(defaults());
+        if (P.connected()) { try { appliquerOutils(m, (await Hub.call("outils")).outils); } catch { /* serveur indisponible : les outils de config.js restent affichés */ } }
         if (o.portail && valid(o.portail)) { try { localStorage.setItem(KEY, JSON.stringify(o.portail)); } catch {} }
         else { try { localStorage.removeItem(KEY); } catch {} }
         const changed = JSON.stringify(m) !== JSON.stringify(P.model);
