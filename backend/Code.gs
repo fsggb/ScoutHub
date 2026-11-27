@@ -423,6 +423,32 @@ var ACTIONS = {
   me: function (r) {
     return { ok: true, user: publicUser_(session_(r.token)) };
   },
+  // Tuiles SCAN 25 (IGN) pour ScoutMap : ouvert à tous (pas de connexion), la clé IGN reste dans la propriété de script SCAN25_KEY ; plafond quotidien.
+  scan25: function (r) {
+    var z = parseInt(r.z, 10), x = parseInt(r.x, 10), y = parseInt(r.y, 10), n = Math.pow(2, z);
+    if (!(z >= 0 && z <= 17 && x >= 0 && y >= 0 && x < n && y < n)) fail_('Tuile invalide.');
+    var cache = CacheService.getScriptCache(), key = 's25_' + z + '_' + x + '_' + y, hit = cache.get(key);
+    if (hit) return { ok: true, d: hit };
+    var day = 'n25_' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMdd'), cnt = parseInt(cache.get(day) || '0', 10);
+    if (cnt > 30000) fail_('Limite quotidienne de tuiles SCAN 25 atteinte, réessayez demain.');
+    cache.put(day, String(cnt + 1), 21600);
+    var k = props_().getProperty('SCAN25_KEY');
+    if (!k) fail_('SCAN 25 non configuré (propriété SCAN25_KEY).');
+    var L = 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR', ek = encodeURIComponent(k);
+    var urls = [
+      'https://data.geopf.fr/private/wmts?apikey=' + ek + '&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + L + '&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=' + z + '&TILEROW=' + y + '&TILECOL=' + x,
+      'https://data.geopf.fr/private/tms/1.0.0/' + L + '/' + z + '/' + x + '/' + y + '.jpeg?apikey=' + ek
+    ], res = null, code = 0;
+    for (var u = 0; u < urls.length; u++) {
+      res = UrlFetchApp.fetch(urls[u], { muteHttpExceptions: true });
+      code = res.getResponseCode();
+      if (code === 200) break;
+    }
+    if (code !== 200) fail_('IGN : HTTP ' + code);
+    var d = Utilities.base64Encode(res.getBlob().getBytes());
+    if (d.length < 95000) { try { cache.put(key, d, 21600); } catch (er) { /* trop gros : ignoré */ } }
+    return { ok: true, d: d };
+  },
   adminList: function (r) {
     requireAdmin_(r.token);
     return { ok: true, users: allUsers_() };
@@ -1208,3 +1234,72 @@ function chatAppeler_(r, admin) {
   etape_(etapes, 'fin', 'Réponse rédigée');
   return { texte: texte.trim(), sources: sources.slice(0, 20), recherches: recherches, nbRecherches: nbRecherches, propositions: sortie.propositions, aides: sortie.aides, depots: sortie.depots, etapes: etapes, usage: usage, modele: modele };
 }
+
+// Tuiles SCAN 25 par lots (jusqu'à 20 tuiles par appel, demandées à l'IGN en parallèle) : beaucoup plus rapide que tuile par tuile.
+ACTIONS.scan25b = function (r) {
+  var T = (r.t || []).slice(0, 20), cache = CacheService.getScriptCache(), out = [], keys = [], tiles = [], i;
+  var k = props_().getProperty('SCAN25_KEY');
+  if (!k) fail_('SCAN 25 non configuré (propriété SCAN25_KEY).');
+  var L = 'GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR', ek = encodeURIComponent(k);
+  for (i = 0; i < T.length; i++) {
+    var z = parseInt(T[i][0], 10), x = parseInt(T[i][1], 10), y = parseInt(T[i][2], 10), n = Math.pow(2, z);
+    out.push(null);
+    if (z >= 0 && z <= 17 && x >= 0 && y >= 0 && x < n && y < n) { tiles.push([z, x, y]); keys.push('s25_' + z + '_' + x + '_' + y); }
+    else { tiles.push(null); keys.push(null); }
+  }
+  var wanted = keys.filter(function (q) { return q; }), hits = wanted.length ? cache.getAll(wanted) : {}, todo = [];
+  for (i = 0; i < tiles.length; i++) {
+    if (!tiles[i]) continue;
+    if (hits[keys[i]]) out[i] = hits[keys[i]]; else todo.push(i);
+  }
+  var err = '';
+  if (todo.length) {
+    var day = 'n25_' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMdd'), cnt = parseInt(cache.get(day) || '0', 10);
+    if (cnt + todo.length > 30000) fail_('Limite quotidienne de tuiles SCAN 25 atteinte, réessayez demain.');
+    cache.put(day, String(cnt + todo.length), 21600);
+    var put = {}, round = function (list, mk) {
+      var rs = UrlFetchApp.fetchAll(list.map(function (ix) { var t = tiles[ix]; return { url: mk(t[0], t[1], t[2]), muteHttpExceptions: true }; })), again = [];
+      for (var j = 0; j < rs.length; j++) {
+        var code = rs[j].getResponseCode();
+        if (code === 200) { var d = Utilities.base64Encode(rs[j].getBlob().getBytes()); out[list[j]] = d; if (d.length < 95000) put[keys[list[j]]] = d; }
+        else { err = 'IGN : HTTP ' + code; again.push(list[j]); }
+      }
+      return again;
+    };
+    var left = round(todo, function (z, x, y) {
+      return 'https://data.geopf.fr/private/wmts?apikey=' + ek + '&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + L + '&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=' + z + '&TILEROW=' + y + '&TILECOL=' + x;
+    });
+    if (left.length) {
+      left = round(left, function (z, x, y) { return 'https://data.geopf.fr/private/tms/1.0.0/' + L + '/' + z + '/' + x + '/' + y + '.jpeg?apikey=' + ek; });
+      if (!left.length) err = '';
+    }
+    try { cache.putAll(put, 21600); } catch (er) { /* trop gros : ignoré */ }
+  }
+  return { ok: true, t: out, e: err };
+};
+
+// Points d'eau potable (OpenStreetMap) pour ScoutMap : le serveur interroge Overpass et garde le résultat 6 h en mémoire.
+ACTIONS.eau = function (r) {
+  var b = (r.b || []).map(Number);
+  if (b.length !== 4 || b.some(function (v) { return !isFinite(v); }) || b[2] - b[0] > 0.2 || b[3] - b[1] > 0.2 || b[0] < -90 || b[2] > 90) fail_('Zone invalide.');
+  var cache = CacheService.getScriptCache(), key = 'eau_' + b.map(function (v) { return v.toFixed(4); }).join('_'), hit = cache.get(key);
+  if (hit) return { ok: true, el: JSON.parse(hit) };
+  var bb = '(' + b.map(function (v) { return v.toFixed(5); }).join(',') + ')';
+  var q = '[out:json][timeout:25];(node["amenity"="drinking_water"]' + bb + ';node["man_made"="water_tap"]["drinking_water"!="no"]' + bb +
+    ';node["amenity"="fountain"]["drinking_water"="yes"]' + bb + ';node["natural"="spring"]["drinking_water"="yes"]' + bb +
+    ';node["man_made"="water_well"]["drinking_water"="yes"]' + bb + ';node["amenity"="water_point"]["drinking_water"!="no"]' + bb + ';);out;';
+  var ends = ['https://overpass-api.de/api/interpreter', 'https://lz4.overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'], lastErr = 'indisponible';
+  for (var i = 0; i < ends.length; i++) {
+    try {
+      var res = UrlFetchApp.fetch(ends[i], { method: 'post', payload: { data: q }, muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) { lastErr = 'HTTP ' + res.getResponseCode(); continue; }
+      var j = JSON.parse(res.getContentText()), el = (j.elements || []).filter(function (e) { return e.lat != null; }).map(function (e) {
+        var t = e.tags || {};
+        return { lat: e.lat, lon: e.lon, tags: { amenity: t.amenity, man_made: t.man_made, natural: t.natural, drinking_water: t.drinking_water, name: t.name } };
+      });
+      try { cache.put(key, JSON.stringify(el), 21600); } catch (er) { /* trop gros : ignoré */ }
+      return { ok: true, el: el };
+    } catch (er2) { lastErr = String(er2).slice(0, 80); }
+  }
+  fail_('OpenStreetMap indisponible (' + lastErr + ').');
+};
