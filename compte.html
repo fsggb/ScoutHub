@@ -12,7 +12,7 @@
 </head>
 <body>
   <header class="topbar" id="bar"></header>
-  <main class="shell narrow">
+  <main class="shell" id="main" hidden>
     <p class="label">ScoutHub</p>
     <h1>Mon compte</h1>
 
@@ -25,6 +25,13 @@
       </dl>
     </section>
 
+    <section class="panel stack" id="mes-applications" aria-labelledby="apps-title">
+      <h2 id="apps-title">Réglages — mes applications</h2>
+      <p class="muted">Choisissez les applications que vous voulez voir : l’icône ✕ sur une tuile (onglet Outils) la masque pour vous seul ; retrouvez-la ici pour la remettre. Cela ne concerne que cet appareil.</p>
+      <ul class="user-list" id="c-masquees"></ul>
+      <p class="muted" id="c-aucune" hidden>Aucune application masquée.</p>
+    </section>
+
     <section class="panel stack" aria-labelledby="out-title">
       <h2 id="out-title">Session</h2>
       <p class="muted">La session reste ouverte 14 jours sur cet appareil.</p>
@@ -34,6 +41,7 @@
   <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
   <script src="config.js"></script>
   <script src="common.js"></script>
+  <script src="portail.js"></script>
   <script src="compte.js"></script>
 </body>
 </html>
