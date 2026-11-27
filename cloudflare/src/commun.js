@@ -16,6 +16,10 @@ export function cors(env, origine) {
 
 export const jourUtc = () => new Date().toISOString().slice(0, 10);
 
+// Tarifs Workers AI en Neurons par minute d'audio : partagés par la dictée de tous (chatgdb.js, /dictee) et le
+// laboratoire de l'administrateur (laboratoire.js, /ia/dictee et /ia/voix) — une seule valeur à tenir à jour.
+export const NEURONS_PAR_MINUTE = { dictee: 46.6, voix: 18.6 };
+
 // Budget gratuit Workers AI (10 000 Neurons/jour pour tout le compte, remise à zéro à 00 h UTC) : compté dans D1
 // (table neurons), partagé par le laboratoire de l'administrateur (/ia/*) et la dictée de tous (/dictee).
 let tablesPretes = false;
