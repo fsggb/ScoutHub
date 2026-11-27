@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL DEFAULT '',
   google INTEGER NOT NULL DEFAULT 0,      -- 1 si déjà prouvé par Google au moins une fois
   picture TEXT NOT NULL DEFAULT '',       -- photo de compte Google (URL), jamais pour un compte prouvé par code e-mail
+  fsggb INTEGER NOT NULL DEFAULT 1,       -- 0 pour un compte Google personnel externe (ACCÈS MEMBRE ouvert à tous)
   created INTEGER NOT NULL
 );
 

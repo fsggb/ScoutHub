@@ -92,8 +92,7 @@
 
   // ---------- accueil : tableau de bord léger (raccourcis). La grille d'applications vit désormais sur outils.html,
   // la structure (Accueil/Documentation/Inscriptions/Outils) reprend l'ancien intranet (Hub.renderTabs, common.js). ----------
-  function showHome() {
-    $("auth").hidden = true; $("home").hidden = false;
+  function showHome() {    $("auth").hidden = true; $("home").hidden = false;
     Hub.renderBar(Hub.user, "Accueil"); Hub.renderTabs("accueil", Hub.user);
     // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
     const prenom = Hub.user.email.split("@")[0].split(/[._-]+/)[0];
@@ -105,8 +104,7 @@
   // « Avec mon compte Boutique GDB » retiré (26/11) : ne fonctionnait pas, seule la connexion Google ou par
   // e-mail @fsggb.fr reste proposée.
   // Seul l'onglet Outils reste accessible sans compte (outils.html/outils.js, inchangé) : l'accueil (tableau de
-  // bord) demande désormais une connexion, comme Documentation et Inscriptions (onglet.js).
-  if (store.get() && window.SCOUTHUB_API) {
+  // bord) demande désormais une connexion, comme Documentation et Inscriptions (onglet.js).  if (store.get() && window.SCOUTHUB_API) {
     // Affichage immédiat avec l'utilisateur mémorisé, vérification de la session en arrière-plan.
     Hub.user = Hub.cachedUser();
     if (Hub.user) showHome(); // sinon : on attend la vérification de la session (showAuth déjà affiché ci-dessous)
