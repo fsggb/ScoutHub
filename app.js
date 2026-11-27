@@ -98,7 +98,7 @@
     // showHome() n'est appelée qu'une fois connecté (showAuth() sinon) : Hub.user existe toujours ici.
     $("hello").textContent = "Bonjour, " + Hub.prenom(Hub.user);
   }
-  function enter() { if (!goNext()) showHome(); }
+  async function enter() { await Hub.sessionIntranet(); if (!goNext()) showHome(); }
 
   // ---------- démarrage ----------
   // « Avec mon compte Boutique GDB » retiré (26/11) : ne fonctionnait pas, seule la connexion Google ou par

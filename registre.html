@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <script>if (window.top !== window.self) document.documentElement.remove();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000761">
+  <meta name="robots" content="noindex">
+  <title>Inscriptions · ScoutHub</title>
+  <link rel="icon" type="image/png" href="assets/fsggb.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="hub.css">
+  <link rel="stylesheet" href="registre.css">
+</head>
+<body data-onglet="inscriptions">
+  <header class="topbar" id="bar"></header>
+  <main class="shell rg-shell" id="main" hidden>
+    <a class="rg-retour" href="inscriptions.html">← Inscriptions</a>
+    <h1 id="rg-h1">Inscriptions</h1>
+    <p class="muted" id="rg-portee"></p>
+
+    <section class="rg-admin" id="rg-admin" hidden aria-label="Simulation d’une adresse">
+      <label for="rg-comme">Voir comme :</label>
+      <select id="rg-comme"><option value="">Moi-même (administrateur)</option></select>
+      <span class="muted">Pour vérifier ce que verrait un chef, avec son adresse de connexion.</span>
+    </section>
+    <section class="rg-simule" id="rg-simule" hidden role="status">
+      <p><strong>Simulation</strong> : vous voyez exactement ce que verrait <b id="rg-sim-email"></b> (<span id="rg-sim-role"></span>). <button class="ghost" type="button" id="rg-sim-quitter">Quitter la simulation</button></p>
+      <p class="muted" id="rg-sim-outils"></p>
+    </section>
+
+    <p class="rg-refus" id="rg-refus" role="status" hidden></p>
+
+    <div class="rg-corps" id="rg-corps" hidden>
+      <aside class="rg-lateral" id="rg-lateral" aria-label="Filtres">
+        <div class="rg-modes" role="tablist" aria-label="Trier par">
+          <button type="button" role="tab" id="m-annee" aria-selected="true">Par année</button>
+          <button type="button" role="tab" id="m-groupe" aria-selected="false">Par groupe</button>
+        </div>
+        <div class="rg-an-filtre" id="rg-an-filtre" hidden>
+          <label for="rg-an">Année</label><select id="rg-an"></select>
+        </div>
+        <div class="rg-arbre" id="rg-arbre" role="tree"></div>
+      </aside>
+      <div class="rg-poignee" id="rg-poignee" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau de filtres (flèches gauche et droite)"></div>
+      <section class="rg-liste" aria-label="Liste">
+        <div class="rg-outils">
+          <input id="rg-q" class="rg-recherche" type="search" placeholder="Chercher un nom, une adresse…" aria-label="Chercher dans la sélection" autocomplete="off">
+          <span id="rg-compte" class="rg-compte" role="status"></span>
+        </div>
+        <p class="rg-note" id="rg-note" hidden></p>
+        <div class="rg-table-wrap"><table class="rg-table" id="rg-table"><thead></thead><tbody></tbody></table></div>
+        <p class="rg-pager"><button class="ghost" type="button" id="rg-prec">← Précédent</button><span id="rg-page"></span><button class="ghost" type="button" id="rg-suiv">Suivant →</button></p>
+      </section>
+    </div>
+
+    <dialog id="rg-fiche" class="rg-fiche" aria-labelledby="rg-fiche-titre">
+      <h2 id="rg-fiche-titre"></h2>
+      <dl id="rg-fiche-champs"></dl>
+      <p class="rg-fiche-actions"><button class="primary" type="button" id="rg-fiche-fermer">Fermer</button></p>
+    </dialog>
+  </main>
+  <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="registre.js"></script>
+</body>
+</html>

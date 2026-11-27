@@ -27,6 +27,12 @@
       const aller = u => { if (w) w.location.href = u; else location.href = u; };
       Hub.call("passe").then(o => { const u = new URL(a.url); u.searchParams.set("sh", o.code); aller(u.href); }).catch(() => aller(a.url));
     });
+    // Administrateur : modifier une application ajoutée (avec son public).
+    if (a.entree && Hub.user && Hub.user.role === "admin") {
+      const b = Object.assign(document.createElement("button"), { type: "button", className: "app-edit", textContent: "✎", title: "Modifier cette application" }); b.setAttribute("aria-label", "Modifier « " + a.nom + " »");
+      b.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); Entrees.dialogue("outils", a.entree, () => Portail.refresh(renderApps)); };
+      link.append(b);
+    }
     let badge; const icon = Portail.safeIcon(a.icone) ? a.icone : "assets/fsggb.png";
     if (a.crop) { badge = document.createElement("span"); badge.className = "app-badge crop"; badge.style.backgroundImage = `url("${icon}")`; }
     else { badge = document.createElement("img"); badge.className = "app-badge"; badge.alt = ""; badge.decoding = "async"; badge.loading = "eager"; badge.src = icon; badge.onerror = () => { if (icon !== "assets/fsggb.png") badge.src = "assets/fsggb.png"; }; }
@@ -82,6 +88,10 @@
     Hub.renderBar(Hub.user, "Outils"); Hub.renderTabs("outils", Hub.user);
     if (recherche) Hub.setSearchValue(recherche);
     $("guest-note").hidden = !!Hub.user;
+    if (Hub.user && Hub.user.role === "admin" && !$("ajout-app")) {   // administrateur : ajouter une application et définir qui est concerné
+      const b = Object.assign(document.createElement("button"), { id: "ajout-app", type: "button", className: "ghost", textContent: "+ Ajouter une application" });
+      b.onclick = () => Entrees.dialogue("outils", null, () => Portail.refresh(renderApps)); document.querySelector(".home-head").append(b);
+    }
     // Première visite (pas encore de mise en page en cache) : on attend la vraie mise en page du serveur avant de peindre,
     // pour éviter que les icônes ou l'organisation des sections changent juste après l'affichage (sinon il faut recharger pour que ça se stabilise).
     if (!Portail.model && !localStorage.getItem('scouthub.portail')) { await Portail.refresh(() => {}); renderApps(); Portail.refresh(renderApps); }

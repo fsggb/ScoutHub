@@ -107,3 +107,14 @@ CREATE TABLE IF NOT EXISTS sessions_donnees (
   email TEXT NOT NULL,
   exp INTEGER NOT NULL
 );
+
+-- Entrées ajoutées par l'administrateur (applications, documentation) avec leur public (filtré côté serveur).
+CREATE TABLE IF NOT EXISTS entrees (
+  id TEXT PRIMARY KEY,
+  section TEXT NOT NULL,                  -- outils | documentation
+  nom TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL,
+  audience TEXT NOT NULL,                 -- jetons séparés par des virgules : all, chef_unite, chef_groupe, equipe_nationale, admin, g:<groupe>, u:<unité>
+  maj INTEGER NOT NULL
+);

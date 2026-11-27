@@ -44,17 +44,23 @@
   const cached = () => { try { const m = JSON.parse(localStorage.getItem(KEY) || "null"); return valid(m) ? m : null; } catch { return null; } };
   // Outils de la fédération : la feuille « Outils » du classeur est la référence (déjà filtrée par le serveur selon la
   // personne connectée) ; elle remplace la section « Outils fédération » de config.js, sans doublon avec une autre application.
-  function appliquerOutils(m, outils) {
-    if (!Array.isArray(outils)) return;
+  function appliquerOutils(m, outils, entrees) {
+    if (!Array.isArray(outils) && !Array.isArray(entrees)) return;
     const titre = "Outils fédération", id = slug(titre), norm = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
     let s = m.sections.find(x => x.titre === titre);
     if (!s) m.sections.push(s = { id, titre, haut: false });
-    m.apps = m.apps.filter(a => a.section !== s.id);
+    if (Array.isArray(outils)) m.apps = m.apps.filter(a => a.section !== s.id);
     const vus = new Set(m.apps.map(a => norm(a.url)));
-    outils.forEach(t => {
+    (outils || []).forEach(t => {
       if (!safeUrl(t.lien) || vus.has(norm(t.lien))) return;
       vus.add(norm(t.lien));
       m.apps.push({ id: slug(t.nom), section: s.id, nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "" });
+    });
+    // Applications ajoutées par l'administrateur (déjà filtrées par le serveur selon la personne ; l'administrateur reçoit aussi leur public).
+    (entrees || []).forEach(e => {
+      if (!safeUrl(e.url) || vus.has(norm(e.url))) return;
+      vus.add(norm(e.url));
+      m.apps.push({ id: "entree-" + e.id, section: s.id, nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", entree: e.audience ? e : undefined });
     });
   }
   const P = window.Portail = {
@@ -67,7 +73,12 @@
       try {
         const o = await Hub.call("portailLire"); P.isAdmin = !!o.admin;
         const m = valid(o.portail) ? merge(o.portail) : merge(defaults());
-        if (P.connected()) { try { appliquerOutils(m, (await Hub.call("outils")).outils); } catch { /* serveur indisponible : les outils de config.js restent affichés */ } }
+        if (P.connected()) {
+          let outils, entrees;
+          try { outils = (await Hub.call("outils")).outils; } catch { /* serveur indisponible : les outils de config.js restent affichés */ }
+          try { entrees = (await Hub.call("entrees", { section: "outils" })).entrees; } catch {}
+          appliquerOutils(m, outils, entrees);
+        }
         if (o.portail && valid(o.portail)) { try { localStorage.setItem(KEY, JSON.stringify(o.portail)); } catch {} }
         else { try { localStorage.removeItem(KEY); } catch {} }
         const changed = JSON.stringify(m) !== JSON.stringify(P.model);

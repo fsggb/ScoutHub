@@ -19,6 +19,8 @@ window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlr
 // Identité (Google, code, comptes) : Worker d'identité auth.fsggb.workers.dev (cloudflare/auth/, code de cloudflare/src/auth.js), qui remplace Apps Script
 // pour ces actions précises. Common.js route automatiquement vers l'une ou l'autre adresse selon l'action appelée.
 window.SCOUTHUB_AUTH_API = "https://auth.fsggb.workers.dev";
+// Intranet servi par Cloudflare (cloudflare/intranet/) : après une connexion, le portail y pose le cookie de session (Hub.sessionIntranet).
+window.SCOUTHUB_INTRANET = "intranet.fsggb.workers.dev";
 // Miroir chiffré des feuilles Google (cloudflare/donnees/) : administrateur seul, après confirmation Google.
 window.SCOUTHUB_DONNEES_API = "https://donnees.fsggb.workers.dev";
 // Applications proposées dans le portail : une seule entrée par application, sous son nom d’origine.

@@ -42,24 +42,10 @@
 
 
     <div id="tab-donnees" hidden>
-      <div class="home-head"><div><h2>Données sensibles</h2><p class="muted">Copie chiffrée du classeur de la fédération. Visible des administrateurs désignés seulement : l’accès est vérifié à partir de votre session administrateur, sans reconnexion. Rien n’est conservé sur cet appareil.</p></div></div>
-      <section class="panel" id="dn-verrou">
-        <p id="dn-msg" class="status" role="status">Ouverture des données…</p>
-        <p><button class="ghost" type="button" id="dn-rouvrir" hidden>Rouvrir les données</button></p>
-      </section>
-      <section id="dn-ouvert" hidden>
-        <div class="dn-barre">
-          <select id="dn-feuille" aria-label="Feuille"></select>
-          <select id="dn-groupe" aria-label="Groupe"><option value="">Tous les groupes</option></select>
-          <select id="dn-unite" aria-label="Unité"><option value="">Toutes les unités</option></select>
-          <input id="dn-q" class="search" type="search" placeholder="Chercher dans cette page…" aria-label="Chercher dans la page affichée" autocomplete="off">
-          <button class="ghost" type="button" id="dn-sync">Synchroniser</button>
-          <button class="ghost" type="button" id="dn-verrouiller">Verrouiller</button>
-        </div>
-        <p id="dn-etat" class="status" role="status"></p>
-        <div class="table-wrap"><table class="users" id="dn-table"><thead></thead><tbody></tbody></table></div>
-        <p class="dn-pager"><button class="ghost" type="button" id="dn-prec">← Précédent</button> <span id="dn-page"></span> <button class="ghost" type="button" id="dn-suiv">Suivant →</button></p>
-      </section>
+      <div class="home-head"><div><h2>Données des inscriptions</h2><p class="muted">Copie chiffrée du classeur de la fédération. Les inscriptions se consultent dans l’onglet <a href="inscriptions.html">Inscriptions</a> (vous y voyez tout, ou ce que verrait une adresse de votre choix). Ici : l’état de la synchronisation, rien de personnel.</p></div>
+        <div class="pt-actions"><button class="primary" type="button" id="dn-tout">Tout synchroniser</button></div></div>
+      <p id="dn-etat" class="status" role="status"></p>
+      <div class="table-wrap"><table class="users"><thead><tr><th>Feuille</th><th>Lignes</th><th>Dernière synchronisation</th><th>État</th><th>Lignes sans groupe connu</th><th class="right">Action</th></tr></thead><tbody id="dn-corps"></tbody></table></div>
     </div>
 
     <dialog id="dlg-app">

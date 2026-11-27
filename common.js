@@ -18,7 +18,7 @@
   // Mention à côté du logo (fixe, ne change pas d'une page à l'autre — reprend « ACCES CHEFS » de l'ancien
   // intranet) : le rôle décide, pas le type de compte. « parent » = accès famille ; les rôles d'encadrement =
   // accès chefs ; le reste (compte Google ou e-mail @fsggb.fr sans rôle particulier) = accès membre.
-  const ACCES_LABELS = { adherent: "ACCÈS MEMBRE", parent: "ACCÈS FAMILLE", chef_unite: "ACCÈS CHEFS", chef_groupe: "ACCÈS CHEFS", equipe_nationale: "ACCÈS CHEFS", admin: "ACCÈS CHEFS" };
+  const ACCES_LABELS = { adherent: "ACCÈS MEMBRE", parent: "ACCÈS FAMILLE", chef_unite: "ACCÈS CHEFS", chef_groupe: "ACCÈS CHEFS", equipe_nationale: "ACCÈS CHEFS", admin: "ACCÈS ADMIN" };
   const normRole = r => (!r || r === "membre" || r === "user" ? "adherent" : (ROLE_ORDER.includes(r) ? r : "adherent"));
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
@@ -39,6 +39,12 @@
     // applications « protege » (ChatGDB, bibliothèque…) aux membres de la fédération, pas à quiconque se connecte.
     // u.fsggb absent (anciens jetons mis en cache avant ce champ) : traité comme membre, pas comme externe.
     estFederation: user => !!user && user.fsggb !== false,
+    // Sur l'intranet (Cloudflare), le Worker contrôle l'accès AVANT d'envoyer les pages : il lit un cookie de session. Après
+    // une connexion (ou à chaque ouverture de l'accueil avec une session valide), on lui confie le jeton pour qu'il le pose.
+    async sessionIntranet() {
+      if (!window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET || !store.get()) return;
+      try { await fetch("/_session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: store.get() }), credentials: "same-origin", cache: "no-store" }); } catch { /* sans réseau : sans importance */ }
+    },
     mesMasquees, masquePerso, toggleMasquePerso,
     // Prénom pour l'accueil : le vrai prénom Google (user.name) si on l'a, sinon on le devine dans l'adresse.
     prenom: user => { const n = (user && user.name || "").trim().split(/\s+/)[0] || (user && user.email || "").split("@")[0].split(/[._-]+/)[0] || ""; return n.charAt(0).toUpperCase() + n.slice(1); },
@@ -49,7 +55,7 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", outils: "/auth/outils", donneesOuvrir: "/auth/donnees/ouvrir", donneesFermer: "/auth/donnees/fermer", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
       const chemin = Hub.IDENTITE[action];

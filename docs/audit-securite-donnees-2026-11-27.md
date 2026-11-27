@@ -41,3 +41,26 @@ Sans jeton ; session administrateur ordinaire utilisée comme jeton de données 
 | R6 | Trois adresses ouvrent les données (liste blanche `DONNEES_ADMINS`). Sans ré-authentification, un jeton de session administrateur volé suffit à les lire pendant 12 h. | Risque accepté par l'administrateur ; limité par le plafond de lecture et le journal. `DONNEES_REAUTH=1` le referme. |
 | R7 | Le chemin positif de la ré-authentification Google (bouton → jeton de données → lecture) n'a pas pu être testé automatiquement (il demande une vraie connexion). | À valider une fois par l'administrateur. |
 | R8 | Sauvegarde quotidienne vers le Drive non encore faite. | Prévue. |
+
+## Mise à jour : registre des inscriptions et droits par adresse (27/11, soir)
+
+**Modèle d'accès** (remplace « administrateur seul ») : chaque personne ne reçoit que les lignes de sa **portée**, calculée par le serveur d'après son adresse de connexion (`/auth/portee`) :
+
+| Profil | Voit |
+|---|---|
+| Administrateur des données (`DONNEES_ADMINS`) | tout, y compris Compta et Groupes et unités |
+| Chef de groupe (ligne « Ville : Groupe » de la feuille « Groupes et unités », adresse @fsggb.fr) | les 4 registres, pour son groupe |
+| Chef d'unité (autres lignes) | les 4 registres, pour son unité |
+| Adhérent, parent, équipe nationale, compte externe | rien |
+
+Le filtre est dans la **requête SQL, avant tout déchiffrement** (colonnes `gk`/`uk`, jamais les noms bruts). Aucun paramètre envoyé par le navigateur ne peut élargir la portée.
+
+**Vérifié sur le déploiement réel** (comptes de test) : chef d'unité 104 lignes Mineurs / chef de groupe 383, comptage identique à la base, **0 ligne hors périmètre** sur la liste et sur la recherche ; un chef qui force un autre groupe par le filtre reçoit 0 ligne ; Compta et Groupes et unités refusés aux chefs ; refus de `comme`, `sync`, `etat`, `habilites` aux chefs ; adhérent, compte externe, jeton forgé, absence de jeton : refusés.
+
+**Entrées ajoutées par l'administrateur** (applications, documentation) : filtrées côté serveur ; une entrée non destinée à la personne ne lui est **pas envoyée** (ni nom, ni adresse, ni public). Seul l'administrateur voit le public de chaque entrée. Adresses `https://` uniquement, public validé contre les groupes/unités existants. Vérifié : admin seul / chefs / groupe / unité / tous / équipe nationale → chaque profil ne voit que les siennes ; écriture refusée aux non-administrateurs.
+
+**Simulation d'une adresse** : réservée à `DONNEES_ADMINS` ; la portée simulée est calculée comme pour la vraie personne ; chaque lecture simulée est journalisée (`simule`). Elle ne donne aucune écriture.
+
+**Limites connues** : (1) une adresse n'a qu'**une** portée : si une même boîte figure pour deux unités de groupes différents, seule la première (ou la plus haute) compte ; (2) les lignes dont le groupe ou l'unité ne correspond à aucune ligne de « Groupes et unités » sont **invisibles des chefs** (l'onglet Administration → Données les compte) ; (3) la recherche porte sur 1 500 lignes de la sélection au plus ; (4) le service worker du portail ne met en cache que des fichiers statiques du même site, jamais les données.
+
+**Faute corrigée pendant le chantier** : un import supprimé par erreur avait fait planter le Worker `donnees` (erreur 1101) ; détecté par les tests de bout en bout, corrigé et re-testé avant toute mise en service.

@@ -16,8 +16,6 @@
   "vars": {
     "CLASSEUR_ID": "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs",
     "CLE_ACTIVE": "1",
-    // Seule adresse autorisée à lire les données sensibles (vérifiée ici ET dans le Worker auth)
-    "DONNEES_ADMINS": "jb.combet@fsggb.fr,president@fsggb.fr,service-informatique@fsggb.fr",
     "SELF_ORIGIN": "https://fsggb.github.io",
     "ORIGINES": "https://fsggb.github.io,https://intranet.fsggb.workers.dev"
   }

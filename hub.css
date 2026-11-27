@@ -195,7 +195,9 @@ a.dash-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,7,97,.
 .tiroir-pied-chevron{flex:none;color:#9a9c9b}
 .bottom-tab svg{display:block;margin:0 auto}
 
-/* Données sensibles (admin-donnees.js) */
-.dn-barre{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}.dn-barre select,.dn-barre .search{font:inherit;padding:8px 10px;border:1px solid #d9d4c7;border-radius:8px;background:#fff;max-width:100%}
-#dn-table td{max-width:260px;overflow-wrap:anywhere;font-size:13px}.dn-pager{display:flex;gap:12px;align-items:center;justify-content:center;margin:14px 0}
-@media (prefers-color-scheme:dark){.dn-barre select,.dn-barre .search{background:#1d232c;color:inherit;border-color:#323b48}}
+/* Applications / documents ajoutés par l'administrateur (entrees.js) */
+.app-edit{position:absolute;top:8px;right:36px;width:26px;height:26px;border:0;border-radius:50%;background:#ffffffd9;color:#000761;cursor:pointer;font-size:14px;line-height:1;z-index:2}.app-edit:hover{background:#fff}
+.dash-card .app-edit{right:8px;top:8px}
+.entree-dlg{border:0;border-radius:16px;padding:22px 24px;max-width:min(520px,94vw);width:100%;background:#fff;color:#1f2430;box-shadow:0 20px 60px #0006}.entree-dlg::backdrop{background:#0008}
+.entree-dlg h2{margin:0 0 10px}.entree-dlg label{display:block;margin:12px 0 4px;font-size:14px}.entree-dlg input,.entree-dlg select{width:100%;font:inherit;color:#1f2430;background:#fff;border:1px solid #c9c5b6;border-radius:8px;padding:9px 10px;margin-bottom:4px}
+.entree-dlg .dlg-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}

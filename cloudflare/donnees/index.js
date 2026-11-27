@@ -2,9 +2,10 @@
 // Apps Script y écrivent) : ce Worker la LIT seulement, jamais d'écriture.
 //  - Base D1 « scouthub-donnees » (juridiction UE), séparée de celle des comptes.
 //  - Colonnes sensibles chiffrées AES-256-GCM, clé dans un secret du Worker (jamais dans la base ni dans le dépôt).
-//  - Lecture des données sensibles : l'administrateur SEUL (DONNEES_ADMINS), avec un jeton de 15 minutes obtenu par
-//    ré-authentification Google récente (Worker « auth »), jamais avec la session ordinaire. 100 lignes par appel,
-//    plafond horaire, chaque lecture journalisée.
+//  - Lecture : chaque personne ne reçoit QUE les lignes de sa portée (administrateur : tout ; chef de groupe : son groupe ;
+//    chef d'unité : son unité ; autres : rien). La portée vient du Worker « auth » (/auth/portee, d'après l'adresse de
+//    connexion) et filtre la requête SQL AVANT tout déchiffrement. Plafond horaire, journal de chaque lecture.
+//  - Un administrateur peut simuler une autre adresse (« comme ») : portée calculée comme pour la vraie personne, journalisée.
 import { jetonGoogle } from "../src/auth.js";
 import { cors } from "../src/commun.js";
 import { FEUILLES } from "./feuilles.js";
@@ -12,7 +13,7 @@ import { FEUILLES } from "./feuilles.js";
 const enc = new TextEncoder(), dec = new TextDecoder();
 const VERS_B64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
 const DE_B64 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
-const PAGE = 100, PLAFOND_HEURE = 2000;
+const PAGE = 100, PLAFOND_HEURE = 6000, SCAN_MAX = 1500;
 
 // ---------- chiffrement ----------
 const clesMemo = new Map();
@@ -84,7 +85,7 @@ async function synchroniser(env, nom) {
     const lignes = [];
     for (let i = 1; i < v.length; i++) if ((v[i] || []).some(c => String(c || "").trim() !== "")) lignes.push({ rang: i + 1, cellules: v[i] });
     if (nom === "Groupes et unités") await synchroniserHabilitations(env, entetes, lignes);   // toujours : retirer une adresse de la feuille retire l'accès
-    const emp = await empreinte(env, JSON.stringify([entetes, lignes.map(l => l.cellules)]));
+    const emp = await empreinte(env, JSON.stringify(["v3", entetes, lignes.map(l => l.cellules)]));
     const ancienne = await env.DB.prepare("SELECT empreinte FROM feuilles WHERE nom = ?1").bind(nom).first();
     if (ancienne && ancienne.empreinte === emp) {
       await env.DB.prepare("UPDATE feuilles SET statut = 'inchangee', erreur = '' WHERE nom = ?1").bind(nom).run();
@@ -95,7 +96,9 @@ async function synchroniser(env, nom) {
       const clair = {}, secret = {};
       entetes.forEach((h, i) => { const c = l.cellules[i]; if (c === undefined || c === "") return; (conf.clair.includes(h) ? clair : secret)[h] = c; });
       const { secret: s, kid } = await chiffrer(env, JSON.stringify(secret), nom + "|" + l.rang);
-      preparees.push(env.DB.prepare("INSERT INTO lignes (feuille, rang, clair, secret, kid) VALUES (?1, ?2, ?3, ?4, ?5)").bind(nom, l.rang, JSON.stringify(clair), s, kid));
+      // Rattachement (année, groupe, unité) : colonnes de filtrage lisibles, jamais de donnée de personne.
+      const cel = n => { const i = entetes.indexOf(n); return i < 0 ? "" : String(l.cellules[i] === undefined ? "" : l.cellules[i]).trim(); };
+      preparees.push(env.DB.prepare("INSERT INTO lignes (feuille, rang, clair, secret, kid, an, gk, uk) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)").bind(nom, l.rang, JSON.stringify(clair), s, kid, conf.annee ? cel(conf.annee).slice(0, 20) : "", slug(cel("Groupe")), slug(cel("Unité"))));
     }
     // Remplacement atomique : toutes les instructions dans un seul lot (tout ou rien).
     const lot = [env.DB.prepare("DELETE FROM lignes WHERE feuille = ?1").bind(nom), ...preparees,
@@ -112,16 +115,21 @@ async function toutSynchroniser(env) {   // une feuille qui échoue n'empêche p
   const out = {}; for (const nom of Object.keys(FEUILLES)) out[nom] = await synchroniser(env, nom); return out;
 }
 
-// ---------- accès : l'administrateur seul, avec le jeton de données (15 min, ré-authentification Google récente) ----------
-async function administrateur(env, jeton) {
-  if (!jeton || typeof jeton !== "string" || jeton.length > 200) return null;
-  const r = await env.AUTH.fetch("https://auth.interne/auth/donnees/verifier", { method: "POST", headers: { "content-type": "application/json", Origin: env.SELF_ORIGIN }, body: JSON.stringify({ jeton }) });
+// ---------- portée de la personne (Worker auth) ----------
+async function portee(env, token, comme) {
+  const r = await env.AUTH.fetch("https://auth.interne/auth/portee", { method: "POST", headers: { "content-type": "application/json", Origin: env.SELF_ORIGIN }, body: JSON.stringify({ token, comme: comme || undefined }) });
   const o = await r.json().catch(() => null);
-  if (!o || !o.ok || !o.email) return null;
-  const permis = String(env.DONNEES_ADMINS || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
-  return permis.includes(String(o.email).toLowerCase()) ? { email: o.email, expire: o.expire } : null;   // double contrôle, ici aussi
+  return o && o.ok ? o : null;
 }
-const journaliser = (env, email, action, feuille, n) => env.DB.prepare("INSERT INTO journal (ts, email, action, feuille, n) VALUES (?1, ?2, ?3, ?4, ?5)").bind(Date.now(), email, action, feuille || "", n || 0).run();
+const peut = (p, nom) => !!FEUILLES[nom] && (p.acces === "tout" || (FEUILLES[nom].chefs && (p.acces === "groupe" || p.acces === "unite")));
+// Filtre de portée appliqué dans la requête SQL, AVANT tout déchiffrement.
+function portee_sql(p) {
+  if (p.acces === "groupe") return { sql: " AND gk = ?", binds: [p.gk] };
+  if (p.acces === "unite") return { sql: " AND gk = ? AND uk = ?", binds: [p.gk, p.uk] };
+  return { sql: "", binds: [] };
+}
+const cle = v => (typeof v === "string" && /^[a-z0-9-]{1,120}$/.test(v)) ? v : "";
+const journaliser = (env, email, action, feuille, n, comme) => env.DB.prepare("INSERT INTO journal (ts, email, action, feuille, n, comme) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(Date.now(), email, action, feuille || "", n || 0, comme || "").run();
 
 export default {
   async fetch(req, env) {
@@ -132,39 +140,76 @@ export default {
     if (req.method !== "POST") return erreur(405, "Méthode refusée.");
     if (!String(env.ORIGINES || "").split(",").map(s => s.trim()).includes(origine)) return erreur(403, "Origine refusée.");
     const r = await req.json().catch(() => ({}));
-    const admin = await administrateur(env, r.jeton);
-    if (!admin) { await journaliser(env, "inconnu", "refus", url.pathname, 0).catch(() => {}); return erreur(403, "Accès aux données fermé : confirmez votre identité."); }
+    if (typeof r.token !== "string" || !r.token) return erreur(401, "Session expirée : reconnectez-vous.");
+    const comme = typeof r.comme === "string" && r.comme.trim() ? r.comme.trim().toLowerCase() : "";
+    const p = await portee(env, r.token, comme);
+    if (!p) { await journaliser(env, "inconnu", "refus", url.pathname, 0, comme).catch(() => {}); return erreur(403, comme ? "Simulation refusée." : "Session expirée ou accès refusé."); }
+    const reel = p.reel, simule = !!p.simule, admin = p.acces === "tout" && !simule && p.admin_reel;
 
+    if (url.pathname === "/donnees/moi") {   // qui je suis pour le registre + les feuilles qui me concernent
+      const feuilles = Object.entries(FEUILLES).filter(([n]) => peut(p, n)).map(([n, f]) => ({ nom: n, titre: f.titre }));
+      return json(200, { ok: true, acces: p.acces, role: p.role, groupe: p.groupe, unite: p.unite, email: p.email, simule, admin: !!p.admin_reel, feuilles });
+    }
+    if (url.pathname === "/donnees/habilites") {   // administrateur : adresses simulables
+      if (!p.admin_reel) return erreur(403, "Réservé à l'administrateur.");
+      const a = await env.AUTH.fetch("https://auth.interne/auth/habilites", { method: "POST", headers: { "content-type": "application/json", Origin: env.SELF_ORIGIN }, body: JSON.stringify({ token: r.token }) });
+      return json(a.status, await a.json().catch(() => ({ ok: false })));
+    }
     if (url.pathname === "/donnees/etat") {
+      if (!admin) return erreur(403, "Réservé à l'administrateur.");
       const { results } = await env.DB.prepare("SELECT nom, lignes, maj, tentative, statut, erreur FROM feuilles ORDER BY nom").all();
-      return json(200, { ok: true, feuilles: results, configurees: Object.keys(FEUILLES), expire: admin.expire });
+      const connus = new Set((await env.AUTH_DB.prepare("SELECT id FROM groupes").all()).results.map(x => x.id));
+      for (const f of results) {   // lignes dont le groupe n'existe pas dans « Groupes et unités » : invisibles des chefs, à corriger dans la feuille
+        if (!FEUILLES[f.nom] || !FEUILLES[f.nom].chefs) continue;
+        const gs = (await env.DB.prepare("SELECT gk, json_extract(clair, '$.Groupe') AS g, count(*) AS n FROM lignes WHERE feuille = ?1 GROUP BY gk, g").bind(f.nom).all()).results;
+        const inconnus = gs.filter(x => !connus.has(x.gk));
+        f.orphelines = inconnus.reduce((t, x) => t + x.n, 0); f.groupes_inconnus = inconnus.slice(0, 10).map(x => x.g || "(vide)");
+      }
+      return json(200, { ok: true, feuilles: results, configurees: Object.keys(FEUILLES) });
     }
     if (url.pathname === "/donnees/sync") {
+      if (!admin) return erreur(403, "Réservé à l'administrateur.");
       const nom = r.feuille;
       if (nom && !FEUILLES[nom]) return erreur(404, "Feuille inconnue.");
       const rep = nom ? { [nom]: await synchroniser(env, nom) } : await toutSynchroniser(env);
-      await journaliser(env, admin.email, "sync", nom || "toutes", 0);
+      await journaliser(env, reel, "sync", nom || "toutes", 0);
       return json(200, { ok: true, resultat: rep });
     }
-    if (url.pathname === "/donnees/filtres") {   // valeurs des colonnes en clair seulement (groupes, unités) : rien à déchiffrer
-      const nom = String(r.feuille || ""); if (!FEUILLES[nom]) return erreur(404, "Feuille inconnue.");
-      const { results } = await env.DB.prepare("SELECT DISTINCT json_extract(clair, '$.Groupe') AS g, json_extract(clair, '$.\"Unité\"') AS u FROM lignes WHERE feuille = ?1").bind(nom).all();
-      return json(200, { ok: true, paires: results.filter(x => x.g || x.u) });
+
+    const nom = String(r.feuille || "");
+    if (!peut(p, nom)) { await journaliser(env, reel, "refus", nom, 0, comme).catch(() => {}); return erreur(403, "Ces données ne vous concernent pas."); }
+    const conf = FEUILLES[nom], sc = portee_sql(p);
+
+    if (url.pathname === "/donnees/arbre") {   // effectifs par année / groupe / unité, dans la portée seulement
+      const { results } = await env.DB.prepare("SELECT an, gk, uk, json_extract(clair, '$.Groupe') AS g, json_extract(clair, '$.\"Unité\"') AS u, count(*) AS n FROM lignes WHERE feuille = ?1" + sc.sql + " GROUP BY an, gk, uk, g, u").bind(nom, ...sc.binds).all();
+      const f = await env.DB.prepare("SELECT entetes FROM feuilles WHERE nom = ?1").bind(nom).first();
+      let colonnes = []; try { colonnes = JSON.parse(f && f.entetes || "[]"); } catch {}
+      return json(200, { ok: true, feuille: nom, titre: conf.titre, annee: !!conf.annee, vue: conf.vue, colonnes, arbre: results });
     }
     if (url.pathname === "/donnees/lire") {
-      const nom = String(r.feuille || ""); if (!FEUILLES[nom]) return erreur(404, "Feuille inconnue.");
       const debut = Math.max(0, parseInt(r.debut, 10) || 0), limite = Math.min(PAGE, Math.max(1, parseInt(r.limite, 10) || PAGE));
-      const lu = await env.DB.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM journal WHERE email = ?1 AND action = 'lire' AND ts > ?2").bind(admin.email, Date.now() - 3600000).first();
-      if (lu.n + limite > PLAFOND_HEURE) { await journaliser(env, admin.email, "refus", nom, 0); return erreur(429, "Plafond de lecture horaire atteint."); }
-      const groupe = typeof r.groupe === "string" && r.groupe ? r.groupe.slice(0, 120) : null, unite = typeof r.unite === "string" && r.unite ? r.unite.slice(0, 120) : null;
-      const f = await env.DB.prepare("SELECT lignes, entetes FROM feuilles WHERE nom = ?1").bind(nom).first();
-      const { results } = await env.DB.prepare("SELECT rang, clair, secret, kid FROM lignes WHERE feuille = ?1 AND (?4 IS NULL OR json_extract(clair, '$.Groupe') = ?4) AND (?5 IS NULL OR json_extract(clair, '$.\"Unité\"') = ?5) ORDER BY rang LIMIT ?2 OFFSET ?3").bind(nom, limite, debut, groupe, unite).all();
-      const lignes = [];
-      for (const l of results) lignes.push({ rang: l.rang, ...JSON.parse(l.clair), ...JSON.parse(await dechiffrer(env, l.secret, l.kid, nom + "|" + l.rang)) });
-      await journaliser(env, admin.email, "lire", nom, lignes.length);
-      const total = (await env.DB.prepare("SELECT count(*) AS n FROM lignes WHERE feuille = ?1 AND (?2 IS NULL OR json_extract(clair, '$.Groupe') = ?2) AND (?3 IS NULL OR json_extract(clair, '$.\"Unité\"') = ?3)").bind(nom, groupe, unite).first()).n;
-      let entetes = []; try { entetes = JSON.parse(f && f.entetes || "[]"); } catch {}
-      return json(200, { ok: true, feuille: nom, debut, total, entetes, lignes, expire: admin.expire });
+      const an = typeof r.an === "string" ? r.an.slice(0, 20) : "", gk = cle(r.gk), uk = cle(r.uk), q = typeof r.q === "string" ? r.q.trim().toLowerCase().slice(0, 60) : "";
+      const lu = await env.DB.prepare("SELECT COALESCE(SUM(n), 0) AS n FROM journal WHERE email = ?1 AND action IN ('lire','simule') AND ts > ?2").bind(reel, Date.now() - 3600000).first();
+      const aScanner = q ? SCAN_MAX : limite;
+      if (lu.n + aScanner > PLAFOND_HEURE) { await journaliser(env, reel, "refus", nom, 0, comme); return erreur(429, "Plafond de lecture horaire atteint : réessayez plus tard."); }
+      let where = " WHERE feuille = ?1" + sc.sql.replace(/gk = \?/, "gk = ?2").replace(/uk = \?/, "uk = ?3"), binds = [nom, ...sc.binds], n = binds.length;
+      if (an) { binds.push(an); where += " AND an = ?" + (++n); }
+      if (gk) { binds.push(gk); where += " AND gk = ?" + (++n); }
+      if (uk) { binds.push(uk); where += " AND uk = ?" + (++n); }
+      const total = (await env.DB.prepare("SELECT count(*) AS n FROM lignes" + where).bind(...binds).first()).n;
+      const lire = async l => ({ rang: l.rang, ...JSON.parse(l.clair), ...JSON.parse(await dechiffrer(env, l.secret, l.kid, nom + "|" + l.rang)) });
+      let lignes = [], nb = 0, correspondances = total, tronque = false;
+      if (!q) {
+        const { results } = await env.DB.prepare("SELECT rang, clair, secret, kid FROM lignes" + where + " ORDER BY rang LIMIT ?" + (n + 1) + " OFFSET ?" + (n + 2)).bind(...binds, limite, debut).all();
+        for (const l of results) lignes.push(await lire(l)); nb = lignes.length;
+      } else {   // recherche : on déchiffre au plus SCAN_MAX lignes DE LA PORTÉE (déjà filtrées) et on compare en mémoire
+        const { results } = await env.DB.prepare("SELECT rang, clair, secret, kid FROM lignes" + where + " ORDER BY rang LIMIT ?" + (n + 1)).bind(...binds, SCAN_MAX).all();
+        tronque = total > SCAN_MAX; nb = results.length; const trouvees = [];
+        for (const l of results) { const x = await lire(l); if (Object.values(x).some(v => String(v).toLowerCase().includes(q))) trouvees.push(x); }
+        correspondances = trouvees.length; lignes = trouvees.slice(debut, debut + limite);
+      }
+      await journaliser(env, reel, simule ? "simule" : "lire", nom, nb, comme);
+      return json(200, { ok: true, feuille: nom, debut, total: q ? correspondances : total, tronque, lignes });
     }
     return erreur(404, "Adresse inconnue.");
   },
