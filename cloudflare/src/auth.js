@@ -398,8 +398,9 @@ export async function authRoute(req, env, url, json, erreur) {
       };
       const lignes = await lireFeuille(env, "", "Outils!A2:E100");
       const lien = l => /^https?:\/\//i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
+      const dispo = new Map((await env.DB.prepare("SELECT cle, nom, description, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
       const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]))
-        .map(l => ({ nom: String(l[0]).trim(), desc: l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 200) }));
+        .map(l => { const cle = "o:" + slug(l[0]), d = dispo.get(cle); return { cle, nom: (d && d.nom) || String(l[0]).trim(), desc: (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 200), section: d ? d.section : "", ordre: d ? d.ordre : null }; });
       return json(200, { ok: true, outils });
     }
     // ---- Portée de lecture des données du registre (appelé par le Worker « donnees ») ----
@@ -445,7 +446,9 @@ export async function authRoute(req, env, url, json, erreur) {
       const admin = !r.comme && p.role === "admin";
       const { results } = await env.DB.prepare("SELECT id, nom, description, url, audience FROM entrees WHERE section = ?1 ORDER BY nom").bind(section).all();
       const vues = results.filter(e => admin || audienceVisible(p, e.audience));
-      return json(200, { ok: true, admin, entrees: vues.map(e => admin ? { ...e, audience: e.audience.split(",") } : { id: e.id, nom: e.nom, description: e.description, url: e.url }) });
+      const dispo = new Map((await env.DB.prepare("SELECT cle, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
+      const pos = e => { const d = dispo.get("e:" + e.id); return { cle: "e:" + e.id, section: d ? d.section : "", ordre: d ? d.ordre : null }; };
+      return json(200, { ok: true, admin, entrees: vues.map(e => admin ? { ...e, audience: e.audience.split(","), ...pos(e) } : { id: e.id, nom: e.nom, description: e.description, url: e.url, ...pos(e) }) });
     }
     if (url.pathname === "/auth/entree/ecrire") {
       const r = await req.json().catch(() => ({}));
@@ -466,6 +469,22 @@ export async function authRoute(req, env, url, json, erreur) {
       await env.DB.prepare("INSERT INTO entrees (id, section, nom, description, url, audience, maj) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(id) DO UPDATE SET section = excluded.section, nom = excluded.nom, description = excluded.description, url = excluded.url, audience = excluded.audience, maj = excluded.maj")
         .bind(id, section, nom, desc, lien, aud.join(","), Date.now()).run();
       return json(200, { ok: true, id });
+    }
+    // Disposition (section, ordre, nom/description affichés) des outils dynamiques : stockée À PART de la mise en page partagée,
+    // et renvoyée seulement avec les outils que la personne peut voir (aucune fuite d'un outil restreint).
+    if (url.pathname === "/auth/outils/disposer") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const items = Array.isArray(r.items) ? r.items.slice(0, 300) : [];
+      const lot = [];
+      for (const it of items) {
+        const cle = String(it.cle || ""); if (!/^[oe]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu : " + cle.slice(0, 40));
+        const sec = String(it.section || "").slice(0, 60); if (sec && !/^[a-z0-9-]{1,60}$/.test(sec)) throw new Erreur("Section invalide.");
+        lot.push(env.DB.prepare("INSERT INTO disposition (cle, nom, description, section, ordre) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, section = excluded.section, ordre = excluded.ordre")
+          .bind(cle, cle.startsWith("o:") ? String(it.nom || "").trim().slice(0, 60) : "", cle.startsWith("o:") ? String(it.description || "").trim().slice(0, 200) : "", sec, Math.max(0, Math.min(999, parseInt(it.ordre, 10) || 0))));
+      }
+      if (lot.length) await env.DB.batch(lot);
+      return json(200, { ok: true, n: lot.length });
     }
     if (url.pathname === "/auth/entree/supprimer") {
       const r = await req.json().catch(() => ({}));

@@ -77,7 +77,7 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
       if (simule()) {
@@ -191,46 +191,52 @@
         location.href = "outils.html?q=" + encodeURIComponent(v);
       });
       Hub._champRecherche = champ;
-      const sp = document.createElement("span"); sp.className = "tb-spacer";
       // Photo de profil (cliquable, façon Google) : la vraie photo du compte Google si on l'a (connexion Google,
       // lue dans le jeton), sinon le rond avec l'initiale comme avant. Ouvre « Mon compte ».
       const avatar = Hub.avatar(user, "tb-avatar"); avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
         Object.assign(document.createElement("div"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
-        wrap, sp, avatar);
+        Object.assign(document.createElement("span"), { className: "tb-spacer" }), wrap, avatar);
       Hub.bandeauSimulation(user);
+      if (Hub._fil) Hub.renderFil(Hub._fil.items, Hub._fil.opts);   // la barre vient d'être reconstruite : on remet le fil
     },
 
     // Bandeau permanent pendant une simulation : on sait toujours qui on est « censé » être, et on peut en sortir d'un clic.
     bandeauSimulation(user) {
       document.getElementById("sim-bandeau")?.remove();
-      if (!simule()) return;
+      const bar = $("bar"); if (!simule() || !bar) return;
       const b = document.createElement("div"); b.id = "sim-bandeau"; b.setAttribute("role", "status");
-      b.append(Object.assign(document.createElement("span"), { textContent: "Simulation : vous voyez le site comme " }), Object.assign(document.createElement("b"), { textContent: simule() }),
-        Object.assign(document.createElement("span"), { textContent: " (" + (Hub.ROLE_LABELS[Hub.normRole(user && user.role)] || "") + "). Lecture seule." }));
-      const q = Object.assign(document.createElement("button"), { type: "button", textContent: "Quitter la simulation" }); q.onclick = () => Hub.quitterSimulation(); b.append(q);
-      const bar = $("bar"); if (bar) bar.after(b);
+      const role = Hub.ROLE_LABELS[Hub.normRole(user && user.role)] || "";
+      b.title = "Simulation : vous voyez le site comme " + simule() + " (" + role + "). Lecture seule.";
+      b.append(Object.assign(document.createElement("span"), { className: "sim-texte", textContent: "Simulation · " }), Object.assign(document.createElement("b"), { textContent: simule() }));
+      const q = Object.assign(document.createElement("button"), { type: "button", textContent: "Quitter", title: "Quitter la simulation" }); q.onclick = () => Hub.quitterSimulation(); b.append(q);
+      const avatar = bar.querySelector(".tb-avatar"); if (avatar) bar.insertBefore(b, avatar); else bar.append(b);
     },
 
     // Fil d'Ariane façon explorateur : précédent, suivant, monter d'un niveau, actualiser, chemin cliquable.
     // items : [{ label, href | onClick }] (le dernier est la position courante) ; opts : { rafraichir: fonction, haut: { href | onClick } }.
     renderFil(items, opts = {}) {
-      const main = document.querySelector("main"); if (!main) return;
+      Hub._fil = { items, opts };
+      const bar = $("bar"); if (!bar) return;
       document.getElementById("fil")?.remove();
+      const svg = d => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+      const I = { retour: svg('<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>'), avant: svg('<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>'), haut: svg('<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>'), actualiser: svg('<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>'), chevron: svg('<path d="m9 18 6-6-6-6"/>') };
       const nav = document.createElement("nav"); nav.id = "fil"; nav.className = "fil"; nav.setAttribute("aria-label", "Où je suis");
-      const bouton = (txt, titre, fn) => { const b = Object.assign(document.createElement("button"), { type: "button", className: "fil-btn", textContent: txt, title: titre }); b.setAttribute("aria-label", titre); b.onclick = fn; return b; };
+      const bouton = (icone, titre, fn, cls) => { const b = Object.assign(document.createElement("button"), { type: "button", className: "fil-btn" + (cls ? " " + cls : ""), innerHTML: icone, title: titre }); b.setAttribute("aria-label", titre); b.onclick = fn; return b; };
       const parent = opts.haut || (items.length > 1 ? items[items.length - 2] : null);
-      const haut = bouton("↑", "Monter d’un niveau", () => { if (!parent) return; if (parent.onClick) parent.onClick(); else if (parent.href) location.href = parent.href; });
+      const haut = bouton(I.haut, "Monter d’un niveau", () => { if (!parent) return; if (parent.onClick) parent.onClick(); else if (parent.href) location.href = parent.href; });
       if (!parent) haut.disabled = true;
       const chemin = document.createElement("ol"); chemin.className = "fil-chemin";
       items.forEach((it, i) => {
         const li = document.createElement("li"), dernier = i === items.length - 1;
         const c = dernier ? Object.assign(document.createElement("span"), { className: "crumb courant", textContent: it.label }) : it.href ? Object.assign(document.createElement("a"), { className: "crumb", href: it.href, textContent: it.label }) : Object.assign(document.createElement("button"), { type: "button", className: "crumb", textContent: it.label, onclick: it.onClick });
-        c.title = it.label; if (dernier) c.setAttribute("aria-current", "page"); li.append(c); if (!dernier) li.append(Object.assign(document.createElement("span"), { className: "fil-sep-chemin", textContent: "›", ariaHidden: "true" })); chemin.append(li);
+        c.title = it.label; if (dernier) c.setAttribute("aria-current", "page"); li.append(c);
+        if (!dernier) li.append(Object.assign(document.createElement("span"), { className: "fil-sep-chemin", innerHTML: I.chevron, ariaHidden: "true" }));
+        chemin.append(li);
       });
-      nav.append(bouton("←", "Page précédente", () => history.back()), bouton("→", "Page suivante", () => history.forward()), haut, bouton("⟳", "Actualiser", opts.rafraichir || (() => location.reload())), Object.assign(document.createElement("span"), { className: "fil-sep" }), chemin);
-      main.prepend(nav);
+      nav.append(bouton(I.retour, "Page précédente", () => history.back()), bouton(I.avant, "Page suivante", () => history.forward(), "optionnel"), haut, bouton(I.actualiser, "Actualiser", opts.rafraichir || (() => location.reload()), "optionnel"), chemin);
+      bar.after(nav);   // seconde ligne de l'en-tête (masquée sur téléphone)
     },
     filParDefaut(actif) {
       const NOMS = { accueil: "Accueil", documentation: "Documentation", inscriptions: "Inscriptions", outils: "Outils", compte: "Mon compte", administration: "Administration", aide: "Aide" };

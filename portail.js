@@ -51,19 +51,33 @@
     const titre = "Outils fédération", id = slug(titre), norm = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
     let s = m.sections.find(x => x.titre === titre);
     if (!s) m.sections.push(s = { id, titre, haut: false });
-    if (Array.isArray(outils)) m.apps = m.apps.filter(a => a.section !== s.id);
+    // La feuille « Outils » remplace les outils fédération de config.js (pas les liens que l'administrateur a ajoutés lui-même).
+    if (Array.isArray(outils)) { const anciens = new Set(defaults().apps.filter(a => a.section === s.id).map(a => a.id)); m.apps = m.apps.filter(a => !anciens.has(a.id)); }
     const vus = new Set(m.apps.map(a => norm(a.url)));
+    // Section demandée par la disposition de l'administrateur (si elle existe encore), sinon la section par défaut.
+    const sect = t => (t.section && m.sections.some(x => x.id === t.section)) ? t.section : s.id;
     (outils || []).forEach(t => {
       if (!safeUrl(t.lien) || vus.has(norm(t.lien))) return;
       vus.add(norm(t.lien));
-      m.apps.push({ id: slug(t.nom), section: s.id, nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: icone(t), crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "" });
+      m.apps.push({ id: slug(t.nom), section: sect(t), nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: icone(t), crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: t.cle, ordre: t.ordre });
     });
     // Applications ajoutées par l'administrateur (déjà filtrées par le serveur selon la personne ; l'administrateur reçoit aussi leur public).
     (entrees || []).forEach(e => {
       if (!safeUrl(e.url) || vus.has(norm(e.url))) return;
       vus.add(norm(e.url));
-      m.apps.push({ id: "entree-" + e.id, section: s.id, nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", entree: e.audience ? e : undefined });
+      m.apps.push({ id: "entree-" + e.id, section: sect(e), nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: e.cle, ordre: e.ordre, entree: e.audience ? e : undefined });
     });
+    // Ordre : les outils dynamiques occupent la position enregistrée dans leur section ; les autres (mise en page partagée) comblent les places libres, dans leur ordre.
+    const resultat = [];
+    m.sections.forEach(sec => {
+      const liste = m.apps.filter(a => a.section === sec.id), n = liste.length, places = new Array(n).fill(null);
+      const dyn = liste.filter(a => a.dyn && a.ordre !== null && a.ordre !== undefined).sort((a, b) => a.ordre - b.ordre);
+      dyn.forEach(a => { let i = Math.min(a.ordre, n - 1); while (i < n && places[i]) i++; if (i >= n) { i = places.indexOf(null); } if (i >= 0) places[i] = a; });
+      const reste = liste.filter(a => !places.includes(a));
+      places.forEach((v, i) => { if (!v) places[i] = reste.shift(); });
+      resultat.push(...places.filter(Boolean), ...reste);
+    });
+    m.apps = [...resultat, ...m.apps.filter(a => !m.sections.some(sec => sec.id === a.section))];
   }
   const P = window.Portail = {
     TOP, slug, safeUrl, safeIcon, safeRole, defaults, merge, valid, isAdmin: false, model: null,

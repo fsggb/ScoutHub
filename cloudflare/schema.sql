@@ -118,3 +118,12 @@ CREATE TABLE IF NOT EXISTS entrees (
   audience TEXT NOT NULL,                 -- jetons séparés par des virgules : all, chef_unite, chef_groupe, equipe_nationale, admin, g:<groupe>, u:<unité>
   maj INTEGER NOT NULL
 );
+
+-- Disposition des outils dynamiques (feuille « Outils » : cle « o:<nom> » ; entrées de l'administrateur : cle « e:<id> »).
+CREATE TABLE IF NOT EXISTS disposition (
+  cle TEXT PRIMARY KEY,
+  nom TEXT NOT NULL DEFAULT '',           -- nom affiché si l'administrateur a renommé l'outil de la feuille
+  description TEXT NOT NULL DEFAULT '',
+  section TEXT NOT NULL DEFAULT '',       -- identifiant de la section ('' = section par défaut)
+  ordre INTEGER NOT NULL DEFAULT 0        -- position dans la section
+);

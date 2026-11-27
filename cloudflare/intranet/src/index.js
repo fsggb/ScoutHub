@@ -18,6 +18,7 @@ const SECURITE = { "x-content-type-options": "nosniff", "referrer-policy": "stri
 // Fichiers servis sans session : uniquement ce qu'il faut pour afficher la page de connexion du portail (aucune adresse d'application).
 const PUBLICS = new Set(["index.html", "styles.css", "hub.css", "common.js", "app.js", "scouthub-client.js", "assets/fsggb.png"]);
 const CONFIG_PUBLIQUE = /^window\.SCOUTHUB_(GOOGLE_CLIENT_ID|API|AUTH_API|INTRANET)\s*=/;
+const enc = new TextEncoder();
 const b64ToBytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 const extOf = p => { const i = p.lastIndexOf("."); return i < 0 ? "" : p.slice(i); };
 const lireCookie = (req, nom) => { const m = (req.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + nom + "=([0-9a-f]{20,200})")); return m ? m[1] : ""; };
@@ -145,9 +146,19 @@ export default {
   }
 };
 
-function fichier(cle, prive, req) {
+// Empreinte du contenu (ETag), calculée une fois par isolat : le navigateur revalide à chaque ouverture et ne retélécharge
+// que si le fichier a changé (réponse 304). Plus jamais une ancienne version restée en mémoire après un déploiement.
+const etags = new Map();
+async function etag(cle, f) {
+  if (!etags.has(cle)) etags.set(cle, '"' + [...new Uint8Array(await crypto.subtle.digest("SHA-1", enc.encode(f.data)))].slice(0, 10).map(b => b.toString(16).padStart(2, "0")).join("") + '"');
+  return etags.get(cle);
+}
+async function fichier(cle, prive, req) {
   const f = FICHIERS[cle];
   if (!f) return erreur(404, "Introuvable.");
-  const entetes = { "content-type": MIME[extOf(cle)] || "application/octet-stream", "cache-control": prive ? "private, no-store" : "public, max-age=3600", ...SECURITE };
+  const entetes = { "content-type": MIME[extOf(cle)] || "application/octet-stream", ...SECURITE };
+  if (prive) entetes["cache-control"] = "private, no-store";
+  else if (f.type === "b64") entetes["cache-control"] = "public, max-age=3600";   // images : changent rarement
+  else { entetes["cache-control"] = "no-cache"; entetes["etag"] = await etag(cle, f); if (req && req.headers.get("if-none-match") === entetes["etag"]) return new Response(null, { status: 304, headers: entetes }); }
   return new Response(req && req.method === "HEAD" ? null : (f.type === "b64" ? b64ToBytes(f.data) : f.data), { headers: entetes });
 }

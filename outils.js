@@ -53,6 +53,8 @@
 
   let recherche = "", voirMasquees = false;
   function renderApps() {
+    if (window.OutilsEdition && OutilsEdition.actif()) return;   // l'administrateur est en train d'organiser : on ne repeint pas par-dessus
+
     const plat = t => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();      // « creation » trouve « Création »
     const q = plat(recherche.trim()), box = $("apps"); box.textContent = "";
     const m = Portail.current(), shown = [];
@@ -91,6 +93,7 @@
     if (Hub.user && Hub.user.role === "admin" && !$("ajout-app")) {   // administrateur : ajouter une application et définir qui est concerné
       const b = Object.assign(document.createElement("button"), { id: "ajout-app", type: "button", className: "ghost", textContent: "+ Ajouter une application" });
       b.onclick = () => Entrees.dialogue("outils", null, () => Portail.refresh(renderApps)); document.querySelector(".home-head").append(b);
+      OutilsEdition.installer(document.querySelector(".home-head"), renderApps);
     }
     // Première visite (pas encore de mise en page en cache) : on attend la vraie mise en page du serveur avant de peindre,
     // pour éviter que les icônes ou l'organisation des sections changent juste après l'affichage (sinon il faut recharger pour que ça se stabilise).

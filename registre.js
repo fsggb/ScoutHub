@@ -12,7 +12,7 @@
   Hub.renderBar(user, "Inscriptions"); Hub.renderTabs("inscriptions", user);
 
   let moi = null, meta = null, arbre = [], mode = "annee", sel = { an: "", gk: "", uk: "" }, anFiltre = "", titre = "Inscriptions";
-  let ouverts = new Set(), q = "", debut = 0, total = 0, minuteur = null, sequence = 0, restaure = false;
+  let courantes = [], idx = -1, ouverts = new Set(), q = "", debut = 0, total = 0, minuteur = null, sequence = 0, restaure = false;
   const el = (tag, props, ...enfants) => { const e = Object.assign(document.createElement(tag), props || {}); e.append(...enfants); return e; };
   const norm = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -104,24 +104,36 @@
     const f = norm($("rg-filtre").value.trim()), force = !!f;   // un filtre de texte déplie tout ce qui correspond
     let rs = mode === "groupe" && anFiltre ? arbre.filter(r => r.an === anFiltre) : arbre;
     if (f) rs = rs.filter(r => norm((r.g || "") + " " + (r.u || "")).includes(f));
-    const aucun = !sel.an && !sel.gk && !sel.uk;
-    racine.append(noeud({ cle: "tous", niveau: 0, libelle: "Tous", n: somme(rs), choisi: aucun, aEnfants: false, onChoisir: () => choisir({ an: "", gk: "", uk: "" }) }));
+    const tous = { an: "", gk: "", uk: "" }, aucun = !sel.an && !sel.gk && !sel.uk;
+    // Retour d'un niveau : quand un élément est choisi, les autres disparaissent pour gagner de la place.
+    const retour = (libelle, fn) => racine.append(el("button", { type: "button", className: "rg-retour-niv", textContent: "‹ " + libelle, onclick: fn }));
+    const focusAn = mode === "annee" && sel.an && !f, focusGr = mode === "groupe" && sel.gk && !f;
+    if (focusAn) retour("Toutes les années", () => choisir(tous));
+    else if (focusGr) retour("Tous les groupes", () => choisir(tous));
+    else racine.append(noeud({ cle: "tous", niveau: 0, libelle: "Tous", n: somme(rs), choisi: aucun, aEnfants: false, onChoisir: () => choisir(tous) }));
     const unites = (liste, an, gk) => [...grouper(liste, r => r.uk).values()].sort((a, b) => tri(nomU(a), nomU(b))).forEach(us =>
       racine.append(noeud({ cle: "u:" + an + "|" + gk + "|" + us[0].uk, niveau: 2, libelle: nomU(us), n: somme(us), choisi: sel.uk === us[0].uk && sel.gk === gk && (mode === "groupe" || sel.an === an), aEnfants: false, onChoisir: () => choisir({ an: mode === "annee" ? an : "", gk, uk: us[0].uk }) })));
     if (mode === "annee") {
       const courante = annees()[0];
-      for (const an of [...new Set(rs.map(r => r.an).filter(Boolean))].sort().reverse()) {
+      let lesAns = [...new Set(rs.map(r => r.an).filter(Boolean))].sort().reverse();
+      if (focusAn) lesAns = lesAns.filter(a => a === sel.an);
+      for (const an of lesAns) {
         const ra = rs.filter(r => r.an === an);
         racine.append(noeud({ cle: "a:" + an, niveau: 0, libelle: an, n: somme(ra), choisi: sel.an === an && !sel.gk, actuelle: an === courante, aEnfants: true, force, onChoisir: () => choisir({ an, gk: "", uk: "" }) }));
         if (!force && !ouverts.has("a:" + an)) continue;
-        [...grouper(ra, r => r.gk).values()].sort((a, b) => tri(nomG(a), nomG(b))).forEach(gs => {
+        let groupes = [...grouper(ra, r => r.gk).values()].sort((a, b) => tri(nomG(a), nomG(b)));
+        const gFocus = sel.an === an && sel.gk && !f;
+        if (gFocus) { groupes = groupes.filter(gs => gs[0].gk === sel.gk); retour("Tous les groupes de " + an, () => choisir({ an, gk: "", uk: "" })); }
+        groupes.forEach(gs => {
           const kg = "a:" + an + "|g:" + gs[0].gk;
           racine.append(noeud({ cle: kg, niveau: 1, libelle: nomG(gs), n: somme(gs), choisi: sel.an === an && sel.gk === gs[0].gk && !sel.uk, aEnfants: true, force, onChoisir: () => choisir({ an, gk: gs[0].gk, uk: "" }) }));
           if (force || ouverts.has(kg)) unites(gs, an, gs[0].gk);
         });
       }
     } else {
-      [...grouper(rs, r => r.gk).values()].sort((a, b) => tri(nomG(a), nomG(b))).forEach(gs => {
+      let groupes = [...grouper(rs, r => r.gk).values()].sort((a, b) => tri(nomG(a), nomG(b)));
+      if (focusGr) groupes = groupes.filter(gs => gs[0].gk === sel.gk);
+      groupes.forEach(gs => {
         const kg = "g:" + gs[0].gk;
         racine.append(noeud({ cle: kg, niveau: 1, libelle: nomG(gs), n: somme(gs), choisi: sel.gk === gs[0].gk && !sel.uk, aEnfants: true, force, onChoisir: () => choisir({ an: "", gk: gs[0].gk, uk: "" }) }));
         if (force || ouverts.has(kg)) unites(gs, "", gs[0].gk);
@@ -174,12 +186,13 @@
       total = o.total; const cols = colonnes(), t = $("rg-table"), tr = el("tr");
       t.tHead.textContent = ""; t.tBodies[0].textContent = "";
       cols.forEach(c => tr.append(el("th", { textContent: c }))); t.tHead.append(tr);
-      for (const l of o.lignes) {
+      courantes = o.lignes; fermerFiche();
+      o.lignes.forEach((l, i) => {
         const r = el("tr"); r.tabIndex = 0;
-        cols.forEach(c => { const v = l[c]; r.append(v === undefined || v === "" ? el("td", { className: "rg-vide", textContent: "—" }) : el("td", { textContent: String(v) })); });
-        r.onclick = () => fiche(l); r.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fiche(l); } };
+        cols.forEach((c, k) => { const v = l[c]; r.append(v === undefined || v === "" ? el("td", { className: "rg-vide", textContent: "—" }) : el("td", { className: k === 0 ? "rg-nom" : "", textContent: String(v) })); });
+        r.onclick = () => ouvrirFiche(i); r.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ouvrirFiche(i); } };
         t.tBodies[0].append(r);
-      }
+      });
       $("rg-compte").textContent = total.toLocaleString("fr-FR") + (q ? " résultat" : " inscription") + (total > 1 ? "s" : "");
       $("rg-page").textContent = total ? (debut + 1) + "–" + Math.min(debut + PAGE, total) + " sur " + total.toLocaleString("fr-FR") : "Aucun résultat";
       $("rg-prec").disabled = debut <= 0; $("rg-suiv").disabled = debut + PAGE >= total;
@@ -190,18 +203,28 @@
   $("rg-prec").onclick = () => { debut = Math.max(0, debut - PAGE); lister(); };
   $("rg-suiv").onclick = () => { debut += PAGE; lister(); };
 
-  // ---------- fiche complète ----------
-  function fiche(l) {
+  // ---------- fiche : volet de droite (boutons des documents, puis tous les champs) ----------
+  const ICONE_DOC = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>';
+  const estLien = v => /^https:\/\/[^\s"'<>]{4,600}$/.test(String(v));
+  function fermerFiche() { idx = -1; $("rg-detail").hidden = true; $("rg-corps").classList.remove("avec-detail"); $("rg-table").querySelectorAll("tbody tr.sel").forEach(t => t.classList.remove("sel")); $("rg-detail").textContent = ""; }
+  function ouvrirFiche(i) {
+    const l = courantes[i]; if (!l) return; idx = i;
     const ordre = (meta.colonnes && meta.colonnes.length) ? meta.colonnes : [...colonnes(), ...Object.keys(l).filter(k => k !== "rang" && !colonnes().includes(k))];
-    const cols = ordre.filter(c => l[c] !== undefined && l[c] !== "");
-    $("rg-fiche-titre").textContent = colonnes().slice(0, 2).map(c => l[c]).filter(Boolean).join(" ") || "Fiche";
-    const dl = $("rg-fiche-champs"); dl.textContent = "";
-    cols.forEach(c => { const val = String(l[c]); dl.append(el("dt", { textContent: c }), el("dd", {}, /^https:\/\/[^\s"'<>]{4,500}$/.test(val) ? el("a", { href: val, target: "_blank", rel: "noopener noreferrer", textContent: "Ouvrir le lien" }) : document.createTextNode(val))); });
-    $("rg-fiche").showModal();
+    const champs = ordre.filter(c => l[c] !== undefined && l[c] !== "");
+    const d = $("rg-detail"); d.textContent = "";
+    const titreFiche = colonnes().slice(0, 2).map(c => l[c]).filter(Boolean).join(" ") || "Fiche";
+    const nav = (txt, titre, fn, off) => { const b = el("button", { type: "button", className: "rg-d-btn", textContent: txt, title: titre, disabled: !!off, onclick: fn }); b.setAttribute("aria-label", titre); return b; };
+    d.append(el("div", { className: "rg-detail-tete" }, el("h2", { textContent: titreFiche }), nav("‹", "Fiche précédente", () => ouvrirFiche(i - 1), i <= 0), nav("›", "Fiche suivante", () => ouvrirFiche(i + 1), i >= courantes.length - 1), nav("✕", "Fermer la fiche", fermerFiche)));
+    const docs = champs.filter(c => estLien(l[c]));
+    if (docs.length) d.append(el("div", { className: "rg-docs" }, ...docs.map(c => { const a = el("a", { className: "rg-doc", href: String(l[c]), target: "_blank", rel: "noopener noreferrer" }); a.innerHTML = '<span class="rg-doc-rond">' + ICONE_DOC + '</span>'; a.append(el("span", { textContent: "Ouvrir " + c })); return a; })));
+    const dl = el("dl", { className: "rg-champs" });
+    champs.filter(c => !estLien(l[c])).forEach(c => dl.append(el("dt", { textContent: c }), el("dd", { textContent: String(l[c]) })));
+    d.append(dl); d.hidden = false; $("rg-corps").classList.add("avec-detail");
+    $("rg-table").querySelectorAll("tbody tr").forEach((t, k) => t.classList.toggle("sel", k === i));
+    const ligne = $("rg-table").tBodies[0].rows[i]; if (ligne) ligne.scrollIntoView({ block: "nearest" });
   }
-  $("rg-fiche-fermer").onclick = () => $("rg-fiche").close();
-  $("rg-fiche").addEventListener("click", e => { if (e.target === $("rg-fiche")) $("rg-fiche").close(); });
-  addEventListener("pagehide", () => { try { $("rg-table").tBodies[0].textContent = ""; $("rg-fiche-champs").textContent = ""; } catch {} });
+  addEventListener("keydown", e => { if (e.key === "Escape" && idx >= 0 && !e.target.closest("input")) fermerFiche(); });
+  addEventListener("pagehide", () => { try { $("rg-table").tBodies[0].textContent = ""; $("rg-detail").textContent = ""; } catch {} });
 
   await demarrer();
 })();
