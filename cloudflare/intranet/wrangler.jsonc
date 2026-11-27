@@ -1,0 +1,7 @@
+{
+  // Site de test intranet.fsggb.workers.dev : instantané du portail (src/files.json, généré par construire.mjs)
+  // servi par un Worker ; le reste est relayé vers la production. Aucune liaison.
+  "name": "intranet",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01"
+}
