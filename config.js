@@ -61,6 +61,8 @@ window.SCOUTHUB_APPS = [
   { group: "Conception et CAO", featured: true, crop: true, name: "SoLeadWorks", desc: "Meubles et coins de patrouille en 3D, avec plans et historique", url: O + "ScoutCraft/?lang=fr", icon: "assets/icons/SoLeadWorks.png", local: true },
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png", local: true },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png", local: true },
-  { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true },
+  // Application de la fédération : un compte au moins (n'importe lequel, « accès membre ») est exigé, pour
+  // garder une trace de qui y accède — jamais ouvert aux invités, contrairement aux suites bureautique/création.
+  { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true, role: "adherent" },
 ];
 })();
