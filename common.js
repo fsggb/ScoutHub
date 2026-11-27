@@ -34,6 +34,11 @@
     $, say, store, user: null, root: ROOT.href, ROLE_LABELS, ROLE_ORDER, ACCES_LABELS,
     // Vrai si l'utilisateur a au moins le rôle demandé (« parent » n'est pas au-dessus de « membre » : voir ChatGDB/docs/projet-chatgdb.md).
     can: (user, min) => !min || min === "public" || (!!user && ROLE_ORDER.indexOf(normRole(user.role)) >= ROLE_ORDER.indexOf(normRole(min))), cachedUser, cacheUser, normRole,
+    // Vrai pour un compte @fsggb.fr (Google Workspace de la fédération, ou code e-mail @fsggb.fr) ; faux pour un
+    // compte Google personnel externe (« ACCÈS MEMBRE » ouvert à tous : voir auth.js). Sert à réserver les
+    // applications « protege » (ChatGDB, bibliothèque…) aux membres de la fédération, pas à quiconque se connecte.
+    // u.fsggb absent (anciens jetons mis en cache avant ce champ) : traité comme membre, pas comme externe.
+    estFederation: user => !!user && user.fsggb !== false,
     mesMasquees, masquePerso, toggleMasquePerso,
     get token() { return store.get(); },
     here: () => location.pathname.split("/").pop() || "index.html",

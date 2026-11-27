@@ -43,7 +43,7 @@
     const m = Portail.current(), shown = [];
     let row = null, prevTop = false;
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Portail.connected()) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin || voirMasquees) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Hub.estFederation(Hub.user)) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin || voirMasquees) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group";
