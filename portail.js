@@ -42,6 +42,16 @@
     });
     return out;
   }
+  // La feuille « Outils » pilote toute la grille (outils, sections, ordre, rangées, images, visibilité) : le modèle est construit
+  // uniquement à partir d'elle. config.js ne sert plus qu'aux visiteurs sans compte et de secours si la feuille est illisible.
+  function modelePilote(outils, layout) {
+    const secs = (layout.sections || []).slice().sort((a, b) => (a.ordre || 0) - (b.ordre || 0)).map(x => ({ id: x.id, titre: x.titre, haut: false, ligne: x.ligne || "r-" + x.id, ordre: x.ordre }));
+    const img = t => t.image && /^assets\/icons\/[\w.\-]{1,60}$/.test(t.image) ? t.image : (t.image && /^images\//i.test(t.image) && window.SCOUTHUB_INTRANET && location.hostname === window.SCOUTHUB_INTRANET) ? "/img/" + t.image.split("/").map(encodeURIComponent).join("/") : (t.image && /^https:\/\//i.test(t.image) && safeIcon(t.image)) ? t.image : "assets/fsggb.png";
+    const rang = id => { const i = secs.findIndex(x => x.id === id); return i < 0 ? 999 : i; };
+    const apps = outils.filter(t => safeUrl(t.lien)).map(t => ({ id: slug(t.nom), section: secs.some(x => x.id === t.section) ? t.section : (secs[0] || {}).id, nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: img(t), crop: !!t.crop, featured: !!t.featured, masque: !!t.masque, protege: false, role: "", local: !!t.local, admin: false, sso: "", dyn: true, cle: t.cle, ordre: t.ordre }))
+      .sort((a, b) => rang(a.section) - rang(b.section) || (a.ordre || 0) - (b.ordre || 0));
+    return { v: 1, sections: secs, apps, pilote: true };
+  }
   function valid(m) { return m && Array.isArray(m.sections) && Array.isArray(m.apps) && m.apps.every(a => a && safeUrl(a.url) && safeIcon(a.icone) && typeof a.nom === "string" && safeRole(a.role)); }
   const cached = () => { try { const m = JSON.parse(localStorage.getItem(KEY) || "null"); return valid(m) ? m : null; } catch { return null; } };
   // Outils de la fédération : la feuille « Outils » du classeur est la référence (déjà filtrée par le serveur selon la
@@ -104,8 +114,20 @@
         // Les trois lectures partent EN MÊME TEMPS (la mise en page, les outils visibles, les outils ajoutés).
         const pOutils = connecte ? Hub.call("outils").catch(() => null) : null, pEntrees = connecte ? Hub.call("entrees", { section: "outils" }).catch(() => null) : null;
         const o = await Hub.call("portailLire"); P.isAdmin = !!o.admin && !Hub.simule();   // en simulation : jamais les droits de l'administrateur
-        const m = valid(o.portail) ? merge(o.portail) : merge(defaults());
-        if (connecte) { const ro = await pOutils, re = await pEntrees; appliquerOutils(m, ro && ro.outils, re && re.entrees, ro && ro.layout); }
+        let m = valid(o.portail) ? merge(o.portail) : merge(defaults());
+        let mm = m;
+        if (connecte) {
+          const ro = await pOutils, re = await pEntrees;
+          if (ro && ro.pilote && Array.isArray(ro.outils) && ro.outils.length) {
+            mm = modelePilote(ro.outils, ro.layout || { sections: [] });
+            (re && re.entrees || []).forEach(e => {   // applications ajoutées à la main (anciennes fiches) : en fin de leur section
+              if (!safeUrl(e.url) || mm.apps.some(x => x.url === e.url)) return;
+              const sec = (e.section && mm.sections.some(x => x.id === e.section)) ? e.section : (mm.sections[0] || {}).id;
+              mm.apps.push({ id: "entree-" + e.id, section: sec, nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: (e.image && /^https:\/\//i.test(e.image) && safeIcon(e.image)) ? e.image : "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, entree: { id: e.id, audience: e.audience || [] }, ordre: e.ordre });
+            });
+          } else appliquerOutils(m, ro && ro.outils, re && re.entrees, ro && ro.layout);
+        }
+        const changed0 = mm !== m; if (changed0) m = mm;
         if (o.portail && valid(o.portail)) { try { localStorage.setItem(KEY, JSON.stringify(o.portail)); } catch {} }
         else { try { localStorage.removeItem(KEY); } catch {} }
         const changed = JSON.stringify(m) !== JSON.stringify(P.model);

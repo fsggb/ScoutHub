@@ -450,7 +450,7 @@
         if (fini) return; fini = true; el.contentEditable = "false"; el.removeAttribute("contenteditable"); el.classList.remove("texte-edite");
         const v = clean(el.textContent);
         if (!ok || v === clean(map[orig] !== undefined ? map[orig] : orig)) { el.textContent = map[orig] !== undefined ? map[orig] : orig; return; }
-        try { await Hub.call("texteEcrire", { orig, valeur: v }); if (!v || v === orig) { delete map[orig]; el.removeAttribute("data-orig"); el.textContent = orig; } else { map[orig] = v; el.dataset.orig = orig; } try { localStorage.setItem(CLE, JSON.stringify(map)); } catch {} appliquer(); }
+        try { const rep = await Hub.call("texteEcrire", { orig, valeur: v }); if (rep.avertissement && !window._avertiTextes) { window._avertiTextes = 1; alert(rep.avertissement); } if (!v || v === orig) { delete map[orig]; el.removeAttribute("data-orig"); el.textContent = orig; } else { map[orig] = v; el.dataset.orig = orig; } try { localStorage.setItem(CLE, JSON.stringify(map)); } catch {} appliquer(); }
         catch (e) { el.textContent = map[orig] !== undefined ? map[orig] : orig; alert("Texte non enregistré : " + e.message); }
       };
       el.addEventListener("blur", () => fin(true), { once: true });
