@@ -30,6 +30,8 @@
     // seule) reste figée dans l'ancienne mise en page et casse le lien pour tout le monde, sans que personne ne le
     // remarque avant qu'un visiteur tombe sur une page 404 (incident du 26/11/2026 : AutoCAD, CathIA, Cartes IGN).
     // Le nom, la description, la section, l'ordre, le masquage et le rôle restent les choix de l'administrateur.
+    const RETIREES = new Set(["cartes-ign", "excalidraw", "soleadworks", "bibliotheque"]);   // retirées du portail : une ancienne mise en page enregistrée ne les ramène pas
+    out.apps = out.apps.filter(x => !RETIREES.has(x.id));
     out.apps.forEach(x => { const o = d.apps.find(y => y.id === x.id); if (o) { x.admin = o.admin; x.url = o.url; x.icone = o.icone; x.local = o.local; x.sso = o.sso; } });
     d.apps.forEach(a => {
       if (out.apps.some(x => x.id === a.id)) return;

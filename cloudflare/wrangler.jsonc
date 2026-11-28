@@ -6,6 +6,7 @@
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
   // Déclencheur régulier : relance la synchronisation des applications (workflow GitHub « Synchroniser ») toutes les 15 minutes
+  "services": [{ "binding": "CHATGDB", "service": "chatgdb" }],   // base de connaissances de ChatGDB (Worker de l'outil)
   "triggers": { "crons": ["*/15 * * * *"] },
   // Workers AI (modèles gratuits : 10 000 Neurons par jour pour le compte) : laboratoire de l'administrateur
   "ai": { "binding": "AI" },

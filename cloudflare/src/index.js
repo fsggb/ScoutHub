@@ -24,6 +24,7 @@ import { lienCourt } from "./liens.js";
 import { direct, Partage } from "./partage.js";
 import { lancerSynchro } from "./synchro.js";
 import { chatgdbConfig } from "./chatgdb-config.js";
+import { chatgdbOutil } from "./chatgdb-outils.js";
 
 export { Partage };
 
@@ -43,6 +44,7 @@ export default {
     // Identité et sessions (rupture avec Apps Script) : jeton de session propre au Worker, pas celui signé par Code.gs.
     if (url.pathname.startsWith("/auth/")) return authRoute(req, env, url, json, erreur);
     if (url.pathname === "/chatgdb/credits" || url.pathname === "/chatgdb/rapide") return chatgdbConfig(req, env, url, json, erreur);   // identité = connexion unique (jeton de session dans le corps)
+    if (url.pathname === "/chatgdb/outil") return chatgdbOutil(req, env, json, erreur);
     const qui = await verifierJeton(req.headers.get("x-scouthub-jeton"), env.RELAIS_SECRET);
     if (!qui) return erreur(401, "Session ScoutHub invalide ou expirée : rechargez la page.");
     const admin = qui.r === "admin";
