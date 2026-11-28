@@ -1,0 +1,55 @@
+name: Déployer sur Cloudflare
+
+# Chaque changement fusionné sur main est publié tel quel sur Cloudflare (intranet, identité, données) : plus rien à faire
+# à la main. Les droits de chefs (accès) se règlent dans la feuille Google « Groupes et unités », pas ici.
+# Prérequis (une fois) : secrets GitHub CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID (voir cloudflare/MIGRATION.md).
+# Les secrets des Workers (CLE_DONNEES_1, MINIATURE_CLE…) restent ceux déjà enregistrés sur Cloudflare : un déploiement n'y touche pas.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Vérifier la configuration
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Secrets CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID absents (Réglages du dépôt > Secrets and variables > Actions)."; exit 1
+          fi
+      # Tables des deux bases (instructions « IF NOT EXISTS » : sans effet si elles existent déjà)
+      - name: Bases de données
+        working-directory: cloudflare
+        run: |
+          npx --yes wrangler@4 d1 execute scouthub --remote --file schema.sql
+          npx --yes wrangler@4 d1 execute scouthub-donnees --remote --file donnees/schema.sql
+      # Ordre : identité, données, API, puis l'intranet qui s'appuie sur les précédents
+      - name: Worker identité (auth)
+        working-directory: cloudflare/auth
+        run: npx --yes wrangler@4 deploy
+      - name: Worker données
+        working-directory: cloudflare/donnees
+        run: npx --yes wrangler@4 deploy
+      - name: Worker scouthub
+        working-directory: cloudflare
+        run: npx --yes wrangler@4 deploy
+      - name: Worker intranet (portail = exactement le code de ce dépôt)
+        working-directory: cloudflare/intranet
+        run: |
+          node construire.mjs
+          npx --yes wrangler@4 deploy

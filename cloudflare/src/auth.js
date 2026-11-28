@@ -39,6 +39,16 @@ async function saveUser(env, email, base) {
     "ON CONFLICT(email) DO UPDATE SET role = excluded.role, name = excluded.name, google = excluded.google, picture = excluded.picture, fsggb = excluded.fsggb"
   ).bind(email, role, base.name || "", base.google ? 1 : 0, base.picture || "", base.fsggb ? 1 : 0, base.created || Date.now()).run();
 }
+// Accès chef fondé sur l'adresse de connexion : la table « habilitations » (remplie à chaque synchronisation de la feuille
+// « Groupes et unités » par le Worker donnees) donne le rôle et la portée d'une adresse. Valeur CALCULÉE à la volée, jamais
+// recopiée dans « users » : retirer l'adresse de la feuille retire l'accès. Ne diminue jamais un rôle plus élevé.
+async function effectif(env, email) {
+  const u = await getUser(env, email);
+  if (!u || adminProtege(env, email) || !estFsggb(env, email)) return u;
+  const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first();
+  if (!h || ROLES.indexOf(h.role) <= ROLES.indexOf(normRole(u.role))) return u;
+  return { ...u, role: h.role, groupe_id: u.groupe_id || h.groupe_id, unite_id: u.unite_id || h.unite_id };
+}
 // fsggb : compte @fsggb.fr (Google Workspace de la fédération, ou code e-mail) ; false pour un compte Google
 // personnel externe (ACCÈS MEMBRE ouvert à tous, voir /auth/google) — réserve les applications « protege » aux
 // membres réels de la fédération, pas à quiconque possède un compte Google.
@@ -71,8 +81,10 @@ async function adminGoogleSeul(env, email) { const u = await getUser(env, email)
 // ---------- sessions (D1 remplace PropertiesService « s: » + CacheService) ----------
 async function nouvelleSession(env, email) {
   const token = (await sha256(crypto.randomUUID() + crypto.randomUUID() + Date.now())) + (await sha256(crypto.randomUUID()));
-  const h = await sha256(token), jours = +env.SESSION_JOURS || 14;
-  await env.DB.prepare("INSERT INTO sessions (hash, email, exp, created) VALUES (?1, ?2, ?3, ?4)").bind(h, email, Date.now() + jours * 864e5, Date.now()).run();
+  const h = await sha256(token), u = await getUser(env, email);
+  // Un administrateur reste connecté 12 h seulement : un jeton volé ne sert pas longtemps (les autres : SESSION_JOURS, 14 par défaut).
+  const duree = (u && normRole(u.role) === "admin") || adminProtege(env, email) ? 12 * 36e5 : (+env.SESSION_JOURS || 14) * 864e5;
+  await env.DB.prepare("INSERT INTO sessions (hash, email, exp, created) VALUES (?1, ?2, ?3, ?4)").bind(h, email, Date.now() + duree, Date.now()).run();
   return token;
 }
 async function sessionEmail(env, token) {
@@ -86,6 +98,73 @@ async function sessionEmail(env, token) {
   if (!(await getUser(env, s.email))) throw new Erreur("Session expirée : reconnectez-vous.", 401);
   return s.email;
 }
+// Adresses autorisées à ouvrir les données sensibles (var DONNEES_ADMINS, séparées par des virgules ; par défaut ADMIN_EMAIL seul).
+const adminDonnees = (env, email) => String(env.DONNEES_ADMINS || env.ADMIN_EMAIL || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean).includes(String(email || "").toLowerCase());
+// Applications autorisées à recevoir un code d'échange (var APPS_AUTORISEES, identifiants séparés par des virgules).
+const appAutorisee = (env, aud) => !!aud && String(env.APPS_AUTORISEES || "").split(",").map(s => s.trim()).filter(Boolean).includes(aud);
+// Portée de lecture des données : { acces: "tout" | "groupe" | "unite" | "aucun", email, role, gk, uk, groupe, unite }.
+// gk / uk = identifiants (slug) du groupe et de l'unité, comparés aux colonnes gk / uk du miroir (jamais aux noms bruts).
+async function porteeDonnees(env, email) {
+  const base = { email, acces: "aucun", role: "adherent", gk: null, uk: null, groupe: "", unite: "" };
+  if (adminDonnees(env, email)) return { ...base, acces: "tout", role: "admin" };
+  if (!estFsggb(env, email)) return base;   // un compte externe n'a jamais accès aux données de la fédération
+  let u = await effectif(env, email);
+  if (!u) {   // adresse jamais connectée (simulation) : l'habilitation seule définit la portée
+    const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first();
+    if (!h) return base;
+    u = { email, role: h.role, groupe_id: h.groupe_id, unite_id: h.unite_id };
+  }
+  const role = normRole(u.role);
+  const g = u.groupe_id ? await env.DB.prepare("SELECT nom FROM groupes WHERE id = ?1").bind(u.groupe_id).first() : null;
+  const un = u.unite_id ? await env.DB.prepare("SELECT nom FROM unites WHERE id = ?1").bind(u.unite_id).first() : null;
+  const r = { ...base, role, gk: u.groupe_id || null, uk: u.unite_id && u.groupe_id ? u.unite_id.slice(u.groupe_id.length + 1) : null, groupe: g ? g.nom : "", unite: un ? un.nom : "" };
+  if (role === "chef_groupe" && r.gk) return { ...r, acces: "groupe" };
+  if (role === "chef_unite" && r.gk && r.uk) return { ...r, acces: "unite" };
+  return r;   // adhérent, parent, équipe nationale… : aucune donnée de personnes
+}
+const SECTIONS = ["outils", "documentation"];
+// Profil d'une adresse pour décider de ce qu'elle voit (administrateur qui simule : adresse jamais connectée acceptée si habilitée).
+async function profilVue(env, email) {
+  let u = await effectif(env, email);
+  if (!u) { const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first(); u = h ? { email, role: h.role, groupe_id: h.groupe_id, unite_id: h.unite_id, fsggb: 1 } : { email, role: "adherent", fsggb: estFsggb(env, email) ? 1 : 0 }; }
+  return { role: normRole(u.role), membre: u.fsggb === undefined ? true : !!u.fsggb, groupe_id: u.groupe_id || null, unite_id: u.unite_id || null };
+}
+// Public d'une entrée : liste de jetons « all », « chef_unite » (ce rôle ET au-dessus), « chef_groupe », « equipe_nationale »,
+// « admin », « g:<groupe> », « u:<unité> ». Toujours réservé aux membres de la fédération (@fsggb.fr).
+function audienceVisible(p, audience) {
+  if (!p.membre) return false;
+  const rang = ROLES.indexOf(p.role), national = rang >= ROLES.indexOf("equipe_nationale");
+  return String(audience || "").split(",").some(a => {
+    if (a === "all") return true;
+    if (a === "admin") return p.role === "admin";
+    if (ROLES.includes(a)) return rang >= ROLES.indexOf(a);
+    if (a.startsWith("g:")) return national || p.groupe_id === a.slice(2);
+    if (a.startsWith("u:")) return national || p.unite_id === a.slice(2) || (p.role === "chef_groupe" && !!p.groupe_id && a.slice(2).startsWith(p.groupe_id + "-"));
+    return false;
+  });
+}
+// Rubriques de Documentation lues dans le classeur (feuille, colonnes, qui peut les lire). Le filtrage se fait ICI, côté serveur.
+//  min : rôle minimum (tout membre @fsggb.fr au-dessus de cette marche) ; portee : lignes limitées au groupe / à l'unité de la personne ;
+//  filtre : règle par ligne (colonne « Accès » : TOUS = chefs d'unité et plus, LIMITE = chefs de groupe et plus).
+const RUBRIQUES = {
+  "Bibliographie": { feuille: "Bibliographie", plage: "A2:E500", min: "chef_unite", cols: ["branches", "categorie", "titre", "auteur", "remarques"] },
+  "Administratif": { feuille: "Documentation", plage: "A2:H500", min: "chef_unite", cols: ["menu", "categorie", "titre", "lien", "etat", "camp", "acces", "remarques"],
+    filtre: (l, rang) => !!l[2] && (String(l[6] || "").toUpperCase() !== "LIMITE" || rang >= ROLES.indexOf("chef_groupe")), sortie: ["menu", "categorie", "titre", "lien", "remarques"] },
+  "Revues": { feuille: "Revues", plage: "A2:C1000", min: "chef_unite", cols: ["nom", "numero", "fichier"] },
+  "Tutos": { feuille: "Tutos", plage: "A2:F300", min: "chef_unite", cols: ["nom", "type", "lien", "video", "miniature", "description"] },
+  "Agenda Fédé": { feuille: "Agenda Fédé", plage: "A2:F500", min: "equipe_nationale", cols: ["tache", "mois", "type", "description", "personne", "faite"] },
+  "Lieux de camp": { feuille: "Lieux de camp", plage: "A2:L3000", min: "chef_unite", portee: true, cols: ["groupe", "unite", "annee", "region", "departement", "superficie", "feu", "bois", "eau", "frigos", "abris", "commentaire"] }
+};
+// Miniature d'un document : jeton signé (HMAC) délivré SEULEMENT avec les lignes que la personne a le droit de voir ; l'intranet ne
+// sert la miniature que si la signature est valide : aucun identifiant de fichier Drive n'est accepté sans cela.
+const b64u = u8 => btoa(String.fromCharCode(...new Uint8Array(u8))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+async function signerMini(env, payload) {
+  if (!env.MINIATURE_CLE) return "";
+  const k = await crypto.subtle.importKey("raw", enc.encode(env.MINIATURE_CLE), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64u(enc.encode(payload)) + "." + b64u(await crypto.subtle.sign("HMAC", k, enc.encode(payload))).slice(0, 27);
+}
+const idDrive = u => { const m = String(u || "").match(/^https:\/\/(?:drive|docs)\.google\.com\/(?:file|document|presentation|spreadsheets)\/d\/([\w-]{20,60})/); return m ? m[1] : ""; };
+const lienHttps = v => /^https:\/\/[^\s"'<>\\]{4,1500}$/.test(String(v || "").trim()) ? String(v).trim() : "";
 async function requireAdmin(env, token) {
   const email = await sessionEmail(env, token);
   const u = await getUser(env, email);
@@ -125,8 +204,8 @@ const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(
 // usurpé) — Gmail (gmail.send, GMAIL_SENDER) et lecture Sheets/Drive (spreadsheets.readonly ou drive.readonly,
 // n'importe quel compte @fsggb.fr qui a accès au fichier visé) partagent la même clé GMAIL_SA_KEY.
 const memosJetonGoogle = new Map();
-async function jetonGoogle(env, scope, sub) {
-  const cleMemo = scope + "|" + sub;
+export async function jetonGoogle(env, scope, sub) {
+  const cleMemo = scope + "|" + (sub || "");
   const m = memosJetonGoogle.get(cleMemo);
   if (m && Date.now() < m.t) return m.v;
   const cle = env.GMAIL_SA_KEY && typeof env.GMAIL_SA_KEY.get === "function" ? await env.GMAIL_SA_KEY.get() : env.GMAIL_SA_KEY;
@@ -134,7 +213,7 @@ async function jetonGoogle(env, scope, sub) {
   const sa = JSON.parse(cle);
   const maintenant = Math.floor(Date.now() / 1000);
   const entete = { alg: "RS256", typ: "JWT" };
-  const charge = { iss: sa.client_email, sub, scope, aud: "https://oauth2.googleapis.com/token", iat: maintenant, exp: maintenant + 3600 };
+  const charge = { iss: sa.client_email, sub: sub || sa.client_email, scope, aud: "https://oauth2.googleapis.com/token", iat: maintenant, exp: maintenant + 3600 };
   const base = b64url(enc.encode(JSON.stringify(entete))) + "." + b64url(enc.encode(JSON.stringify(charge)));
   const clePrivee = await crypto.subtle.importKey("pkcs8", pem2binaire(sa.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", clePrivee, enc.encode(base));
@@ -153,10 +232,21 @@ const jetonGmail = env => jetonGoogle(env, "https://www.googleapis.com/auth/gmai
 // Workspace (Sécurité > Contrôles des API > Délégation à l'échelle du domaine), pour le client du compte de
 // service. SHEET_ID : identifiant de la feuille (dans son URL, après /d/) ; SHEET_SUB : compte @fsggb.fr usurpé
 // pour la lecture (doit avoir accès à la feuille).
-const SHEET_ID = "1e5aqzBPsl4wOs4anjAeKeSPzRDm_dbRuPXLyIqzYQDU";
+const CLASSEUR_PAR_DEFAUT = "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs";   // classeur « intranet » (var CLASSEUR_ID)
+const memoFeuilles = new Map();
 async function lireFeuille(env, sub, plage) {
+  // Cache court : mémoire de l'isolat 60 s, puis cache Cloudflare 3 min (données de configuration, pas de données de personnes).
+  const m = memoFeuilles.get(plage); if (m && m.exp > Date.now()) return m.v;
+  const cle = new Request("https://feuille.interne/" + encodeURIComponent((env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "|" + plage));
+  try { const c = await caches.default.match(cle); if (c) { const v = await c.json(); memoFeuilles.set(plage, { v, exp: Date.now() + 60000 }); return v; } } catch {}
+  const v = await lireFeuilleBrut(env, sub, plage);
+  memoFeuilles.set(plage, { v, exp: Date.now() + 60000 });
+  try { await caches.default.put(cle, new Response(JSON.stringify(v), { headers: { "cache-control": "public, max-age=180" } })); } catch {}
+  return v;
+}
+async function lireFeuilleBrut(env, sub, plage) {
   const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/spreadsheets.readonly", sub);
-  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + SHEET_ID + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
+  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + (env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
   const j = await res.json();
   if (!res.ok) throw new Erreur("Lecture de la feuille refusée : " + (j.error?.message || res.status), 502);
   return j.values || [];
@@ -205,7 +295,7 @@ export async function authRoute(req, env, url, json, erreur) {
       const estMembreFede = estFsggb(env, email) && String(info.hd || "").toLowerCase() === (env.GOOGLE_DOMAINE || "fsggb.fr");
       const photo = /^https:\/\/[^\s"<>]{1,500}$/.test(String(info.picture || "")) ? info.picture : "";
       const token = await provisionner(env, email, info.name, true, photo, estMembreFede);
-      return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
+      return json(200, { ok: true, token, user: publicUser(await effectif(env, email)) });
     }
     if (url.pathname === "/auth/code/demander") {
       const r = await req.json().catch(() => ({}));
@@ -242,7 +332,7 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!egal(await sha256(c.sel + ":" + email + ":" + code), c.hash)) { await env.DB.prepare("UPDATE login_codes SET essais = essais + 1 WHERE email = ?1").bind(email).run(); throw new Erreur("Code incorrect."); }
       await env.DB.prepare("DELETE FROM login_codes WHERE email = ?1").bind(email).run();
       const token = await provisionner(env, email, "", false);
-      return json(200, { ok: true, token, user: publicUser(await getUser(env, email)) });
+      return json(200, { ok: true, token, user: publicUser(await effectif(env, email)) });
     }
     if (url.pathname === "/auth/magic/demander") {
       const r = await req.json().catch(() => ({}));
@@ -274,12 +364,49 @@ export async function authRoute(req, env, url, json, erreur) {
       if (!l) throw new Erreur("Ce lien a expiré ou a déjà servi : redemandez-en un.");
       await env.DB.prepare("DELETE FROM magic_links WHERE hash = ?1").bind(h).run();
       const token2 = await provisionner(env, l.email, "", false);
-      return json(200, { ok: true, token: token2, user: publicUser(await getUser(env, l.email)) });
+      return json(200, { ok: true, token: token2, user: publicUser(await effectif(env, l.email)) });
     }
     if (url.pathname === "/auth/me") {
       const r = await req.json().catch(() => ({}));
       const email = await sessionEmail(env, r.token);
-      return json(200, { ok: true, user: publicUser(await getUser(env, email)) });
+      return json(200, { ok: true, user: publicUser(await effectif(env, email)) });
+    }
+    // ---- Échange de code à usage unique (SSO vers les applications hors domaine, dont Apps Script) ----
+    // 1) Le portail, session ouverte, demande un code pour une application précise (« aud », à lister dans
+    //    APPS_AUTORISEES : jamais une valeur libre, pour qu'un site tiers ne puisse pas s'en faire délivrer).
+    // 2) Il envoie la personne vers l'application avec ?code=… ; 3) l'application (navigateur ou serveur, ex. Apps
+    //    Script) appelle /auth/echange/valider avec ce code et le même aud : le code ne sert qu'une fois, 60 secondes.
+    if (url.pathname === "/auth/echange/emettre") {
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token);
+      const aud = String(r.aud || "");
+      if (!appAutorisee(env, aud)) throw new Erreur("Application non autorisée.", 403);
+      const code = (await sha256(crypto.randomUUID() + crypto.randomUUID())) + (await sha256(crypto.randomUUID()));
+      await env.DB.prepare("DELETE FROM echanges WHERE exp < ?1").bind(Date.now()).run();
+      await env.DB.prepare("INSERT INTO echanges (hash, email, aud, exp) VALUES (?1, ?2, ?3, ?4)").bind(await sha256(code), email, aud, Date.now() + 60000).run();
+      return json(200, { ok: true, code, expire_dans: 60 });
+    }
+    if (url.pathname === "/auth/echange/valider") {
+      const r = await req.json().catch(() => ({}));
+      const code = String(r.code || ""), aud = String(r.aud || "");
+      if (!code || !appAutorisee(env, aud)) throw new Erreur("Code ou application invalide.", 403);
+      // Suppression et lecture en une seule instruction : deux appels simultanés ne peuvent pas le consommer deux fois.
+      const e = await env.DB.prepare("DELETE FROM echanges WHERE hash = ?1 RETURNING email, aud, exp").bind(await sha256(code)).first();
+      if (!e || e.exp < Date.now() || e.aud !== aud) throw new Erreur("Ce code a expiré ou a déjà servi.", 403);
+      const u = await getUser(env, e.email);
+      if (!u) throw new Erreur("Compte introuvable.", 403);
+      const rep = { ok: true, user: publicUser(await effectif(env, e.email)) };
+      if (r.session) rep.token = await nouvelleSession(env, e.email);   // applications web hors domaine : leur propre session
+      return json(200, rep);
+    }
+    // Serveur à serveur (Apps Script, ancienne version du portail) : « ce jeton de session est-il valide, et pour qui ? ».
+    // Ne renvoie que l'identité et le rôle effectif, jamais de données de la feuille.
+    if (url.pathname === "/auth/session/valider") {
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token);
+      const u = await effectif(env, email);
+      if (!u) throw new Erreur("Compte introuvable.", 403);
+      return json(200, { ok: true, user: publicUser(u) });
     }
     if (url.pathname === "/auth/logout") {
       const r = await req.json().catch(() => ({}));
@@ -291,10 +418,168 @@ export async function authRoute(req, env, url, json, erreur) {
     // publique, les données elles-mêmes (liste des outils) ne sont pas sensibles. SHEET_SUB est provisoire : à
     // ajuster si le compte usurpé n'a pas accès à la feuille (voir le commentaire au-dessus de lireFeuille).
     if (url.pathname === "/auth/outils") {
-      const SHEET_SUB = "jb.combet@fsggb.fr";
-      const lignes = await lireFeuille(env, SHEET_SUB, "Outils!A2:E20");
-      const outils = lignes.filter(l => l[0]).map(l => ({ nom: l[0] || "", desc: l[1] || "", image: l[2] || "", lien: l[3] || "", visibilite: l[4] || "" }));
-      return json(200, { ok: true, outils });
+      // Outils de la fédération : feuille « Outils » du classeur, lue par le compte de service. Visibilité par outil :
+      // « All » = tout membre de la fédération connecté (@fsggb.fr) ; « Equipe nationale » = ce rôle et au-dessus ;
+      // autre valeur (une ou plusieurs, séparées par des virgules) = nom d'un groupe ou d'une unité (le chef ou le membre de cette portée).
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      const email = r.comme ? cleanEmail(r.comme) : reel;
+      let u = await effectif(env, email);
+      if (!u && r.comme) { const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first(); if (h) u = { email, role: h.role, groupe_id: h.groupe_id, unite_id: h.unite_id, fsggb: 1 }; }
+      if (!u) throw new Erreur("Adresse inconnue.", 404);
+      const role = normRole(u.role), membre = u.fsggb === undefined ? true : !!u.fsggb, admin = role === "admin";
+      const g = u.groupe_id ? await env.DB.prepare("SELECT nom FROM groupes WHERE id = ?1").bind(u.groupe_id).first() : null;
+      const un = u.unite_id ? await env.DB.prepare("SELECT nom FROM unites WHERE id = ?1").bind(u.unite_id).first() : null;
+      const miens = new Set([g && slug(g.nom), un && slug(un.nom)].filter(Boolean));
+      const visible = v => {
+        if (admin) return true;
+        const vals = String(v || "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
+        if (!vals.length) return false;   // visibilité vide : jamais montré par défaut
+        return vals.some(x => { const k = slug(x); return k === "all" ? membre : k === "equipe-nationale" ? ROLES.indexOf(role) >= ROLES.indexOf("equipe_nationale") && membre : miens.has(k); });
+      };
+      const lignes = await lireFeuille(env, "", "Outils!A2:E100");
+      const lien = l => /^https?:\/\//i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
+      const dispo = new Map((await env.DB.prepare("SELECT cle, nom, description, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
+      const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]))
+        .map(l => { const cle = "o:" + slug(l[0]), d = dispo.get(cle); return { cle, nom: (d && d.nom) || String(l[0]).trim(), desc: (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 200), section: d ? d.section : "", ordre: d ? d.ordre : null }; });
+      const layout = { sections: [], apps: [] };
+      for (const [cle, d] of dispo) { if (cle.startsWith("s:")) layout.sections.push({ id: cle.slice(2), titre: d.nom, ligne: d.section, ordre: d.ordre }); else if (cle.startsWith("a:")) layout.apps.push({ id: cle.slice(2), nom: d.nom, desc: d.description, section: d.section, ordre: d.ordre }); }
+      return json(200, { ok: true, outils, layout });
+    }
+    // ---- Portée de lecture des données du registre (appelé par le Worker « donnees ») ----
+    // Renvoie ce que la personne a le droit de voir : administrateur des données (DONNEES_ADMINS) = tout ; chef de groupe =
+    // son groupe ; chef d'unité = son unité ; tout autre profil = rien. Seul un administrateur peut demander « comme »
+    // (voir ce que verrait une autre adresse) : la portée simulée est calculée exactement comme pour la vraie personne.
+    if (url.pathname === "/auth/portee") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      return json(200, { ok: true, reel, admin_reel: adminDonnees(env, reel), ...(await porteeDonnees(env, r.comme ? cleanEmail(r.comme) : reel)), simule: !!r.comme });
+    }
+    // Profil d'une adresse, pour qu'un administrateur voie TOUT le site comme cette personne (lecture seule : le serveur
+    // n'accepte « comme » que sur des lectures, jamais sur une écriture). Réservé à DONNEES_ADMINS.
+    if (url.pathname === "/auth/profil") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (!adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      const email = cleanEmail(r.comme);
+      let u = await effectif(env, email);
+      if (!u) {
+        const h = await env.DB.prepare("SELECT role, groupe_id, unite_id FROM habilitations WHERE email = ?1").bind(email).first();
+        u = { email, role: h ? h.role : "adherent", name: "", google: 0, picture: "", fsggb: estFsggb(env, email) ? 1 : 0, groupe_id: h ? h.groupe_id : null, unite_id: h ? h.unite_id : null };
+      }
+      const g = u.groupe_id ? await env.DB.prepare("SELECT nom FROM groupes WHERE id = ?1").bind(u.groupe_id).first() : null;
+      const un = u.unite_id ? await env.DB.prepare("SELECT nom FROM unites WHERE id = ?1").bind(u.unite_id).first() : null;
+      const h = await env.DB.prepare("SELECT 1 AS x FROM habilitations WHERE email = ?1").bind(email).first();
+      return json(200, { ok: true, user: { ...publicUser(u), simule: true }, groupe_nom: g ? g.nom.trim() : "", unite_nom: un ? un.nom.trim() : "", connu: !!(await env.DB.prepare("SELECT 1 AS x FROM users WHERE email = ?1").bind(email).first()), chef: !!h });
+    }
+    // Adresses qu'un administrateur peut simuler : les accès chef déduits de la feuille « Groupes et unités ».
+    if (url.pathname === "/auth/habilites") {
+      const r = await req.json().catch(() => ({}));
+      if (!adminDonnees(env, await sessionEmail(env, r.token))) throw new Erreur("Réservé à l'administrateur.", 403);
+      const { results } = await env.DB.prepare("SELECT h.email, h.role, g.nom AS groupe, u.nom AS unite FROM habilitations h LEFT JOIN groupes g ON g.id = h.groupe_id LEFT JOIN unites u ON u.id = h.unite_id ORDER BY g.nom, u.nom, h.email").all();
+      return json(200, { ok: true, habilites: results });
+    }
+    // ---- Entrées ajoutées par l'administrateur (applications, documentation), chacune avec SON public ----
+    // Le filtrage se fait ICI, côté serveur : une entrée qui ne concerne pas la personne ne lui est jamais envoyée (ni son
+    // nom, ni son adresse, ni la liste de ceux qui la voient). Seul l'administrateur reçoit aussi le public de chaque entrée.
+    if (url.pathname === "/auth/entrees") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      const section = SECTIONS.includes(r.section) ? r.section : ""; if (!section) throw new Erreur("Section inconnue.");
+      const p = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
+      const admin = !r.comme && p.role === "admin";
+      const { results } = await env.DB.prepare("SELECT id, nom, description, url, audience FROM entrees WHERE section = ?1 ORDER BY nom").bind(section).all();
+      const vues = results.filter(e => admin || audienceVisible(p, e.audience));
+      const dispo = new Map((await env.DB.prepare("SELECT cle, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
+      const pos = e => { const d = dispo.get("e:" + e.id); return { cle: "e:" + e.id, section: d ? d.section : "", ordre: d ? d.ordre : null }; };
+      return json(200, { ok: true, admin, entrees: vues.map(e => admin ? { ...e, audience: e.audience.split(","), ...pos(e) } : { id: e.id, nom: e.nom, description: e.description, url: e.url, ...pos(e) }) });
+    }
+    if (url.pathname === "/auth/entree/ecrire") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const section = SECTIONS.includes(r.section) ? r.section : ""; if (!section) throw new Erreur("Section inconnue.");
+      const nom = String(r.nom || "").trim().slice(0, 60); if (!nom) throw new Erreur("Donnez un nom.");
+      const desc = String(r.description || "").trim().slice(0, 200);
+      const lien = String(r.url || "").trim(); if (!/^https:\/\/[^\s"'<>\\]{3,1500}$/.test(lien)) throw new Erreur("L'adresse doit commencer par https://.");
+      const aud = [...new Set((Array.isArray(r.audience) ? r.audience : []).map(String))].slice(0, 12);
+      if (!aud.length) throw new Erreur("Choisissez qui est concerné.");
+      for (const a of aud) {
+        if (/^(all|chef_unite|chef_groupe|equipe_nationale|admin)$/.test(a)) continue;
+        if (a.startsWith("g:") && await env.DB.prepare("SELECT 1 FROM groupes WHERE id = ?1").bind(a.slice(2)).first()) continue;
+        if (a.startsWith("u:") && await env.DB.prepare("SELECT 1 FROM unites WHERE id = ?1").bind(a.slice(2)).first()) continue;
+        throw new Erreur("Public inconnu : " + a.slice(0, 40));
+      }
+      const id = /^[a-z0-9-]{3,80}$/.test(String(r.id || "")) && await env.DB.prepare("SELECT 1 FROM entrees WHERE id = ?1").bind(r.id).first() ? r.id : (slug(nom) || "entree") + "-" + (await sha256(crypto.randomUUID())).slice(0, 6);
+      await env.DB.prepare("INSERT INTO entrees (id, section, nom, description, url, audience, maj) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(id) DO UPDATE SET section = excluded.section, nom = excluded.nom, description = excluded.description, url = excluded.url, audience = excluded.audience, maj = excluded.maj")
+        .bind(id, section, nom, desc, lien, aud.join(","), Date.now()).run();
+      return json(200, { ok: true, id });
+    }
+    // Disposition (section, ordre, nom/description affichés) des outils dynamiques : stockée À PART de la mise en page partagée,
+    // et renvoyée seulement avec les outils que la personne peut voir (aucune fuite d'un outil restreint).
+    if (url.pathname === "/auth/outils/disposer") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const items = Array.isArray(r.items) ? r.items.slice(0, 300) : [];
+      const lot = [];
+      for (const it of items) {
+        const cle = String(it.cle || ""); if (!/^[oeas]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu : " + cle.slice(0, 40));
+        const sec = String(it.section || "").slice(0, 60); if (sec && !/^[a-z0-9-]{1,60}$/.test(sec)) throw new Erreur("Section invalide.");
+        const nomLibre = cle.startsWith("o:") || cle.startsWith("a:") || cle.startsWith("s:");
+        lot.push(env.DB.prepare("INSERT INTO disposition (cle, nom, description, section, ordre) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, section = excluded.section, ordre = excluded.ordre")
+          .bind(cle, nomLibre ? String(it.nom || "").trim().slice(0, 60) : "", (cle.startsWith("o:") || cle.startsWith("a:")) ? String(it.description || "").trim().slice(0, 200) : "", sec, Math.max(0, Math.min(999, parseInt(it.ordre, 10) || 0))));
+      }
+      for (const c of (Array.isArray(r.supprimer) ? r.supprimer.slice(0, 50) : [])) if (/^s:[a-z0-9-]{1,60}$/.test(String(c))) lot.push(env.DB.prepare("DELETE FROM disposition WHERE cle = ?1").bind(String(c)));
+      if (lot.length) await env.DB.batch(lot);
+      return json(200, { ok: true, n: lot.length });
+    }
+    // Contenu d'une rubrique de Documentation, DÉJÀ FILTRÉ selon la personne (rôle, groupe, unité). Simulation : admin seulement.
+    if (url.pathname === "/auth/rubrique") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      const email = r.comme ? cleanEmail(r.comme) : reel, def = RUBRIQUES[String(r.rubrique || "")];
+      if (!def) throw new Erreur("Rubrique inconnue.", 404);
+      const p = await profilVue(env, email), rang = ROLES.indexOf(p.role);
+      if (!p.membre || rang < ROLES.indexOf(def.min)) throw new Erreur("Cette rubrique ne vous est pas destinée.", 403);
+      const brut = await lireFeuille(env, "", "'" + def.feuille + "'!" + def.plage);
+      let portee = null; if (def.portee && p.role !== "admin" && rang < ROLES.indexOf("equipe_nationale")) { portee = await porteeDonnees(env, email); if (portee.acces === "aucun") throw new Erreur("Cette rubrique ne vous est pas destinée.", 403); }
+      const sortie = def.sortie || def.cols;
+      const lignes = brut.filter(l => l.some(c => String(c || "").trim())).filter(l => !def.filtre || def.filtre(l, rang)).filter(l => {
+        if (!portee || portee.acces === "tout") return true;
+        const g = slug(l[0]), u = slug(l[1]);   // « Lieux de camp » : Groupe, Unité en colonnes A et B
+        return g === portee.gk && (portee.acces === "groupe" || u === portee.uk);
+      }).map(l => { const o = {}; def.cols.forEach((c, i) => { if (sortie.includes(c)) o[c] = String(l[i] === undefined ? "" : l[i]).trim().slice(0, 4000); }); if (o.lien !== undefined) o.lien = lienHttps(o.lien); if (o.video !== undefined) o.video = lienHttps(o.video); return o; });
+      for (const o of lignes) {   // jetons de miniature (1re page) pour les revues et les documents du Drive
+        if (r.rubrique === "Revues" && /^Revues_Files_\/[^/]+$/i.test(o.fichier || "")) o.mini = await signerMini(env, "p:" + o.fichier);
+        else if (r.rubrique === "Administratif" && idDrive(o.lien)) o.mini = await signerMini(env, "i:" + idDrive(o.lien));
+      }
+      return json(200, { ok: true, rubrique: r.rubrique, colonnes: sortie, lignes, portee: portee ? portee.acces : "tout" });
+    }
+    if (url.pathname === "/auth/entree/supprimer") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      await env.DB.prepare("DELETE FROM entrees WHERE id = ?1").bind(String(r.id || "")).run();
+      return json(200, { ok: true });
+    }
+    // Rubriques d'un menu de l'ancien intranet (feuille « Menu », colonne Visible), déjà filtrées selon la personne.
+    if (url.pathname === "/auth/menu") {
+      const r = await req.json().catch(() => ({}));
+      const reel = await sessionEmail(env, r.token);
+      if (r.comme && !adminDonnees(env, reel)) throw new Erreur("Simulation réservée à l'administrateur.", 403);
+      if (r.menu === "Accueil") {   // images des boutons de la page d'accueil (feuille « Accueil » : nom, lien, image)
+        const pa = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
+        if (!pa.membre) return json(200, { ok: true, rubriques: [] });
+        return json(200, { ok: true, rubriques: (await lireFeuille(env, "", "Accueil!A2:C20")).filter(l => l[0]).map(l => ({ nom: String(l[0]).trim(), image: String(l[2] || "").trim().slice(0, 200) })) });
+      }
+      const rubrique = ["Documentation", "Inscriptions"].includes(r.menu) ? r.menu : ""; if (!rubrique) throw new Erreur("Menu inconnu.");
+      const p = await profilVue(env, r.comme ? cleanEmail(r.comme) : reel);
+      const lignes = await lireFeuille(env, "", "Menu!A2:E100");
+      const vis = v => { if (p.role === "admin") return true; const k = slug(v || "all") || "all"; return k === "all" ? p.membre : k === "equipe-nationale" ? p.membre && ROLES.indexOf(p.role) >= ROLES.indexOf("equipe_nationale") : false; };
+      const lisible = nom => { const d = RUBRIQUES[nom]; return !d || p.role === "admin" || (p.membre && ROLES.indexOf(p.role) >= ROLES.indexOf(d.min)); };
+      return json(200, { ok: true, rubriques: lignes.filter(l => l[0] === rubrique && l[1] && vis(l[4]) && lisible(String(l[1]).trim())).map(l => ({ nom: String(l[1]).trim(), image: String(l[3] || "").trim().slice(0, 200) })) });
     }
     if (url.pathname === "/auth/admin/list") {
       await requireAdmin(env, (await req.json().catch(() => ({}))).token);
@@ -377,7 +662,7 @@ export async function authRoute(req, env, url, json, erreur) {
 // Pour les autres routes du Worker, une fois la bascule faite : vérifie un jeton de session /auth/* (remplace verifierJeton).
 export async function quiEstCe(env, token) {
   const email = await sessionEmail(env, token);
-  const u = await getUser(env, email);
+  const u = await effectif(env, email);
   return { e: email, r: normRole(u.role), n: u.name || "", groupe_id: u.groupe_id, unite_id: u.unite_id };
 }
 // Pour les futures routes de données sensibles (fiches sanitaires, listes d'adhérents…) : filtrer AVANT d'envoyer,

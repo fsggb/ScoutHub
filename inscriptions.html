@@ -14,21 +14,14 @@
 <body data-onglet="inscriptions">
   <header class="topbar" id="bar"></header>
   <main class="shell" id="main" hidden>
-    <p class="label">Inscriptions</p>
     <h1>Inscriptions</h1>
-    <p class="muted">Cet onglet reprend la structure de l’ancien intranet. Son contenu (mineurs, majeurs, camps, cotisations) n’existe pas encore ici : il demande de nouvelles données, pas encore construites sur ScoutHub.</p>
-    <div class="dash-cards">
-      <div class="dash-card a-venir"><span class="tile-label"><strong>Mineurs</strong><span class="desc">Bientôt disponible</span></span></div>
-      <div class="dash-card a-venir"><span class="tile-label"><strong>Majeurs</strong><span class="desc">Bientôt disponible</span></span></div>
-      <div class="dash-card a-venir"><span class="tile-label"><strong>Camp</strong><span class="desc">Bientôt disponible</span></span></div>
-      <div class="dash-card a-venir"><span class="tile-label"><strong>Formulaires d’inscription</strong><span class="desc">Bientôt disponible</span></span></div>
-      <div class="dash-card a-venir"><span class="tile-label"><strong>Cotisations Mineurs</strong><span class="desc">Bientôt disponible</span></span></div>
-      <div class="dash-card a-venir"><span class="tile-label"><strong>Cotisations Majeurs</strong><span class="desc">Bientôt disponible</span></span></div>
-    </div>
+    <p class="muted" id="ins-portee">Les inscriptions qui vous concernent : chaque chef voit son groupe ou son unité.</p>
+    <div class="dash-cards" id="cartes"></div>
+    <p class="muted" id="ins-note" hidden></p>
   </main>
-  <footer>ScoutHub · FSGGB · <a href="https://github.com/fsggb/ScoutHub">Code source</a></footer>
   <script src="config.js"></script>
   <script src="common.js"></script>
   <script src="onglet.js"></script>
+  <script src="inscriptions.js"></script>
 </body>
 </html>

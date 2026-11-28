@@ -505,9 +505,26 @@ function session_(token) {
   cache.put('sc:' + id, email, SESSION_CACHE_SECONDS);
   return email;
 }
+// Passerelle vers l'identité unique Cloudflare : les applications restées sur l'ancienne version (ChatGDB…) reçoivent
+// le jeton de l'intranet ; on le fait valider par le Worker d'identité (serveur à serveur) et on aligne le rôle local.
+var CLOUDFLARE_AUTH_ = 'https://auth.fsggb.workers.dev/auth/session/valider';
+function sessionCloudflare_(token) {
+  token = String(token || '');
+  if (token.length < 32 || token.length > 200) fail_('Session expirée : reconnectez-vous.');
+  var res;
+  try { res = UrlFetchApp.fetch(CLOUDFLARE_AUTH_, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ token: token }), muteHttpExceptions: true }); }
+  catch (e) { fail_('Session expirée : reconnectez-vous.'); }
+  var o = null; try { o = JSON.parse(res.getContentText()); } catch (e2) {}
+  var u = o && o.ok && o.user;
+  if (res.getResponseCode() !== 200 || !u || !estFsggb_(u.email) || u.fsggb === false) fail_('Session expirée : reconnectez-vous.');
+  var email = cleanEmail_(u.email), local = getUser_(email);
+  var role = adminProtege_(email) ? 'admin' : normRole_(u.role);
+  if (!local || local.role !== role) saveUser_(email, { role: role, created: local && local.created, name: u.name || (local && local.name), google: true });
+  return email;
+}
 function sessionUncached_(token) {
   var raw = props_().getProperty('s:' + sha_(String(token || '')));
-  if (!raw) fail_('Session expirée : reconnectez-vous.');
+  if (!raw) return sessionCloudflare_(token);      // pas une session locale : peut-être une session de l'intranet Cloudflare
   var s = JSON.parse(raw);
   if (s.exp < Date.now() || !estFsggb_(s.email) || !getUser_(s.email)) { props_().deleteProperty('s:' + sha_(String(token))); fail_('Session expirée : reconnectez-vous.'); }
   return s.email;

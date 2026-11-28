@@ -83,3 +83,47 @@ CREATE TABLE IF NOT EXISTS magic_links (
   exp INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS magic_links_email ON magic_links (email);
+
+-- Codes d'échange à usage unique (SSO vers les applications hors domaine) : seule l'empreinte du code est stockée,
+-- durée de vie 60 s, liés à une application précise (aud) ; supprimés à la première utilisation.
+CREATE TABLE IF NOT EXISTS echanges (
+  hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  aud TEXT NOT NULL,
+  exp INTEGER NOT NULL
+);
+
+-- Accès chef déduit de la feuille « Groupes et unités » (remplie par le Worker donnees à chaque synchronisation).
+CREATE TABLE IF NOT EXISTS habilitations (
+  email TEXT PRIMARY KEY,
+  role TEXT NOT NULL,                     -- chef_groupe | chef_unite
+  groupe_id TEXT,
+  unite_id TEXT,
+  maj INTEGER NOT NULL
+);
+-- Ouverture des données sensibles : jeton de 15 minutes obtenu par ré-authentification Google récente (empreinte seule).
+CREATE TABLE IF NOT EXISTS sessions_donnees (
+  hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  exp INTEGER NOT NULL
+);
+
+-- Entrées ajoutées par l'administrateur (applications, documentation) avec leur public (filtré côté serveur).
+CREATE TABLE IF NOT EXISTS entrees (
+  id TEXT PRIMARY KEY,
+  section TEXT NOT NULL,                  -- outils | documentation
+  nom TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL,
+  audience TEXT NOT NULL,                 -- jetons séparés par des virgules : all, chef_unite, chef_groupe, equipe_nationale, admin, g:<groupe>, u:<unité>
+  maj INTEGER NOT NULL
+);
+
+-- Disposition des outils dynamiques (feuille « Outils » : cle « o:<nom> » ; entrées de l'administrateur : cle « e:<id> »).
+CREATE TABLE IF NOT EXISTS disposition (
+  cle TEXT PRIMARY KEY,
+  nom TEXT NOT NULL DEFAULT '',           -- nom affiché si l'administrateur a renommé l'outil de la feuille
+  description TEXT NOT NULL DEFAULT '',
+  section TEXT NOT NULL DEFAULT '',       -- identifiant de la section ('' = section par défaut)
+  ordre INTEGER NOT NULL DEFAULT 0        -- position dans la section
+);

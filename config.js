@@ -3,7 +3,12 @@
 // Nouveau client « Intranet general - Web » (projet intranet-general) : doit correspondre au GOOGLE_CLIENT_ID du
 // Worker Cloudflare (cloudflare/wrangler.jsonc), qui vérifie le jeton. Site de test uniquement sur cette branche :
 // la production (main) garde encore l'ancien client, utilisé par Apps Script (backend/Code.gs), inchangé.
-window.SCOUTHUB_GOOGLE_CLIENT_ID = "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com";
+// DEUX MODES, choisis par l'adresse du site (le même code sert les deux) :
+//  - version GitHub (fsggb.github.io) : fonctionne SEULE, comme avant la migration : connexion par Apps Script (ancien client Google),
+//    aucune dépendance à Cloudflare, aucune donnée sensible (inscriptions, documentation dynamique) ;
+//  - intranet (Cloudflare, tout autre nom) : connexion unique par le Worker « auth », données sensibles, outils dynamiques.
+window.SCOUTHUB_LEGACY = location.hostname === "fsggb.github.io";
+window.SCOUTHUB_GOOGLE_CLIENT_ID = window.SCOUTHUB_LEGACY ? "599247454430-5q2iim2k770v5159vphuael9sl6k160c.apps.googleusercontent.com" : "746804418411-qp582kgsv182ljo33vs0hh3dbcu75kie.apps.googleusercontent.com";
 // ChatGDB : assistant IA de la fédération. « live: false » = interface seule, envoi désactivé.
 // Crédits (unité : 1 crédit ≈ une question courte). Limites glissantes façon Claude : une par session de 5 heures
 // et une par semaine. Les valeurs sont des points de départ à ajuster ; voir ChatGDB/docs/projet-chatgdb.md.
@@ -16,9 +21,13 @@ window.SCOUTHUB_CHATGDB = {
 // Adresse du déploiement Apps Script (backend/Code.gs), terminée par /exec. Sert encore tout ce qui n'est pas
 // l'identité (portail, ChatGDB, boutique…) : voir cloudflare/MIGRATION.md.
 window.SCOUTHUB_API = "https://script.google.com/macros/s/AKfycbylU60sGF5NmQpjlrF2CdMNFbkUhXvihwNoTMm67IH0wOk7QZZL_nIfMhWaQinR9j-oFQ/exec";
-// Identité (Google, code, comptes) : nouveau serveur Cloudflare (cloudflare/src/auth.js), qui remplace Apps Script
+// Identité (Google, code, comptes) : Worker d'identité auth.fsggb.workers.dev (cloudflare/auth/, code de cloudflare/src/auth.js), qui remplace Apps Script
 // pour ces actions précises. Common.js route automatiquement vers l'une ou l'autre adresse selon l'action appelée.
-window.SCOUTHUB_AUTH_API = "https://scouthub.fsggb.workers.dev";
+window.SCOUTHUB_AUTH_API = window.SCOUTHUB_LEGACY ? "" : "https://auth.fsggb.workers.dev";
+// Intranet servi par Cloudflare (cloudflare/intranet/) : après une connexion, le portail y pose le cookie de session (Hub.sessionIntranet).
+window.SCOUTHUB_INTRANET = "intranet.fsggb.workers.dev";   // en mode GitHub, aucune des adresses Cloudflare ci-dessus n'est utilisée
+// Miroir chiffré des feuilles Google (cloudflare/donnees/) : administrateur seul, après confirmation Google.
+window.SCOUTHUB_DONNEES_API = window.SCOUTHUB_LEGACY ? "" : "https://donnees.fsggb.workers.dev";
 // Applications proposées dans le portail : une seule entrée par application, sous son nom d’origine.
 (() => {
 const O = "https://fsggb.github.io/";

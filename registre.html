@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <script>if (window.top !== window.self) document.documentElement.remove();</script>
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000761">
+  <meta name="robots" content="noindex">
+  <title>Inscriptions · ScoutHub</title>
+  <link rel="icon" type="image/png" href="assets/fsggb.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="hub.css">
+  <link rel="stylesheet" href="registre.css">
+</head>
+<body data-onglet="inscriptions">
+  <header class="topbar" id="bar"></header>
+  <main class="shell rg-shell" id="main" hidden>
+    <div class="rg-titre"><h1 id="rg-h1">Inscriptions</h1><p class="muted" id="rg-portee"></p></div>
+
+    <p class="rg-refus" id="rg-refus" role="status" hidden></p>
+
+    <div class="rg-corps" id="rg-corps" hidden>
+      <aside class="rg-lateral" id="rg-lateral" aria-label="Filtres">
+        <div class="rg-lat-tete"><strong>Filtrer</strong><button type="button" class="rg-fx-eff" id="rg-fx-reset" hidden>Tout effacer</button></div>
+        <div id="rg-facettes"></div>
+      </aside>
+      <div class="rg-poignee" id="rg-poignee" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largeur du panneau de filtres (flèches gauche et droite)"></div>
+      <section class="rg-liste" aria-label="Liste">
+        <div class="rg-outils">
+          <input id="rg-q" class="rg-recherche" type="search" placeholder="Chercher un nom, une adresse…" aria-label="Chercher dans la sélection" autocomplete="off">
+          <span id="rg-compte" class="rg-compte" role="status"></span>
+        </div>
+        <div class="rg-actifs" id="rg-actifs" hidden aria-label="Filtres actifs"></div>
+        <p class="rg-note" id="rg-note" hidden></p>
+        <div class="rg-table-wrap"><table class="rg-table" id="rg-table"><thead></thead><tbody></tbody></table></div>
+        <p class="rg-pager"><button class="ghost" type="button" id="rg-prec">← Précédent</button><span id="rg-page"></span><button class="ghost" type="button" id="rg-suiv">Suivant →</button></p>
+      </section>
+      <aside class="rg-detail" id="rg-detail" hidden aria-label="Fiche"></aside>
+    </div>
+  </main>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="registre.js"></script>
+</body>
+</html>

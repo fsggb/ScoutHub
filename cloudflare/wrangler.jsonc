@@ -46,7 +46,10 @@
     // l'envoi, « Invalid email or User ID »). À remettre sur no-reply@fsggb.fr une fois l'alias créé.
     "GMAIL_SENDER": "service-informatique@fsggb.fr",
     "ADMIN_EMAIL": "jb.combet@fsggb.fr",
-    "ADMIN_GOOGLE": "service-informatique@fsggb.fr",
+    "ADMIN_GOOGLE": "service-informatique@fsggb.fr,president@fsggb.fr",
+    "CLASSEUR_ID": "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs",   // classeur « intranet » : feuilles Outils (lues par le compte de service)
+    // Seule adresse autorisée à ouvrir les données sensibles (ré-authentification Google récente requise)
+    "DONNEES_ADMINS": "jb.combet@fsggb.fr,president@fsggb.fr,service-informatique@fsggb.fr",
     "SESSION_JOURS": "14",
     "CODE_QUOTA_JOUR": "90",
     "SITE_RETOUR": "https://fsggb.github.io/ScoutHub/"

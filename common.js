@@ -4,13 +4,20 @@
   const TOKEN_KEY = "scouthub.token";
   const store = {
     get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user")); } catch {} }
+    set: v => { try { v ? localStorage.setItem(TOKEN_KEY, v) : (localStorage.removeItem(TOKEN_KEY), localStorage.removeItem("scouthub.user"), localStorage.removeItem("scouthub.portail.vue")); } catch {} }
   };
   // Racine du portail (adresse de ce script), pour que les pages dans des sous-dossiers (ChatGDB) retrouvent index.html.
   const ROOT = new URL(".", document.currentScript.src);
   const USER_KEY = "scouthub.user";
-  const cachedUser = () => { try { return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
-  const cacheUser = u => { try { u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
+  // Simulation (administrateur) : « voir le site comme » une adresse. L'état vit dans sessionStorage (cet onglet seulement, jamais
+  // sur disque) ; le profil simulé est gardé à part et n'écrase JAMAIS le profil réel mis en cache.
+  const SIM_KEY = "scouthub.simule", SIM_USER = "scouthub.simule.user";
+  const simule = () => { try { return sessionStorage.getItem(SIM_KEY) || ""; } catch { return ""; } };
+  const cachedUser = () => { try { if (simule()) return JSON.parse(sessionStorage.getItem(SIM_USER) || "null"); return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
+  const cacheUser = u => { try { if (simule()) { u ? sessionStorage.setItem(SIM_USER, JSON.stringify(u)) : sessionStorage.removeItem(SIM_USER); return; } u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
+  // Lectures qui acceptent « comme » (le serveur le refuse à tout autre que l'administrateur, et ne l'accepte jamais sur une écriture).
+  const LEGACY_APPS_SCRIPT = new Set(["google", "codeDemander", "codeVerifier", "me", "logout", "adminList", "adminSetRole", "adminDelete"]);   // actions d'identité que l'ancien serveur sait faire
+  const LECTURES_COMME = new Set(["outils", "entrees", "menu", "rubrique"]);
   // « adherent » remplace l'ancien « membre » (même rôle de base, nouveau nom) ; les comptes encore enregistrés sous
   // l'ancien nom sont traités comme « adherent » ci-dessous (normRole), indépendamment de la mise à jour du serveur.
   const ROLE_LABELS = { adherent: "Adhérent", parent: "Parent", chef_unite: "Chef d’unité", chef_groupe: "Chef de groupe", equipe_nationale: "Équipe nationale", admin: "Administrateur" };
@@ -18,7 +25,7 @@
   // Mention à côté du logo (fixe, ne change pas d'une page à l'autre — reprend « ACCES CHEFS » de l'ancien
   // intranet) : le rôle décide, pas le type de compte. « parent » = accès famille ; les rôles d'encadrement =
   // accès chefs ; le reste (compte Google ou e-mail @fsggb.fr sans rôle particulier) = accès membre.
-  const ACCES_LABELS = { adherent: "ACCÈS MEMBRE", parent: "ACCÈS FAMILLE", chef_unite: "ACCÈS CHEFS", chef_groupe: "ACCÈS CHEFS", equipe_nationale: "ACCÈS CHEFS", admin: "ACCÈS CHEFS" };
+  const ACCES_LABELS = { adherent: "ACCÈS MEMBRE", parent: "ACCÈS FAMILLE", chef_unite: "ACCÈS CHEFS", chef_groupe: "ACCÈS CHEFS", equipe_nationale: "ACCÈS CHEFS", admin: "ACCÈS ADMIN" };
   const normRole = r => (!r || r === "membre" || r === "user" ? "adherent" : (ROLE_ORDER.includes(r) ? r : "adherent"));
   const $ = id => document.getElementById(id);
   const say = (el, text, err = false) => { if (!el) return; el.textContent = text; el.classList.toggle("error", err); };
@@ -39,6 +46,37 @@
     // applications « protege » (ChatGDB, bibliothèque…) aux membres de la fédération, pas à quiconque se connecte.
     // u.fsggb absent (anciens jetons mis en cache avant ce champ) : traité comme membre, pas comme externe.
     estFederation: user => !!user && user.fsggb !== false,
+    // Sur l'intranet (Cloudflare), le Worker contrôle l'accès AVANT d'envoyer les pages : il lit un cookie de session. Après
+    // une connexion (ou à chaque ouverture de l'accueil avec une session valide), on lui confie le jeton pour qu'il le pose.
+    async sessionIntranet() {
+      if (!window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET || !store.get()) return;
+      try { await fetch("/_session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: store.get() }), credentials: "same-origin", cache: "no-store" }); } catch { /* sans réseau : sans importance */ }
+    },
+    simule,
+    // Image de fond d'une carte (Drive, servie par l'intranet seulement ; hors intranet : le dégradé habituel). Chargée en différé.
+    fondCarte(carte, image) {
+      if (!image || !/^images\//i.test(image) || !window.SCOUTHUB_INTRANET || location.hostname !== window.SCOUTHUB_INTRANET) return;
+      const u = "/img/" + image.split("/").map(encodeURIComponent).join("/"), im = new Image();
+      im.onload = () => { carte.style.backgroundImage = "linear-gradient(180deg, rgba(0,7,97,.04) 35%, rgba(0,7,97,.75)), url(\"" + u + "\")"; carte.style.backgroundSize = "cover"; carte.style.backgroundPosition = "center"; carte.classList.add("avec-image"); };
+      im.src = u;
+    },
+    // Petit rond qui tourne + texte, pour toute zone en cours de chargement.
+    chargement(texte) { const d = document.createElement("div"); d.className = "zone-chargement"; d.setAttribute("role", "status"); d.append(Object.assign(document.createElement("span"), { className: "chargement" }), Object.assign(document.createElement("span"), { textContent: texte || "Chargement…" })); return d; },
+    // Entrer dans la simulation : l'adresse est vérifiée par le serveur (administrateur seulement) avant de rien changer.
+    async simulerComme(email) {
+      const e = String(email || "").trim().toLowerCase(); if (!e) throw new Error("Choisissez une adresse.");
+      let o; try { sessionStorage.setItem(SIM_KEY, e); sessionStorage.removeItem(SIM_USER); o = await Hub.call("profil", { comme: e }); } catch (x) { try { sessionStorage.removeItem(SIM_KEY); } catch {} throw x; }
+      try { sessionStorage.setItem(SIM_USER, JSON.stringify(o.user)); } catch {}
+    },
+    quitterSimulation() { try { sessionStorage.removeItem(SIM_KEY); sessionStorage.removeItem(SIM_USER); } catch {} location.href = ROOT.href + "admin.html"; },
+    // Rond de profil : la photo Google si elle charge, sinon les initiales sur fond doré bien lisible (jamais un rond vide).
+    avatar(user, classe) {
+      const a = document.createElement(classe === "tb-avatar" ? "a" : "span"); a.className = classe;
+      const nom = (user.name || "").trim(), brut = nom ? nom.split(/\s+/).slice(0, 2).map(m => m.charAt(0)).join("") : (user.email || "?").split("@")[0].split(/[._-]+/).slice(0, 2).map(m => m.charAt(0)).join("");
+      a.append(Object.assign(document.createElement("span"), { className: "av-ini", textContent: (brut || "?").toUpperCase() }));
+      if (user.picture) { const img = Object.assign(document.createElement("img"), { src: user.picture, alt: "", referrerPolicy: "no-referrer" }); img.onerror = () => img.remove(); a.append(img); }
+      return a;
+    },
     mesMasquees, masquePerso, toggleMasquePerso,
     // Prénom pour l'accueil : le vrai prénom Google (user.name) si on l'a, sinon on le devine dans l'adresse.
     prenom: user => { const n = (user && user.name || "").trim().split(/\s+/)[0] || (user && user.email || "").split("@")[0].split(/[._-]+/)[0] || ""; return n.charAt(0).toUpperCase() + n.slice(1); },
@@ -49,10 +87,20 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", rubrique: "/auth/rubrique", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
-      const chemin = Hub.IDENTITE[action];
+      if (simule()) {
+        if (action === "me") return { ok: true, user: (await Hub.call("profil", { comme: simule() })).user };
+        if (LECTURES_COMME.has(action) && !data.comme) data = { ...data, comme: simule() };
+      }
+      let chemin = Hub.IDENTITE[action];
+      // Version GitHub (pas de serveur Cloudflare) : l'identité d'origine reste sur Apps Script ; les fonctions propres à
+      // l'intranet (outils dynamiques, inscriptions, simulation…) n'existent pas ici et le disent clairement.
+      if (chemin && !window.SCOUTHUB_AUTH_API) {
+        if (!LEGACY_APPS_SCRIPT.has(action)) throw new Error("Disponible sur l’intranet seulement.");
+        chemin = "";
+      }
       const API = chemin ? window.SCOUTHUB_AUTH_API : window.SCOUTHUB_API;
       if (!API) throw new Error(chemin ? "La nouvelle connexion n’est pas encore configurée." : "Le serveur ScoutHub n’est pas encore configuré.");
       let res;
@@ -133,7 +181,7 @@
       bar.textContent = "";
       if (!user) {
         bar.append(Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
-          Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: titre || "ScoutHub" }));
+          Object.assign(document.createElement("div"), { className: "tb-titre", textContent: "ScoutHub" }));
         const q = new URLSearchParams(location.search);
         if (!(Hub.here() === "index.html" && (q.has("connexion") || q.has("next")))) {
           const sp = document.createElement("span"); sp.className = "tb-spacer"; bar.append(sp);
@@ -159,18 +207,57 @@
         location.href = "outils.html?q=" + encodeURIComponent(v);
       });
       Hub._champRecherche = champ;
-      const refresh = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon", innerHTML: Hub.ICONS.actualiser, ariaLabel: "Actualiser" });
-      refresh.onclick = () => location.reload();
-      const sp = document.createElement("span"); sp.className = "tb-spacer";
       // Photo de profil (cliquable, façon Google) : la vraie photo du compte Google si on l'a (connexion Google,
       // lue dans le jeton), sinon le rond avec l'initiale comme avant. Ouvre « Mon compte ».
-      const avatar = document.createElement("a"); avatar.className = "tb-avatar"; avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
-      if (user.picture) avatar.append(Object.assign(document.createElement("img"), { src: user.picture, alt: "" }));
-      else avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
+      const avatar = Hub.avatar(user, "tb-avatar"); avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
-        Object.assign(document.createElement("h1"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
-        wrap, sp, refresh, avatar);
+        Object.assign(document.createElement("div"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
+        Object.assign(document.createElement("span"), { className: "tb-spacer" }), wrap, avatar);
+      Hub.bandeauSimulation(user);
+      if (Hub._fil) Hub.renderFil(Hub._fil.items, Hub._fil.opts);   // la barre vient d'être reconstruite : on remet le fil
+    },
+
+    // Bandeau permanent pendant une simulation : on sait toujours qui on est « censé » être, et on peut en sortir d'un clic.
+    bandeauSimulation(user) {
+      document.getElementById("sim-bandeau")?.remove();
+      const bar = $("bar"); if (!simule() || !bar) return;
+      const b = document.createElement("div"); b.id = "sim-bandeau"; b.setAttribute("role", "status");
+      const role = Hub.ROLE_LABELS[Hub.normRole(user && user.role)] || "";
+      b.title = "Simulation : vous voyez le site comme " + simule() + " (" + role + "). Lecture seule.";
+      b.append(Object.assign(document.createElement("span"), { className: "sim-texte", textContent: "Simulation · " }), Object.assign(document.createElement("b"), { textContent: simule() }));
+      const q = Object.assign(document.createElement("button"), { type: "button", textContent: "Quitter", title: "Quitter la simulation" }); q.onclick = () => Hub.quitterSimulation(); b.append(q);
+      const avatar = bar.querySelector(".tb-avatar"); if (avatar) bar.insertBefore(b, avatar); else bar.append(b);
+    },
+
+    // Fil d'Ariane façon explorateur : précédent, suivant, monter d'un niveau, actualiser, chemin cliquable.
+    // items : [{ label, href | onClick }] (le dernier est la position courante) ; opts : { rafraichir: fonction, haut: { href | onClick } }.
+    renderFil(items, opts = {}) {
+      Hub._fil = { items, opts };
+      const bar = $("bar"); if (!bar) return;
+      document.getElementById("fil")?.remove();
+      const svg = d => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+      const I = { retour: svg('<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>'), avant: svg('<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>'), haut: svg('<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>'), actualiser: svg('<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>'), chevron: svg('<path d="m9 18 6-6-6-6"/>') };
+      const nav = document.createElement("nav"); nav.id = "fil"; nav.className = "fil"; nav.setAttribute("aria-label", "Où je suis");
+      const bouton = (icone, titre, fn, cls) => { const b = Object.assign(document.createElement("button"), { type: "button", className: "fil-btn" + (cls ? " " + cls : ""), innerHTML: icone, title: titre }); b.setAttribute("aria-label", titre); b.onclick = fn; return b; };
+      const parent = opts.haut || (items.length > 1 ? items[items.length - 2] : null);
+      const haut = bouton(I.haut, "Monter d’un niveau", () => { if (!parent) return; if (parent.onClick) parent.onClick(); else if (parent.href) location.href = parent.href; });
+      if (!parent) haut.disabled = true;
+      const chemin = document.createElement("ol"); chemin.className = "fil-chemin";
+      items.forEach((it, i) => {
+        const li = document.createElement("li"), dernier = i === items.length - 1;
+        const c = dernier ? Object.assign(document.createElement("span"), { className: "crumb courant", textContent: it.label }) : it.href ? Object.assign(document.createElement("a"), { className: "crumb", href: it.href, textContent: it.label }) : Object.assign(document.createElement("button"), { type: "button", className: "crumb", textContent: it.label, onclick: it.onClick });
+        c.title = it.label; if (dernier) c.setAttribute("aria-current", "page"); li.append(c);
+        if (!dernier) li.append(Object.assign(document.createElement("span"), { className: "fil-sep-chemin", innerHTML: I.chevron, ariaHidden: "true" }));
+        chemin.append(li);
+      });
+      nav.append(bouton(I.retour, "Page précédente", () => history.back()), bouton(I.avant, "Page suivante", () => history.forward(), "optionnel"), haut, bouton(I.actualiser, "Actualiser", opts.rafraichir || (() => location.reload()), "optionnel"), chemin);
+      bar.after(nav);   // seconde ligne de l'en-tête (masquée sur téléphone)
+    },
+    filParDefaut(actif) {
+      const NOMS = { accueil: "Accueil", documentation: "Documentation", inscriptions: "Inscriptions", outils: "Outils", compte: "Mon compte", administration: "Administration", aide: "Aide" };
+      const nom = NOMS[actif] || document.title.replace(/\s*·.*$/, "") || "ScoutHub";
+      return actif === "accueil" ? [{ label: "Accueil" }] : [{ label: "Accueil", href: ROOT.href + "index.html" }, { label: nom }];
     },
 
     // Valeur du champ de recherche de l'en-tête (ex. en arrivant sur outils.html?q=...) : Hub.onSearch n'est posé
@@ -197,9 +284,7 @@
         return el;
       });
       const pied = document.createElement("a"); pied.className = "tiroir-pied"; pied.href = "compte.html";
-      const avatar = document.createElement("span"); avatar.className = "avatar";
-      if (user.picture) avatar.append(Object.assign(document.createElement("img"), { src: user.picture, alt: "" }));
-      else avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
+      const avatar = Hub.avatar(user, "avatar");
       const chevron = document.createElement("span"); chevron.className = "tiroir-pied-chevron"; chevron.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
       pied.append(avatar, Object.assign(document.createElement("span"), { className: "tiroir-pied-mail", textContent: user.email }), chevron);
       tiroir.append(entete, ...els, pied);
@@ -238,6 +323,7 @@
     TABS: [["accueil", "Accueil", "index.html"], ["documentation", "Documentation", "documentation.html"], ["inscriptions", "Inscriptions", "inscriptions.html"], ["outils", "Outils", "outils.html"]],
     renderTabs(actif, user) {
       Hub._actif = actif;
+      Hub.renderFil(Hub.filParDefaut(actif));   // fil d'Ariane de la page (les pages à niveaux multiples le remplacent ensuite)
       document.querySelectorAll(".bottom-tabs").forEach(n => n.remove());
       const nav = document.createElement("nav");
       nav.className = "bottom-tabs"; nav.setAttribute("aria-label", "Sections de ScoutHub");

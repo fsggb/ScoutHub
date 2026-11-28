@@ -38,3 +38,14 @@ Les sessions cloud repartent d'un conteneur neuf : ces outils disparaissent et s
 - Relais Cloudflare du mode rapide de ChatGDB : `cloudflare/` (Worker + D1, `wrangler.jsonc`) (propriétés RELAIS_URL, RELAIS_SECRET).
 - Projet en cours : migrer le serveur vers Cloudflare (Workers + D1 + Durable Objects), Apps Script ne gardant que
   le Drive (bibliothèque, CathIA) et la boutique.
+
+## Cloudflare : déploiement automatique et un Worker par outil
+- Fusionner sur `main` déclenche `.github/workflows/cloudflare.yml` : bases (schémas), Workers `auth`, `donnees`, `scouthub`, puis `intranet`
+  (portail = exactement le code du dépôt). Secrets GitHub requis : `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+- Un Worker par outil : l'intranet sert `/ChatGDB/*` via la liaison de service `CHATGDB` (Worker `chatgdb`, déployé par le workflow
+  `cloudflare.yml` du dépôt ChatGDB). Ajouter un outil = table `OUTILS` dans `cloudflare/intranet/src/index.js` + liaison dans
+  `cloudflare/intranet/wrangler.jsonc` (le Worker de l'outil doit exister avant le déploiement de l'intranet).
+- Accès chef : se règle dans la feuille Google « Groupes et unités » (synchronisation à 03:15 UTC ou Administration > Données > Tout
+  synchroniser), sans toucher à Cloudflare.
+- fsggb.github.io/ScoutHub reste utilisable seul (`config.js` : `SCOUTHUB_LEGACY` selon l'adresse) : identité Apps Script, aucune donnée sensible.
+  Apps Script accepte aussi les sessions de l'intranet (`sessionCloudflare_` dans `backend/Code.gs` → `/auth/session/valider`).
