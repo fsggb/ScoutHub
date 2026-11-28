@@ -169,6 +169,7 @@
       reglages: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
       administration: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.77 17 5 19 5a1 1 0 0 1 1 1z"/></svg>',
       chatgdb: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+      gaufre: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">'+[5,12,19].flatMap(y=>[5,12,19].map(x=>'<circle cx="'+x+'" cy="'+y+'" r="1.8"/>')).join('')+'</svg>',
       deconnexion: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>'
     },
 
@@ -217,11 +218,14 @@
       Hub._champRecherche = champ; Hub._wrapRecherche = wrap; Hub.rechercheGlobale(champ, wrap);
       // Photo de profil (cliquable, façon Google) : la vraie photo du compte Google si on l'a (connexion Google,
       // lue dans le jeton), sinon le rond avec l'initiale comme avant. Ouvre « Mon compte ».
-      const avatar = Hub.avatar(user, "tb-avatar"); avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
+      const avatar = Hub.avatar(user, "tb-avatar"); avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte et changement de compte"); avatar.setAttribute("aria-haspopup", "menu");
+      avatar.addEventListener("click", ev => { ev.preventDefault(); Hub.menuCompte(user, avatar); });
+      const gaufre = Object.assign(document.createElement("button"), { type: "button", className: "tb-icon tb-gaufre", ariaLabel: "Applications", title: "Applications", innerHTML: Hub.ICONS.gaufre });
+      gaufre.setAttribute("aria-haspopup", "menu"); gaufre.onclick = () => Hub.menuApplications(gaufre);
       bar.append(burger,
         Object.assign(document.createElement("img"), { className: "tb-logo", src: "assets/fsggb.png", alt: "FSGGB" }),
         Object.assign(document.createElement("div"), { className: "tb-titre", textContent: Hub.ACCES_LABELS[Hub.normRole(user.role)] || "ScoutHub" }),
-        Object.assign(document.createElement("span"), { className: "tb-spacer" }), wrap, avatar);
+        Object.assign(document.createElement("span"), { className: "tb-spacer" }), wrap, gaufre, avatar);
       Hub.bandeauSimulation(user);
       if (Hub._fil) Hub.renderFil(Hub._fil.items, Hub._fil.opts);   // la barre vient d'être reconstruite : on remet le fil
       Hub.placerRecherche();
@@ -267,6 +271,41 @@
       const bureau = window.matchMedia("(min-width:880px)").matches;
       if (bureau && fil) { if (w.parentNode !== fil) fil.append(w); w.classList.add("dans-fil"); }
       else { w.classList.remove("dans-fil"); const av = bar.querySelector(".tb-avatar"); if (w.parentNode !== bar) { if (av) bar.insertBefore(w, av); else bar.append(w); } }
+    },
+
+
+    // ---- fenêtres flottantes de la barre du haut : menu du compte (façon Google) et grille des applications ----
+    _fermerPop() { document.querySelectorAll(".tb-pop").forEach(n => n.remove()); },
+    _pop(ancre, classe) {
+      const deja = document.querySelector(".tb-pop." + classe); Hub._fermerPop(); if (deja) return null;
+      const p = document.createElement("div"); p.className = "tb-pop " + classe; p.setAttribute("role", "menu"); document.body.append(p);
+      const r = ancre.getBoundingClientRect(); p.style.top = (r.bottom + 8) + "px"; p.style.right = Math.max(8, innerWidth - r.right - 4) + "px";
+      const fermer = e => { if (e.type === "keydown" ? e.key === "Escape" : !p.contains(e.target) && !ancre.contains(e.target)) { p.remove(); removeEventListener("click", fermer, true); removeEventListener("keydown", fermer, true); } };
+      setTimeout(() => { addEventListener("click", fermer, true); addEventListener("keydown", fermer, true); }, 0);
+      return p;
+    },
+    menuCompte(user, ancre) {
+      const p = Hub._pop(ancre, "pop-compte"); if (!p) return;
+      const el = (t, props = {}, ...k) => { const n = Object.assign(document.createElement(t), props); n.append(...k); return n; };
+      const grand = Hub.avatar(user, "pop-avatar"); grand.removeAttribute("href"); grand.tabIndex = -1;
+      p.append(el("div", { className: "pop-tete" }, grand, el("div", {}, el("strong", { textContent: user.name || user.email.split("@")[0] }), el("small", { textContent: user.email }), el("small", { className: "pop-role", textContent: Hub.ROLE_LABELS[Hub.normRole(user.role)] || "" }))));
+      const lien = (txt, href, icone) => { const a = el("a", { className: "pop-item", href }); a.innerHTML = icone; a.append(el("span", { textContent: txt })); return a; };
+      const bouton = (txt, fn, icone, cls) => { const b = el("button", { type: "button", className: "pop-item " + (cls || "") }); b.innerHTML = icone; b.append(el("span", { textContent: txt })); b.onclick = () => { Hub._fermerPop(); fn(); }; return b; };
+      p.append(lien("Mon compte", "compte.html", Hub.ICONS.compte), lien("Mes applications masquées", "compte.html#mes-applications", Hub.ICONS.reglages),
+        bouton("Changer de compte", () => Hub.logout(), Hub.ICONS.compte, ""), bouton("Se déconnecter", () => Hub.logout(), Hub.ICONS.deconnexion, "pop-danger"));
+    },
+    menuApplications(ancre) {
+      const p = Hub._pop(ancre, "pop-apps"); if (!p) return;
+      const el = (t, props = {}, ...k) => { const n = Object.assign(document.createElement(t), props); n.append(...k); return n; };
+      let apps = []; try { apps = (window.Portail && Portail.model ? Portail.model.apps : (JSON.parse(localStorage.getItem("scouthub.portail.vue") || "null") || {}).m.apps) || []; } catch {}
+      const visibles = apps.filter(a => !a.masque && a.url && !(typeof Hub.masquePerso === "function" && Hub.masquePerso(a.id))).slice(0, 12);
+      const tuile = (nom, href, img, externe) => { const a = el("a", { className: "pop-tuile", href }); if (externe) { a.target = "_blank"; a.rel = "noopener"; } const i = el("img", { alt: "", loading: "lazy" }); i.src = img; i.onerror = () => { i.src = "assets/fsggb.png"; }; a.append(i, el("span", { textContent: nom })); return a; };
+      p.append(el("h3", { className: "pop-titre", textContent: "Applications de la fédération" }));
+      const g1 = el("div", { className: "pop-grille" }); visibles.forEach(a => g1.append(tuile(a.nom, a.url, /^(assets|https:|\/img\/)/.test(a.icone || "") ? a.icone : "assets/fsggb.png", !a.local))); p.append(g1);
+      p.append(el("a", { className: "pop-tous", href: "outils.html", textContent: "Tous les outils →" }));
+      p.append(el("h3", { className: "pop-titre", textContent: "Google Workspace" }));
+      const G = [["Gmail", "https://mail.google.com/", "https://www.gstatic.com/images/branding/product/2x/gmail_2020q4_48dp.png"], ["Drive", "https://drive.google.com/", "https://www.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png"], ["Agenda", "https://calendar.google.com/", "https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png"], ["Docs", "https://docs.google.com/document/", "https://www.gstatic.com/images/branding/product/2x/docs_2020q4_48dp.png"], ["Sheets", "https://docs.google.com/spreadsheets/", "https://www.gstatic.com/images/branding/product/2x/sheets_2020q4_48dp.png"], ["Meet", "https://meet.google.com/", "https://www.gstatic.com/images/branding/product/2x/meet_2020q4_48dp.png"]];
+      const g2 = el("div", { className: "pop-grille" }); G.forEach(([n, h, i]) => g2.append(tuile(n, h, i, true))); p.append(g2);
     },
 
     // Bandeau permanent pendant une simulation : on sait toujours qui on est « censé » être, et on peut en sortir d'un clic.
@@ -416,9 +455,11 @@
   // Les textes modifiés sont rangés sur le serveur (« texte d'origine » → « texte affiché ») et appliqués à tout le monde.
   (function textesModifiables() {
     if (!window.SCOUTHUB_AUTH_API) return;      // version GitHub seule : pas de serveur pour les ranger
-    const CLE = "scouthub.textes", IGNORE = "script,style,input,textarea,select,svg,code,pre,[data-app],[data-titre],.tb-search,.rg-liste,#bar,.fil,.rail,.bottom-tabs,nav,table,#apps-barre,.ctx-menu,dialog,[data-donnee]";   // seulement les textes du contenu des pages
+    const CLE = "scouthub.textes", IGNORE = "script,style,input,textarea,select,svg,code,pre,[data-app],[data-titre],.tb-search,.rg-liste,#hello,#bar,.fil,.rail,.bottom-tabs,nav,table,#apps-barre,.ctx-menu,dialog,[data-donnee]";   // seulement les textes du contenu des pages
     let map = {}; try { map = JSON.parse(localStorage.getItem(CLE) || "{}") || {}; } catch {}
-    const feuille = el => !el.children.length && !el.closest(IGNORE);
+    // Seuls les textes qui viennent des feuilles du classeur (boutons de l\u2019accueil, rubriques des menus, contenu de Documentation) se modifient.
+    const ZONES = "#cartes,#home,#rb-contenu,#rb-h1";
+    const feuille = el => !el.children.length && !!el.closest(ZONES) && !el.closest(IGNORE);
     const clean = t => String(t || "").replace(/\s+/g, " ").trim();
     let occupe = false, minuteur = 0;
     function appliquer(racine) {

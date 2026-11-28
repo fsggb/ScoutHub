@@ -132,6 +132,13 @@ async function miniature(env, jetonMini, ctx) {
   } catch { return erreur(502, "Miniature momentanément indisponible."); }
 }
 
+// Petite vignette du logo de la fédération dans un coin de chaque application servie par l'intranet (clic = retour au portail).
+const VIGNETTE = '<a id="fsggb-vignette" href="/index.html" title="Retour à ScoutHub" aria-label="Retour à ScoutHub" style="all:initial;position:fixed;left:10px;bottom:10px;z-index:2147483000;width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 1px 6px rgba(0,7,97,.35);display:grid;place-items:center;cursor:pointer;opacity:.88"><img src="/assets/fsggb.png" alt="" style="width:22px;height:22px;object-fit:contain;display:block"></a>';
+function avecVignette(rep) {
+  if (!/text\/html/i.test(rep.headers.get("content-type") || "")) return rep;
+  return new HTMLRewriter().on("body", { element(e) { e.append(VIGNETTE, { html: true }); } }).transform(rep);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -200,7 +207,7 @@ export default {
       const propre = new Headers(); for (const h of ["accept", "accept-language", "user-agent", "range", "if-none-match"]) { const v = req.headers.get(h); if (v) propre.set(h, v); }
       const r = await env[OUTILS[outil]].fetch(new Request(new URL(reste + url.search, "https://outil.interne"), { method: req.method, headers: propre }));
       const h = new Headers(r.headers); h.delete("set-cookie"); h.set("cache-control", "private, no-cache"); for (const [k, v] of Object.entries(SECURITE)) h.set(k, v);
-      return new Response(r.body, { status: r.status, headers: h });
+      return avecVignette(new Response(r.body, { status: r.status, headers: h }));
     }
 
     // ----- pages et fichiers -----
@@ -213,7 +220,7 @@ export default {
     const propre = new Headers(); for (const h of ["accept", "accept-language", "user-agent", "range"]) { const v = req.headers.get(h); if (v) propre.set(h, v); }
     const r = await fetch(PROD + cle + url.search, { method: req.method, headers: propre, redirect: "follow" });
     const h = new Headers(r.headers); h.delete("set-cookie"); h.set("cache-control", "private, no-store"); for (const [k, v] of Object.entries(SECURITE)) h.set(k, v);
-    return new Response(r.body, { status: r.status, headers: h });
+    return avecVignette(new Response(r.body, { status: r.status, headers: h }));
   }
 };
 

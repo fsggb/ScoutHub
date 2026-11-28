@@ -140,10 +140,14 @@
       chargementListe(false);
       total = o.total; const cols = colonnes(), t = $("rg-table"), tr = el("tr");
       t.tHead.textContent = ""; t.tBodies[0].textContent = "";
+      const tout = el("input", { type: "checkbox", title: "Tout sélectionner", ariaLabel: "Tout sélectionner" }); tout.onchange = () => { choisies = new Set(tout.checked ? o.lignes.map((_, i) => i) : []); t.tBodies[0].querySelectorAll("input.rg-cb").forEach((c, i) => { c.checked = tout.checked; }); majLot(); };
+      tr.append(el("th", { className: "rg-col-cb" }, tout));
       cols.forEach(c => tr.append(el("th", { textContent: c }))); t.tHead.append(tr);
-      courantes = o.lignes; fermerFiche();
+      courantes = o.lignes; choisies = new Set(); fermerFiche(); barreLot();
       o.lignes.forEach((l, i) => {
         const r = el("tr"); r.tabIndex = 0;
+        const cb = el("input", { type: "checkbox", className: "rg-cb", ariaLabel: "Sélectionner cette fiche" }); cb.onclick = ev => ev.stopPropagation(); cb.onchange = () => { cb.checked ? choisies.add(i) : choisies.delete(i); majLot(); };
+        r.append(el("td", { className: "rg-col-cb" }, cb));
         cols.forEach((c, k) => { const v = l[c]; r.append(v === undefined || v === "" ? el("td", { className: "rg-vide", textContent: "—" }) : el("td", { className: k === 0 ? "rg-nom" : "", textContent: String(v) })); });
         r.onclick = () => ouvrirFiche(i); r.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ouvrirFiche(i); } };
         t.tBodies[0].append(r);
@@ -158,6 +162,39 @@
   $("rg-prec").onclick = () => { debut = Math.max(0, debut - PAGE); lister(); };
   $("rg-suiv").onclick = () => { debut += PAGE; lister(); };
 
+
+  // ---------- impression de plusieurs fiches : sélection, page entière ou toute la sélection ----------
+  let choisies = new Set();
+  function majLot() { const b = $("rg-imp-sel"); if (b) { b.disabled = !choisies.size; b.textContent = "Imprimer la sélection" + (choisies.size ? " (" + choisies.size + ")" : ""); } }
+  function barreLot() {
+    if ($("rg-lot")) { majLot(); return; }
+    const bar = el("div", { id: "rg-lot", className: "rg-lot" });
+    bar.append(
+      el("button", { type: "button", id: "rg-imp-sel", className: "ghost", textContent: "Imprimer la sélection", disabled: true, onclick: () => imprimerLot([...choisies].sort((a, b) => a - b).map(i => courantes[i])) }),
+      el("button", { type: "button", id: "rg-imp-page", className: "ghost", textContent: "Imprimer cette page", onclick: () => imprimerLot(courantes) }),
+      el("button", { type: "button", id: "rg-imp-tout", className: "ghost", textContent: "Tout imprimer", onclick: imprimerTout }),
+      el("span", { className: "rg-lot-aide muted", textContent: "Cochez des lignes pour n’imprimer que celles-là." }));
+    document.querySelector(".rg-table-wrap").before(bar);
+  }
+  async function imprimerTout() {
+    if (!total) return;
+    if (total > 40 && !confirm("Imprimer les " + total + " fiches de cette sélection ? Cela peut faire beaucoup de pages.")) return;
+    const b = $("rg-imp-tout"); b.disabled = true; b.textContent = "Préparation…";
+    try {
+      const toutes = [];
+      for (let d = 0; d < total && d < 600; d += PAGE) { const o = await api("/donnees/lire", { an: sel.an, gk: sel.gk, uk: sel.uk, q, debut: d, limite: PAGE }); toutes.push(...o.lignes); }
+      imprimerLot(toutes);
+    } catch (e) { alert(e.message); } finally { b.disabled = false; b.textContent = "Tout imprimer"; }
+  }
+  function imprimerLot(lignes) {
+    if (!lignes || !lignes.length) return;
+    document.getElementById("rg-impression")?.remove();
+    const z = el("div", { id: "rg-impression" }); lignes.forEach(l => z.append(construireCarte(l)));
+    document.body.append(z); document.body.classList.add("impr-lot");
+    const fin = () => { document.body.classList.remove("impr-lot"); z.remove(); removeEventListener("afterprint", fin); };
+    addEventListener("afterprint", fin); setTimeout(() => window.print(), 50);
+  }
+
   // ---------- fiche : élégante, imprimable ; elle remplace la liste (bouton « Liste » pour revenir) ----------
   const SVG = d => '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
   const ICONES = { fichier: SVG('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>'), sante: SVG('<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M3.2 12H8l2-3 3 6 2-3h4.8"/>'), photo: SVG('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>'), volets: SVG('<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>'), lien: SVG('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'), badge: SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h2"/><path d="M15 12h2"/><path d="M7 16h10"/>'), imprimer: SVG('<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>') };
@@ -166,20 +203,13 @@
   const GROUPES = [["Identité", /^(nom|pr[ée]nom|prenom|date de naissance|lieu de naissance|commune de naissance|sexe|nom enfant|prénom enfant|nom du responsable|nom responsable|prénom de l'enfant)/i], ["Contact", /(adresse|mail|t[ée]l[ée]?phone|^tel)/i], ["Inscription", /(groupe|unit[ée]|ann?[ée]e?|^date|paiement|assurance|routier|chef|renouvellement|montant|camp|type|moyen|transport|r[ôo]le|doublon)/i]];
   const BADGES = /^(paiement|assurance)$/i;
   function fermerFiche() { idx = -1; $("rg-detail").hidden = true; $("rg-corps").classList.remove("avec-detail"); $("rg-table").querySelectorAll("tbody tr.sel").forEach(t => t.classList.remove("sel")); $("rg-detail").textContent = ""; }
-  function ouvrirFiche(i) {
-    const l = courantes[i]; if (!l) return; idx = i;
+  // La fiche d'une personne (même présentation à l'écran et à l'impression) : utilisée seule ou en lot.
+  function construireCarte(l) {
     const ordre = (meta.colonnes && meta.colonnes.length) ? meta.colonnes : [...colonnes(), ...Object.keys(l).filter(k => k !== "rang" && !colonnes().includes(k))];
     const champs = ordre.filter(c => l[c] !== undefined && l[c] !== "");
-    const d = $("rg-detail"); d.textContent = "";
     const vue = colonnes(), nomComplet = vue.slice(0, 2).map(c => l[c]).filter(Boolean).join(" ") || "Fiche";
     const sous = [l["Unité"], l["Annee"] || l["Année"] || l["Année d'adhésion"]].filter(Boolean).join(" · ");
-    const btn = (contenu, titre, fn, off, cls) => { const b = el("button", { type: "button", className: "rg-d-btn " + (cls || ""), title: titre, disabled: !!off, onclick: fn }); b.setAttribute("aria-label", titre); typeof contenu === "string" ? (b.innerHTML = contenu) : b.append(contenu); return b; };
     const ini = nomComplet.split(/\s+/).slice(0, 2).map(m => m.charAt(0)).join("").toUpperCase();
-    d.append(el("div", { className: "rg-detail-tete" },
-      btn("← Liste", "Retour à la liste", fermerFiche, false, "texte"),
-      el("span", { className: "rg-d-espace" }),
-      btn("‹", "Fiche précédente", () => ouvrirFiche(i - 1), i <= 0), btn("›", "Fiche suivante", () => ouvrirFiche(i + 1), i >= courantes.length - 1),
-      btn(ICONES.imprimer, "Imprimer la fiche", () => window.print()), btn("✕", "Fermer la fiche", fermerFiche)));
     const carte = el("div", { className: "rg-carte" });
     carte.append(el("div", { className: "rg-id" }, el("span", { className: "rg-rond", textContent: ini || "?" }), el("div", {}, el("h2", { textContent: nomComplet }), el("p", { textContent: sous }))));
     const badges = champs.filter(c => BADGES.test(c)); if (badges.length) carte.append(el("div", { className: "rg-badges" }, ...badges.map(c => el("span", { className: "rg-badge" + (/^(oui|ok|pay|reçu|recu|valid)/i.test(String(l[c])) ? " ok" : ""), textContent: c + " : " + l[c] }))));
@@ -192,6 +222,21 @@
       carte.append(el("section", { className: "rg-bloc" }, el("h3", { textContent: nom }), dl));
     }
     carte.append(el("p", { className: "rg-pied-impr", textContent: "FSGGB · fiche éditée le " + new Date().toLocaleDateString("fr-FR") + " — document confidentiel" }));
+    return carte;
+  }
+  function ouvrirFiche(i) {
+    const l = courantes[i]; if (!l) return; idx = i;
+    const d = $("rg-detail"); d.textContent = "";
+    const vue = colonnes(), nomComplet = vue.slice(0, 2).map(c => l[c]).filter(Boolean).join(" ") || "Fiche";
+    const sous = [l["Unité"], l["Annee"] || l["Année"] || l["Année d'adhésion"]].filter(Boolean).join(" · ");
+    const btn = (contenu, titre, fn, off, cls) => { const b = el("button", { type: "button", className: "rg-d-btn " + (cls || ""), title: titre, disabled: !!off, onclick: fn }); b.setAttribute("aria-label", titre); typeof contenu === "string" ? (b.innerHTML = contenu) : b.append(contenu); return b; };
+    const ini = nomComplet.split(/\s+/).slice(0, 2).map(m => m.charAt(0)).join("").toUpperCase();
+    d.append(el("div", { className: "rg-detail-tete" },
+      btn("← Liste", "Retour à la liste", fermerFiche, false, "texte"),
+      el("span", { className: "rg-d-espace" }),
+      btn("‹", "Fiche précédente", () => ouvrirFiche(i - 1), i <= 0), btn("›", "Fiche suivante", () => ouvrirFiche(i + 1), i >= courantes.length - 1),
+      btn(ICONES.imprimer, "Imprimer la fiche", () => window.print()), btn("✕", "Fermer la fiche", fermerFiche)));
+    const carte = construireCarte(l);
     d.append(carte); d.hidden = false; $("rg-corps").classList.add("avec-detail");
     $("rg-table").querySelectorAll("tbody tr").forEach((t, k) => t.classList.toggle("sel", k === i));
     d.scrollTop = 0;

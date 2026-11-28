@@ -11,12 +11,29 @@
     const o = await r.json().catch(() => ({})); if (!o.ok) throw new Error(o.error && o.error.message || "Erreur."); return o;
   }
   function onglet(actif) {
-    for (const n of ["comptes", "portail", "donnees", "simulation"]) { const sel = n === actif; $("tb-" + n).setAttribute("aria-selected", String(sel)); $("tab-" + n).hidden = !sel; }
+    for (const n of ["comptes", "portail", "donnees", "simulation", "textes"]) { const sel = n === actif; $("tb-" + n).setAttribute("aria-selected", String(sel)); $("tab-" + n).hidden = !sel; }
     if (actif === "donnees") etat();
     if (actif === "simulation") adressesSimulables();
+    if (actif === "textes") textes();
   }
   $("tb-donnees").onclick = () => onglet("donnees");
   $("tb-simulation").onclick = () => onglet("simulation");
+  $("tb-textes").onclick = () => onglet("textes");
+  // Registre des textes modifiés : lecture, et « Rétablir » pour revenir au texte d'origine.
+  async function textes() {
+    const corps = $("tx-body"); say($("tx-etat"), "Chargement…");
+    try {
+      const o = await Hub.call("textes"); corps.textContent = "";
+      (o.textes || []).sort((a, b) => a.orig.localeCompare(b.orig, "fr")).forEach(t => {
+        const tr = document.createElement("tr"), td = (txt, cls) => { const c = document.createElement("td"); if (cls) c.className = cls; if (txt != null) c.textContent = txt; tr.append(c); return c; };
+        td(t.orig); td(t.valeur);
+        const b = Object.assign(document.createElement("button"), { type: "button", className: "text-danger", textContent: "Rétablir" });
+        b.onclick = async () => { try { await Hub.call("texteEcrire", { orig: t.orig, valeur: "" }); try { localStorage.removeItem("scouthub.textes"); } catch {} textes(); } catch (e) { say($("tx-etat"), e.message, true); } };
+        td(null, "right").append(b); corps.append(tr);
+      });
+      say($("tx-etat"), (o.textes || []).length ? "" : "Aucun texte modifié pour le moment : double-cliquez sur un texte du site pour le changer.");
+    } catch (e) { say($("tx-etat"), e.message, true); }
+  }
   $("tb-comptes").addEventListener("click", () => onglet("comptes"));
   $("tb-portail").addEventListener("click", () => onglet("portail"));
   async function etat() {
