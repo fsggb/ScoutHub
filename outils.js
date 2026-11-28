@@ -117,7 +117,7 @@
       items.forEach(a => grid.append(tile(a)));
       section.append(titre, grid);
       const derniere = rangees[rangees.length - 1];   // sections de même « ligne » consécutives = côte à côte sur la même rangée
-      if (derniere && derniere.id === s.ligne) derniere.blocs.push(section); else rangees.push({ id: s.ligne, blocs: [section] });
+      if (derniere && derniere.id === s.ligne && derniere.blocs.length < 3) derniere.blocs.push(section);   // 3 sections côte à côte au plus : jamais de colonnes écrasées else rangees.push({ id: s.ligne, blocs: [section] });
     });
     rangees.forEach(r => {
       if (r.blocs.length === 1) { box.append(r.blocs[0]); return; }

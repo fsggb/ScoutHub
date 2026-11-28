@@ -101,6 +101,13 @@
         if (!LEGACY_APPS_SCRIPT.has(action)) throw new Error("Disponible sur l’intranet seulement.");
         chemin = "";
       }
+      // ChatGDB sur l'intranet : crédits et paramètres de conversation viennent de Cloudflare, plus d'Apps Script.
+      if (!chemin && window.SCOUTHUB_CHAT_API && (action === "credits" || action === "rapide")) {
+        let rep; try { rep = await fetch(window.SCOUTHUB_CHAT_API + "/chatgdb/" + action, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: store.get(), ...data }) }); } catch { throw new Error("Serveur injoignable."); }
+        let o; try { o = await rep.json(); } catch { throw new Error("Réponse invalide du serveur."); }
+        if (!o.ok) { const m = o.error && o.error.message ? o.error.message : o.error; if (/Session expirée/.test(m || "") && Hub.here() !== "index.html") Hub.toLogin(); throw new Error(m || "Erreur."); }
+        return o;
+      }
       const API = chemin ? window.SCOUTHUB_AUTH_API : window.SCOUTHUB_API;
       if (!API) throw new Error(chemin ? "La nouvelle connexion n’est pas encore configurée." : "Le serveur ScoutHub n’est pas encore configuré.");
       let res;
