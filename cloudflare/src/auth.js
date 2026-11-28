@@ -232,6 +232,7 @@ const jetonGmail = env => jetonGoogle(env, "https://www.googleapis.com/auth/gmai
 // Workspace (Sécurité > Contrôles des API > Délégation à l'échelle du domaine), pour le client du compte de
 // service. SHEET_ID : identifiant de la feuille (dans son URL, après /d/) ; SHEET_SUB : compte @fsggb.fr usurpé
 // pour la lecture (doit avoir accès à la feuille).
+const PLAGE_OUTILS = "Outils!A2:J300", PLAGE_SECTIONS = "Sections!A2:C100", PLAGE_TEXTES = "Textes!A2:B2000";
 const CLASSEUR_PAR_DEFAUT = "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs";   // classeur « intranet » (var CLASSEUR_ID)
 const memoFeuilles = new Map();
 async function lireFeuille(env, sub, plage) {
@@ -244,6 +245,28 @@ async function lireFeuille(env, sub, plage) {
   try { await caches.default.put(cle, new Response(JSON.stringify(v), { headers: { "cache-control": "public, max-age=180" } })); } catch {}
   return v;
 }
+// ---------- écriture dans la feuille (compte de service ÉDITEUR requis) ----------
+async function oublierFeuilles(env, plages) {
+  for (const p of plages) { memoFeuilles.delete(p); try { await caches.default.delete(new Request("https://feuille.interne/" + encodeURIComponent((env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "|" + p))); } catch {} }
+}
+async function appelSheets(env, chemin, corps, methode = "POST") {
+  const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/spreadsheets", "");
+  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + (env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + chemin, { method: methode, headers: { authorization: "Bearer " + jeton, "content-type": "application/json" }, body: corps ? JSON.stringify(corps) : undefined });
+  const j = await res.json().catch(() => ({}));
+  if (res.status === 403) throw new Erreur("LECTURE_SEULE", 403);
+  if (!res.ok) throw new Erreur("Écriture dans la feuille refusée : " + (j.error?.message || res.status), 502);
+  return j;
+}
+// data : [{ range: "Outils!A5:B5", values: [[...]] }]
+async function ecrireFeuille(env, data, plagesAOublier) {
+  if (data.length) await appelSheets(env, "/values:batchUpdate", { valueInputOption: "USER_ENTERED", data });
+  await oublierFeuilles(env, plagesAOublier || []);
+}
+async function ajouterFeuille(env, plage, ligne, plagesAOublier) {
+  await appelSheets(env, "/values/" + encodeURIComponent(plage) + ":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS", { values: [ligne] });
+  await oublierFeuilles(env, plagesAOublier || []);
+}
+const MSG_LECTURE_SEULE = "Enregistré sur le serveur, mais pas dans la feuille : partagez le classeur en « Éditeur » avec le compte de service du serveur (intranet-general-serveur@intranet-general.iam.gserviceaccount.com) pour que les modifications y soient répercutées.";
 async function lireFeuilleBrut(env, sub, plage) {
   const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/spreadsheets.readonly", sub);
   const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets/" + (env.CLASSEUR_ID || CLASSEUR_PAR_DEFAUT) + "/values/" + encodeURIComponent(plage), { headers: { authorization: "Bearer " + jeton } });
@@ -438,17 +461,35 @@ export async function authRoute(req, env, url, json, erreur) {
         if (!vals.length) return false;   // visibilité vide : jamais montré par défaut
         return vals.some(x => { const k = slug(x); return k === "all" ? membre : k === "equipe-nationale" ? ROLES.indexOf(role) >= ROLES.indexOf("equipe_nationale") && membre : k === "chefs" ? ROLES.indexOf(role) >= ROLES.indexOf("chef_unite") && membre : k === "chefs-de-groupe" ? ROLES.indexOf(role) >= ROLES.indexOf("chef_groupe") && membre : k === "admin" ? false : miens.has(k); });
       };
-      const lignes = await lireFeuille(env, "", "Outils!A2:E100");
-      const lien = l => /^https?:\/\//i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
-      const dispo = new Map((await env.DB.prepare("SELECT cle, nom, description, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
+      // La feuille « Outils » pilote la grille : A nom, B description, C image, D lien, E visibilité, F section, G ordre, H masqué,
+      // I clé, J options (featured, crop). La feuille « Sections » donne l'ordre et la rangée des sections.
+      const lignes = await lireFeuille(env, "", PLAGE_OUTILS);
+      let feuilleSections = []; try { feuilleSections = await lireFeuille(env, "", PLAGE_SECTIONS); } catch {}
+      const lien = l => /^https?:\/\//i.test(l) ? l : /^(?![a-z][a-z0-9+.-]*:)[\w.\/-]+(\?[\w=&%.\/-]*)?$/i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
+      const piloteFeuille = lignes.some(l => String(l[5] || "").trim());
+      // Feuille « Outils » pilote : seules les modifications en attente d'écriture dans la feuille (table dispo_attente) s'y superposent.
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS dispo_attente (cle TEXT PRIMARY KEY, nom TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', section TEXT NOT NULL DEFAULT '', ordre INTEGER)").run();
+      const dispo = new Map((await env.DB.prepare("SELECT cle, nom, description, section, ordre FROM " + (piloteFeuille ? "dispo_attente" : "disposition")).all()).results.map(d => [d.cle, d]));
       await env.DB.prepare("CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL)").run();
       const modifs = new Map((await env.DB.prepare("SELECT * FROM outil_modifs").all()).results.map(m => [m.cle, m]));
-      for (const l of lignes) { const m = modifs.get("o:" + slug(l[0])); if (m) { if (m.url) l[3] = m.url; if (m.image !== null && m.image !== undefined && m.image !== "") l[2] = m.image; if (m.publique) l[4] = m.publique; } }
-      const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]) && (admin || !(modifs.get("o:" + slug(l[0])) || {}).masque))
-        .map(l => { const cle = "o:" + slug(l[0]), d = dispo.get(cle), mo = modifs.get(cle) || {}; return { cle, nom: mo.nom || (d && d.nom) || String(l[0]).trim(), desc: mo.description || (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 300), masque: !!(modifs.get(cle) || {}).masque, section: d ? d.section : "", ordre: d ? d.ordre : null }; });
+      const cleDe = l => /^o:[a-z0-9-]{1,100}$/.test(String(l[8] || "").trim()) ? String(l[8]).trim() : "o:" + slug(l[0]);
+      const oui = v => /^(1|oui|x|true|vrai|yes)$/i.test(String(v || "").trim());
+      for (const l of lignes) { const m = modifs.get(cleDe(l)); if (m) { if (m.url) l[3] = m.url; if (m.image) l[2] = m.image; if (m.publique) l[4] = m.publique; if (m.nom) l[0] = m.nom; if (m.description) l[1] = m.description; if (m.masque) l[7] = "1"; } }
+      const pilote = lignes.some(l => String(l[5] || "").trim());
+      const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]) && (admin || !oui(l[7])))
+        .map(l => {
+          const cle = cleDe(l), d = dispo.get(cle), opts = String(l[9] || "").toLowerCase();
+          const titreSec = String(l[5] || "").trim(), secId = titreSec ? slug(titreSec) : "";
+          const rel = !/^https?:\/\//i.test(String(l[3]).trim()) && lien(String(l[3]).trim()) === String(l[3]).trim();
+          return { cle, nom: (d && d.nom) || String(l[0]).trim(), desc: (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 300),
+            masque: oui(l[7]), featured: /featured/.test(opts), crop: /crop/.test(opts), local: rel,
+            section: (d && d.section) || secId, sectionTitre: titreSec, ordre: d && d.ordre !== null && d.ordre !== undefined ? d.ordre : (parseInt(l[6], 10) || 0) };
+        });
       const layout = { sections: [], apps: [] };
-      for (const [cle, d] of dispo) { if (cle.startsWith("s:")) layout.sections.push({ id: cle.slice(2), titre: d.nom, ligne: d.section, ordre: d.ordre }); else if (cle.startsWith("a:")) layout.apps.push({ id: cle.slice(2), nom: d.nom, desc: d.description, section: d.section, ordre: d.ordre }); }
-      return json(200, { ok: true, outils, layout });
+      feuilleSections.filter(x => x[0]).forEach((x, i) => layout.sections.push({ id: slug(x[0]), titre: String(x[0]).trim(), ligne: String(x[2] || "").trim() || "r-" + slug(x[0]), ordre: parseInt(x[1], 10) || i + 1 }));
+      for (const o of outils) if (o.sectionTitre && !layout.sections.some(x => x.id === slug(o.sectionTitre))) layout.sections.push({ id: slug(o.sectionTitre), titre: o.sectionTitre, ligne: "r-" + slug(o.sectionTitre), ordre: 99 });
+      for (const [cle, d] of dispo) { const x = layout.sections.find(y => y.id === cle.slice(2)); if (cle.startsWith("s:")) { if (x) { x.titre = d.nom || x.titre; x.ligne = d.section || x.ligne; x.ordre = d.ordre; } else if (!pilote) layout.sections.push({ id: cle.slice(2), titre: d.nom, ligne: d.section, ordre: d.ordre }); } else if (cle.startsWith("a:") && !pilote) layout.apps.push({ id: cle.slice(2), nom: d.nom, desc: d.description, section: d.section, ordre: d.ordre }); }
+      return json(200, { ok: true, outils, layout, pilote });
     }
     // ---- Portée de lecture des données du registre (appelé par le Worker « donnees ») ----
     // Renvoie ce que la personne a le droit de voir : administrateur des données (DONNEES_ADMINS) = tout ; chef de groupe =
@@ -496,7 +537,8 @@ export async function authRoute(req, env, url, json, erreur) {
       const admin = !r.comme && p.role === "admin";
       const { results } = await env.DB.prepare("SELECT id, nom, description, url, audience FROM entrees WHERE section = ?1 ORDER BY nom").bind(section).all();
       const vues = results.filter(e => admin || audienceVisible(p, e.audience));
-      const dispo = new Map((await env.DB.prepare("SELECT cle, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS dispo_attente (cle TEXT PRIMARY KEY, nom TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', section TEXT NOT NULL DEFAULT '', ordre INTEGER)").run();
+      const dispo = new Map((await env.DB.prepare("SELECT cle, section, ordre FROM disposition UNION ALL SELECT cle, section, ordre FROM dispo_attente").all()).results.map(d => [d.cle, d]));
       const pos = e => { const d = dispo.get("e:" + e.id); return { cle: "e:" + e.id, section: d ? d.section : "", ordre: d ? d.ordre : null }; };
       await env.DB.prepare("CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL)").run();
       const imgs = new Map((await env.DB.prepare("SELECT cle, image FROM outil_modifs WHERE cle LIKE 'e:%'").all()).results.map(m => [m.cle, m.image || ""]));
@@ -528,17 +570,40 @@ export async function authRoute(req, env, url, json, erreur) {
       const r = await req.json().catch(() => ({}));
       await requireAdmin(env, r.token);
       const items = Array.isArray(r.items) ? r.items.slice(0, 300) : [];
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS dispo_attente (cle TEXT PRIMARY KEY, nom TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', section TEXT NOT NULL DEFAULT '', ordre INTEGER)").run();
       const lot = [];
       for (const it of items) {
         const cle = String(it.cle || ""); if (!/^[oeas]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu : " + cle.slice(0, 40));
         const sec = String(it.section || "").slice(0, 60); if (sec && !/^[a-z0-9-]{1,60}$/.test(sec)) throw new Erreur("Section invalide.");
         const nomLibre = cle.startsWith("o:") || cle.startsWith("a:") || cle.startsWith("s:");
-        lot.push(env.DB.prepare("INSERT INTO disposition (cle, nom, description, section, ordre) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, section = excluded.section, ordre = excluded.ordre")
+        lot.push(env.DB.prepare("INSERT INTO dispo_attente (cle, nom, description, section, ordre) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, section = excluded.section, ordre = excluded.ordre")
           .bind(cle, nomLibre ? String(it.nom || "").trim().slice(0, 60) : "", (cle.startsWith("o:") || cle.startsWith("a:")) ? String(it.description || "").trim().slice(0, 200) : "", sec, Math.max(0, Math.min(999, parseInt(it.ordre, 10) || 0))));
       }
-      for (const c of (Array.isArray(r.supprimer) ? r.supprimer.slice(0, 50) : [])) if (/^s:[a-z0-9-]{1,60}$/.test(String(c))) lot.push(env.DB.prepare("DELETE FROM disposition WHERE cle = ?1").bind(String(c)));
+      for (const c of (Array.isArray(r.supprimer) ? r.supprimer.slice(0, 50) : [])) if (/^s:[a-z0-9-]{1,60}$/.test(String(c))) lot.push(env.DB.prepare("DELETE FROM dispo_attente WHERE cle = ?1").bind(String(c)));
       if (lot.length) await env.DB.batch(lot);
-      return json(200, { ok: true, n: lot.length });
+      // Répercussion dans la feuille (sections, ordre, noms) ; si elle n'est pas modifiable, la disposition reste gardée sur le serveur.
+      let avertissement;
+      try {
+        const titres = new Map(items.filter(it => String(it.cle).startsWith("s:")).map(it => [String(it.cle).slice(2), String(it.nom || "").trim()]));
+        const rangs = new Map();
+        const secs = items.filter(it => String(it.cle).startsWith("s:")).sort((x, y) => (+x.ordre || 0) - (+y.ordre || 0));
+        secs.forEach(it => { if (!rangs.has(it.section)) rangs.set(it.section, "r" + (rangs.size + 1)); });
+        const brut = await lireFeuilleBrut(env, "", PLAGE_OUTILS), data = [];
+        for (const it of items) {
+          const cle = String(it.cle); if (!cle.startsWith("o:")) continue;
+          const i = brut.findIndex(l => (/^o:/.test(String(l[8] || "").trim()) ? String(l[8]).trim() : "o:" + slug(l[0])) === cle); if (i < 0) continue;
+          const n = i + 2, l = brut[i];
+          data.push({ range: "Outils!A" + n + ":B" + n, values: [[String(it.nom || l[0] || "").trim(), String(it.description !== undefined ? it.description : l[1] || "").trim()]] });
+          data.push({ range: "Outils!F" + n + ":G" + n, values: [[titres.get(String(it.section)) || l[5] || "", Math.max(0, Math.min(999, parseInt(it.ordre, 10) || 0)) + 1]] });
+        }
+        if (secs.length) data.push({ range: "Sections!A2:C" + (secs.length + 1), values: secs.map((it, k) => [String(it.nom || "").trim(), k + 1, rangs.get(it.section)]) });
+        if (data.length) {
+          if (secs.length) await appelSheets(env, "/values/" + encodeURIComponent("Sections!A2:C100") + ":clear", {});
+          await ecrireFeuille(env, data, [PLAGE_OUTILS, PLAGE_SECTIONS]);
+          await env.DB.prepare("DELETE FROM dispo_attente").run();
+        }
+      } catch (e) { if (e instanceof Erreur && e.message === "LECTURE_SEULE") avertissement = MSG_LECTURE_SEULE; else console.log("disposer feuille: " + (e && e.message)); }
+      return json(200, { ok: true, n: lot.length, avertissement });
     }
     // Contenu d'une rubrique de Documentation, DÉJÀ FILTRÉ selon la personne (rôle, groupe, unité). Simulation : admin seulement.
     if (url.pathname === "/auth/rubrique") {
@@ -567,8 +632,9 @@ export async function authRoute(req, env, url, json, erreur) {
     // Lecture ouverte (ce sont des libellés, rien de sensible) ; écriture réservée à l'administrateur.
     if (url.pathname === "/auth/textes") {
       await env.DB.prepare("CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL)").run();
-      const { results } = await env.DB.prepare("SELECT orig, valeur FROM textes LIMIT 3000").all();
-      return json(200, { ok: true, textes: results });
+      const m = new Map(); try { (await lireFeuille(env, "", PLAGE_TEXTES)).forEach(l => { if (l[0] && l[1]) m.set(String(l[0]).trim(), String(l[1]).trim()); }); } catch {}
+      (await env.DB.prepare("SELECT orig, valeur FROM textes LIMIT 3000").all()).results.forEach(t => m.set(t.orig, t.valeur));   // modifications en attente d'écriture dans la feuille
+      return json(200, { ok: true, textes: [...m].map(([orig, valeur]) => ({ orig, valeur })) });
     }
     if (url.pathname === "/auth/textes/ecrire") {
       const r = await req.json().catch(() => ({}));
@@ -576,30 +642,19 @@ export async function authRoute(req, env, url, json, erreur) {
       const orig = String(r.orig || "").trim().slice(0, 400), valeur = String(r.valeur || "").trim().slice(0, 800);
       if (!orig) throw new Erreur("Texte d'origine manquant.");
       await env.DB.prepare("CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL)").run();
-      if (!valeur || valeur === orig) await env.DB.prepare("DELETE FROM textes WHERE orig = ?1").bind(orig).run();
-      else await env.DB.prepare("INSERT INTO textes (orig, valeur, maj) VALUES (?1, ?2, ?3) ON CONFLICT(orig) DO UPDATE SET valeur = excluded.valeur, maj = excluded.maj").bind(orig, valeur, Date.now()).run();
-      return json(200, { ok: true });
-    }
-    // Modification complète d'un outil par l'administrateur : nom, description, adresse, image, public, masquage.
-    // Outil de la feuille « Outils » (o:…) : surcharge rangée à part (la feuille n'est jamais modifiée). Outil ajouté (e:…) : sa fiche est mise à jour.
-    if (url.pathname === "/auth/outil/modifier") {
-      const r = await req.json().catch(() => ({}));
-      await requireAdmin(env, r.token);
-      const cle = String(r.cle || ""); if (!/^[oe]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu.");
-      const nom = String(r.nom || "").trim().slice(0, 60), desc = String(r.description || "").trim().slice(0, 200), image = String(r.image || "").trim().slice(0, 300);
-      let adr = String(r.url || "").trim().slice(0, 1500); if (adr && !/^https:\/\/[^\s"'<>\\]{3,1500}$/.test(adr)) throw new Erreur("L'adresse doit commencer par https://.");
-      if (image && !/^(Images\/[^"'<>\\]{1,250}|https:\/\/[^\s"'<>\\]{3,290})$/i.test(image)) throw new Erreur("Image : un chemin « Images/… » du Drive ou une adresse https://.");
-      const publique = String(r.publique || "").trim().slice(0, 200), masque = r.masque ? 1 : 0;
-      await env.DB.prepare("CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL)").run();
-      if (cle.startsWith("e:")) {
-        const AUD = { all: "all", chefs: "chef_unite", "chefs-de-groupe": "chef_groupe", "equipe-nationale": "equipe_nationale", admin: "admin" };
-        const aud = masque ? "admin" : (AUD[slug(publique)] || "");
-        await env.DB.prepare("UPDATE entrees SET nom = COALESCE(NULLIF(?2, ''), nom), description = ?3, url = COALESCE(NULLIF(?4, ''), url), audience = COALESCE(NULLIF(?5, ''), audience), maj = ?6 WHERE id = ?1").bind(cle.slice(2), nom, desc, adr, aud, Date.now()).run();
-        adr = ""; 
+      const effacer = !valeur || valeur === orig;
+      try {
+        const brut = await lireFeuilleBrut(env, "", PLAGE_TEXTES), i = brut.findIndex(l => String(l[0] || "").trim() === orig);
+        if (i >= 0) await ecrireFeuille(env, [{ range: "Textes!A" + (i + 2) + ":B" + (i + 2), values: [effacer ? ["", ""] : [orig, valeur]] }], [PLAGE_TEXTES]);
+        else if (!effacer) await ajouterFeuille(env, "Textes!A:B", [orig, valeur], [PLAGE_TEXTES]);
+        await env.DB.prepare("DELETE FROM textes WHERE orig = ?1").bind(orig).run();
+        return json(200, { ok: true });
+      } catch (e) {
+        if (!(e instanceof Erreur) || e.message !== "LECTURE_SEULE") throw e;
+        if (effacer) await env.DB.prepare("DELETE FROM textes WHERE orig = ?1").bind(orig).run();
+        else await env.DB.prepare("INSERT INTO textes (orig, valeur, maj) VALUES (?1, ?2, ?3) ON CONFLICT(orig) DO UPDATE SET valeur = excluded.valeur, maj = excluded.maj").bind(orig, valeur, Date.now()).run();
+        return json(200, { ok: true, provisoire: true, avertissement: MSG_LECTURE_SEULE });
       }
-      await env.DB.prepare("INSERT INTO outil_modifs (cle, nom, description, url, image, publique, masque, maj) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, url = excluded.url, image = excluded.image, publique = excluded.publique, masque = excluded.masque, maj = excluded.maj")
-        .bind(cle, nom, desc, adr, image, publique, masque, Date.now()).run();
-      return json(200, { ok: true });
     }
     if (url.pathname === "/auth/entree/supprimer") {
       const r = await req.json().catch(() => ({}));

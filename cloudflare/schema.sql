@@ -133,3 +133,6 @@ CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, 
 
 -- Modifications d'outils par l'administrateur (nom, description, adresse, image, public, masquage)
 CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL);
+
+-- Modifications de disposition en attente d'écriture dans la feuille « Outils » (quand le serveur n'y est pas encore éditeur)
+CREATE TABLE IF NOT EXISTS dispo_attente (cle TEXT PRIMARY KEY, nom TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', section TEXT NOT NULL DEFAULT '', ordre INTEGER);

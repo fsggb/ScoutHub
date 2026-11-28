@@ -43,3 +43,11 @@ Les schémas SQL (bases D1) ne changent que rarement : les appliquer à la main 
 ## Domaine personnalisé (étape suivante)
 Domaine géré par Cloudflare (DNS) → Worker intranet : Settings > Domains & Routes > Add > Custom domain (ex. intranet.fsggb.fr). Puis mettre à jour
 `SELF_ORIGIN` et `ORIGINES` (wrangler.jsonc de auth, donnees, scouthub, intranet) et `config.js` (adresses des Workers), et déclarer l'origine dans la console Google (client OAuth).
+
+## La feuille pilote l'interface (classeur « intranet »)
+- **Outils** (A2:J) : A nom · B description · C image (`assets/icons/…`, `Images/…` du Drive ou https) · D lien (https ou chemin relatif `Word/`) · E visibilité (`All`, `Chefs`, `Chefs de groupe`, `Equipe nationale`, `Admin`, ou noms de groupes/unités) · F section · G ordre · H masqué (`1`) · I clé (`o:…`, stable) · J options (`featured`, `crop`).
+- **Sections** : Section · Ordre · Ligne (les sections de même ligne sont côte à côte, 3 au plus).
+- **Textes** : Original · Texte (texte affiché à la place, modifiable par double-clic).
+- Les modifications faites dans l'interface (double-clic, clic droit, glisser-déposer) sont écrites dans ces feuilles par le compte de service, qui doit être **Éditeur** du classeur
+  (intranet-general-serveur@intranet-general.iam.gserviceaccount.com). Sinon elles sont gardées sur le serveur (tables `outil_modifs`, `dispo_attente`, `textes`) et s'appliquent quand même.
+- `config.js` (liste des applications) ne sert plus qu'aux visiteurs sans compte et de secours si la feuille est illisible.

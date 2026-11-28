@@ -21,7 +21,7 @@
     mm.sections.forEach((s, i) => { if (!rangs.has(s.ligne)) rangs.set(s.ligne, "r" + (rangs.size + 1)); items.push({ cle: "s:" + s.id, nom: s.titre, section: rangs.get(s.ligne), ordre: i }); });
     supprimees.forEach(id => items.push({ cle: "s:" + id, nom: "", section: "supprimee", ordre: 999 }));
     mm.sections.forEach(s => mm.apps.filter(a => a.section === s.id).forEach((a, i) => items.push({ cle: a.cle || "a:" + String(a.id).toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 100), nom: a.nom, description: a.desc, section: s.id, ordre: i })));
-    try { await Hub.call("outilsDisposer", { items }); etat("Enregistré ✓"); try { localStorage.removeItem("scouthub.portail.vue"); } catch {} }
+    try { const rep = await Hub.call("outilsDisposer", { items }); if (rep.avertissement) etat(rep.avertissement, true); else etat("Enregistré ✓"); try { localStorage.removeItem("scouthub.portail.vue"); } catch {} }
     catch (e) { etat("Non enregistré : " + e.message, true); }
   }
 
@@ -128,7 +128,7 @@
     const fermer = () => { dlg.close(); dlg.remove(); }; non.onclick = fermer; dlg.addEventListener("cancel", () => dlg.remove());
     f.onsubmit = async ev => {
       ev.preventDefault(); ok.disabled = true; statut.textContent = "Enregistrement…";
-      try { await Hub.call("outilModifier", { cle, nom: nom[1].value, description: desc[1].value, url: adr[1].value, image: img[1].value, publique: pub.value, masque: masque.checked }); fermer(); await Portail.refresh(rerendre); rerendre(); etat("Enregistré ✓"); }
+      try { const rep = await Hub.call("outilModifier", { cle, nom: nom[1].value, description: desc[1].value, url: adr[1].value, image: img[1].value, publique: pub.value, masque: masque.checked }); fermer(); await Portail.refresh(rerendre); rerendre(); if (rep.avertissement) alert(rep.avertissement); else etat("Enregistré ✓"); }
       catch (e) { statut.textContent = e.message; statut.classList.add("error"); ok.disabled = false; }
     };
   }

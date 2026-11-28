@@ -163,9 +163,13 @@
     // pour éviter que les icônes ou l'organisation des sections changent juste après l'affichage (sinon il faut recharger pour que ça se stabilise).
     // Un seul affichage, stable : on attend la vraie disposition (au plus 1,5 s) avant de montrer la grille, puis elle apparaît d'un coup.
     const box = $("apps"); box.classList.add("en-attente");
-    const reveler = () => { renderApps(); box.classList.remove("en-attente"); };
+    let signature = "";
+    const reveler = () => { renderApps(); signature = JSON.stringify(Portail.current()); box.classList.remove("en-attente"); };
     const delai = new Promise(r => setTimeout(r, 1500));
-    await Promise.race([Portail.refresh(() => {}), delai]); reveler();
+    const lecture = Portail.refresh(() => {});
+    await Promise.race([lecture, delai]); reveler();
+    // Si la disposition du serveur est arrivée après le délai, on la dessine dès qu'elle est là (une seule fois, sans clignotement).
+    lecture.then(() => { if (JSON.stringify(Portail.current()) !== signature) { renderApps(); signature = JSON.stringify(Portail.current()); } });
     Portail.refresh(renderApps);
   }
 
