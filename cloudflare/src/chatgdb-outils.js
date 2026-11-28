@@ -2,6 +2,7 @@
 // lues dans le Worker « chatgdb » par liaison de service : toujours la version déployée depuis GitHub).
 import { quiEstCe } from "./auth.js";
 
+export const OUTIL_IMAGE = { name: "voir_image", description: "Télécharge une image à partir de son adresse directe (https) pour que tu la VOIES réellement (photo, schéma, carte, capture…). À utiliser sur les adresses d'images trouvées dans les résultats de recherche ou données par l'utilisateur. Formats : JPEG, PNG, GIF, WebP, 4 Mo au plus.", input_schema: { type: "object", properties: { url: { type: "string", description: "Adresse directe de l'image, en https." } }, required: ["url"] } };
 export const OUTILS_BASE = [
   { name: "chercher_connaissances", description: "Cherche dans la base de connaissances de la fédération : fiches de synthèse détaillées tirées de la documentation (froissartage, nœuds et matelotage, cuisine de camp, feu, entretien des outils, pyrotechnie, topographie, cryptographie, documents religieux, carnet de chants) et notices complètes des applications de ScoutHub. À consulter AVANT le web pour toute question technique scoute ou sur une application. Renvoie identifiants, titres, thèmes, résumés, sections et fiches liées.", input_schema: { type: "object", properties: { requete: { type: "string", description: "Quelques mots-clés ou la question." }, theme: { type: "string", description: "Facultatif : limiter à un thème (ex. Froissartage)." } }, required: ["requete"] } },
   { name: "lire_fiche", description: "Lit une fiche de la base de connaissances en entier (identifiant donné par chercher_connaissances), ou seulement une section. Indique ses sources (documents du Drive) et ses fiches liées.", input_schema: { type: "object", properties: { id: { type: "string" }, section: { type: "string", description: "Facultatif : titre (ou début du titre) de la section voulue." } }, required: ["id"] } }
@@ -36,6 +37,19 @@ async function lireFiche(env, id, section) {
   const src = (f.sources || []).map(x => "- " + (x.titre || "") + (x.pages ? " (p. " + x.pages + ")" : "") + (x.drive ? " https://drive.google.com/file/d/" + x.drive + "/view" : x.url ? " " + x.url : "")).join("\n");
   return "# " + f.titre + " [" + f.theme + "]\n" + (f.resume ? f.resume + "\n\n" : "") + corps.slice(0, 40000) + (src ? "\n\nSources :\n" + src : "") + ((f.liens || []).length ? "\nFiches liées : " + f.liens.join(", ") : "");
 }
+// Image distante : seulement une adresse https vue dans la conversation (résultat de recherche, message), jamais une adresse inventée ou interne.
+async function imageDistante(url, permis) {
+  url = String(url || "").slice(0, 2000);
+  if (!/^https:\/\/[^\s]+$/.test(url)) return "Adresse invalide (https obligatoire).";
+  const h = new URL(url).hostname; if (/^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h) || !h.includes(".") || /\.(internal|local)$/.test(h)) return "Adresse refusée.";
+  if (!permis.has(url)) return "Refusé : cette adresse n'a pas été vue dans la conversation. N'utilise que des adresses d'images issues des résultats de recherche ou données par la personne.";
+  const r = await fetch(url, { redirect: "follow", headers: { "user-agent": "ChatGDB/1.0" } });
+  const type = (r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (!r.ok || !/^image\/(jpeg|png|gif|webp)$/.test(type)) return "Ce n'est pas une image lisible (JPEG, PNG, GIF ou WebP).";
+  const buf = new Uint8Array(await r.arrayBuffer()); if (buf.length > 4 * 1024 * 1024) return "Image trop lourde (4 Mo au plus).";
+  let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return [{ type: "image", source: { type: "base64", media_type: type, data: btoa(bin) } }];
+}
 export async function chatgdbOutil(req, env, json, erreur) {
   const r = await req.json().catch(() => ({}));
   try { await quiEstCe(env, r.token); } catch (e) { return erreur(e && e.code || 401, "Session expirée : reconnectez-vous."); }
@@ -45,6 +59,7 @@ export async function chatgdbOutil(req, env, json, erreur) {
     if (!env.CHATGDB) res = "Base de connaissances indisponible.";
     else if (r.nom === "chercher_connaissances") { const rc = await chercher(env, String(e.requete || "").slice(0, 300), e.theme); res = rc === null ? "Base de connaissances indisponible." : rc.length ? JSON.stringify(rc) : "Aucune fiche ne correspond."; }
     else if (r.nom === "lire_fiche") res = await lireFiche(env, e.id, e.section);
+    else if (r.nom === "voir_image") res = await imageDistante(e.url, new Set((Array.isArray(r.urls) ? r.urls : []).slice(0, 300).map(u => String(u).slice(0, 2000))));
     else res = "Outil non disponible pour le moment.";
   } catch { res = "Lecture impossible pour le moment."; }
   return json(200, { ok: true, resultat: res, propositions: [], aides: [], depots: [] });

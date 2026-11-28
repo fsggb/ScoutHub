@@ -76,3 +76,5 @@ dialog h2{margin:0 0 8px;color:var(--navy);font-weight:500}.dlg-actions{display:
 @media (max-width:700px){.barre-aide{display:none}}
 .oe-titre-champ{font:inherit;font-weight:700;color:#000761;border:2px solid #c9a227;border-radius:6px;padding:2px 6px;min-width:0;width:100%;box-sizing:border-box}
 .sec-poignee{cursor:grab}.app-group h2.sec-poignee:hover{color:#000761}
+
+.oe-apercu{display:block;width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid #e7e4dc;margin:6px 0;background:#f3f3fb}.oe-case{display:flex;gap:8px;align-items:center;margin-top:12px}

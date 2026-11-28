@@ -87,7 +87,7 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", rubrique: "/auth/rubrique", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", textes: "/auth/textes", texteEcrire: "/auth/textes/ecrire", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", rubrique: "/auth/rubrique", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", textes: "/auth/textes", outilModifier: "/auth/outil/modifier", texteEcrire: "/auth/textes/ecrire", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
       if (simule()) {
@@ -416,7 +416,7 @@
   // Les textes modifiés sont rangés sur le serveur (« texte d'origine » → « texte affiché ») et appliqués à tout le monde.
   (function textesModifiables() {
     if (!window.SCOUTHUB_AUTH_API) return;      // version GitHub seule : pas de serveur pour les ranger
-    const CLE = "scouthub.textes", IGNORE = "script,style,input,textarea,select,svg,code,pre,[data-app],[data-titre],.tb-search,.rg-liste";
+    const CLE = "scouthub.textes", IGNORE = "script,style,input,textarea,select,svg,code,pre,[data-app],[data-titre],.tb-search,.rg-liste,#bar,.fil,.rail,.bottom-tabs,nav,table,#apps-barre,.ctx-menu,dialog,[data-donnee]";   // seulement les textes du contenu des pages
     let map = {}; try { map = JSON.parse(localStorage.getItem(CLE) || "{}") || {}; } catch {}
     const feuille = el => !el.children.length && !el.closest(IGNORE);
     const clean = t => String(t || "").replace(/\s+/g, " ").trim();
