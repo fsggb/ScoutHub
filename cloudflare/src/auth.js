@@ -436,13 +436,16 @@ export async function authRoute(req, env, url, json, erreur) {
         if (admin) return true;
         const vals = String(v || "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
         if (!vals.length) return false;   // visibilité vide : jamais montré par défaut
-        return vals.some(x => { const k = slug(x); return k === "all" ? membre : k === "equipe-nationale" ? ROLES.indexOf(role) >= ROLES.indexOf("equipe_nationale") && membre : miens.has(k); });
+        return vals.some(x => { const k = slug(x); return k === "all" ? membre : k === "equipe-nationale" ? ROLES.indexOf(role) >= ROLES.indexOf("equipe_nationale") && membre : k === "chefs" ? ROLES.indexOf(role) >= ROLES.indexOf("chef_unite") && membre : k === "chefs-de-groupe" ? ROLES.indexOf(role) >= ROLES.indexOf("chef_groupe") && membre : k === "admin" ? false : miens.has(k); });
       };
       const lignes = await lireFeuille(env, "", "Outils!A2:E100");
       const lien = l => /^https?:\/\//i.test(l) ? l : (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(l) ? "https://" + l : "");
       const dispo = new Map((await env.DB.prepare("SELECT cle, nom, description, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
-      const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]))
-        .map(l => { const cle = "o:" + slug(l[0]), d = dispo.get(cle); return { cle, nom: (d && d.nom) || String(l[0]).trim(), desc: (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 200), section: d ? d.section : "", ordre: d ? d.ordre : null }; });
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL)").run();
+      const modifs = new Map((await env.DB.prepare("SELECT * FROM outil_modifs").all()).results.map(m => [m.cle, m]));
+      for (const l of lignes) { const m = modifs.get("o:" + slug(l[0])); if (m) { if (m.url) l[3] = m.url; if (m.image !== null && m.image !== undefined && m.image !== "") l[2] = m.image; if (m.publique) l[4] = m.publique; } }
+      const outils = lignes.filter(l => l[0] && lien(String(l[3] || "").trim()) && visible(l[4]) && (admin || !(modifs.get("o:" + slug(l[0])) || {}).masque))
+        .map(l => { const cle = "o:" + slug(l[0]), d = dispo.get(cle), mo = modifs.get(cle) || {}; return { cle, nom: mo.nom || (d && d.nom) || String(l[0]).trim(), desc: mo.description || (d && d.description) || l[1] || "", lien: lien(String(l[3]).trim()), image: String(l[2] || "").trim().slice(0, 300), masque: !!(modifs.get(cle) || {}).masque, section: d ? d.section : "", ordre: d ? d.ordre : null }; });
       const layout = { sections: [], apps: [] };
       for (const [cle, d] of dispo) { if (cle.startsWith("s:")) layout.sections.push({ id: cle.slice(2), titre: d.nom, ligne: d.section, ordre: d.ordre }); else if (cle.startsWith("a:")) layout.apps.push({ id: cle.slice(2), nom: d.nom, desc: d.description, section: d.section, ordre: d.ordre }); }
       return json(200, { ok: true, outils, layout });
@@ -495,7 +498,9 @@ export async function authRoute(req, env, url, json, erreur) {
       const vues = results.filter(e => admin || audienceVisible(p, e.audience));
       const dispo = new Map((await env.DB.prepare("SELECT cle, section, ordre FROM disposition").all()).results.map(d => [d.cle, d]));
       const pos = e => { const d = dispo.get("e:" + e.id); return { cle: "e:" + e.id, section: d ? d.section : "", ordre: d ? d.ordre : null }; };
-      return json(200, { ok: true, admin, entrees: vues.map(e => admin ? { ...e, audience: e.audience.split(","), ...pos(e) } : { id: e.id, nom: e.nom, description: e.description, url: e.url, ...pos(e) }) });
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL)").run();
+      const imgs = new Map((await env.DB.prepare("SELECT cle, image FROM outil_modifs WHERE cle LIKE 'e:%'").all()).results.map(m => [m.cle, m.image || ""]));
+      return json(200, { ok: true, admin, entrees: vues.map(e => admin ? { ...e, audience: e.audience.split(","), image: imgs.get("e:" + e.id) || "", ...pos(e) } : { id: e.id, nom: e.nom, description: e.description, url: e.url, image: imgs.get("e:" + e.id) || "", ...pos(e) }) });
     }
     if (url.pathname === "/auth/entree/ecrire") {
       const r = await req.json().catch(() => ({}));
@@ -573,6 +578,27 @@ export async function authRoute(req, env, url, json, erreur) {
       await env.DB.prepare("CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL)").run();
       if (!valeur || valeur === orig) await env.DB.prepare("DELETE FROM textes WHERE orig = ?1").bind(orig).run();
       else await env.DB.prepare("INSERT INTO textes (orig, valeur, maj) VALUES (?1, ?2, ?3) ON CONFLICT(orig) DO UPDATE SET valeur = excluded.valeur, maj = excluded.maj").bind(orig, valeur, Date.now()).run();
+      return json(200, { ok: true });
+    }
+    // Modification complète d'un outil par l'administrateur : nom, description, adresse, image, public, masquage.
+    // Outil de la feuille « Outils » (o:…) : surcharge rangée à part (la feuille n'est jamais modifiée). Outil ajouté (e:…) : sa fiche est mise à jour.
+    if (url.pathname === "/auth/outil/modifier") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const cle = String(r.cle || ""); if (!/^[oe]:[a-z0-9-]{1,100}$/.test(cle)) throw new Erreur("Outil inconnu.");
+      const nom = String(r.nom || "").trim().slice(0, 60), desc = String(r.description || "").trim().slice(0, 200), image = String(r.image || "").trim().slice(0, 300);
+      let adr = String(r.url || "").trim().slice(0, 1500); if (adr && !/^https:\/\/[^\s"'<>\\]{3,1500}$/.test(adr)) throw new Erreur("L'adresse doit commencer par https://.");
+      if (image && !/^(Images\/[^"'<>\\]{1,250}|https:\/\/[^\s"'<>\\]{3,290})$/i.test(image)) throw new Erreur("Image : un chemin « Images/… » du Drive ou une adresse https://.");
+      const publique = String(r.publique || "").trim().slice(0, 200), masque = r.masque ? 1 : 0;
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL)").run();
+      if (cle.startsWith("e:")) {
+        const AUD = { all: "all", chefs: "chef_unite", "chefs-de-groupe": "chef_groupe", "equipe-nationale": "equipe_nationale", admin: "admin" };
+        const aud = masque ? "admin" : (AUD[slug(publique)] || "");
+        await env.DB.prepare("UPDATE entrees SET nom = COALESCE(NULLIF(?2, ''), nom), description = ?3, url = COALESCE(NULLIF(?4, ''), url), audience = COALESCE(NULLIF(?5, ''), audience), maj = ?6 WHERE id = ?1").bind(cle.slice(2), nom, desc, adr, aud, Date.now()).run();
+        adr = ""; 
+      }
+      await env.DB.prepare("INSERT INTO outil_modifs (cle, nom, description, url, image, publique, masque, maj) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(cle) DO UPDATE SET nom = excluded.nom, description = excluded.description, url = excluded.url, image = excluded.image, publique = excluded.publique, masque = excluded.masque, maj = excluded.maj")
+        .bind(cle, nom, desc, adr, image, publique, masque, Date.now()).run();
       return json(200, { ok: true });
     }
     if (url.pathname === "/auth/entree/supprimer") {

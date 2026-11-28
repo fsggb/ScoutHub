@@ -90,7 +90,7 @@
   }
 
   // ---------- nom et description d'un outil ; nouvel outil ----------
-  function modifier(a, rerendre) {
+  function modifierSimple(a, rerendre) {
     const dlg = el("dialog", { className: "entree-dlg" }), f = el("form", { method: "dialog" });
     const nom = el("input", { id: "oe-nom", maxLength: 40, required: true, value: a.nom }), desc = el("input", { id: "oe-desc", maxLength: 140, value: a.desc || "" });
     const ok = el("button", { type: "submit", className: "primary", textContent: "Valider" }), non = el("button", { type: "button", className: "ghost", textContent: "Annuler" });
@@ -103,6 +103,33 @@
       ev.preventDefault(); a.nom = nom.value.trim() || a.nom; a.desc = desc.value.trim(); dlg.close(); dlg.remove(); rerendre();
       if (a.entree && a.entree.id) { try { await Hub.call("entreeEcrire", { section: "outils", id: a.entree.id, nom: a.nom, description: a.desc, url: a.url, audience: a.entree.audience }); } catch (e) { etat("Non enregistré : " + e.message, true); return; } }
       planifier();
+    };
+  }
+  // Fenêtre complète : nom, description, adresse, image, public, masquage. Pour tout outil de la feuille « Outils » ou ajouté à la main.
+  function modifier(a, rerendre) {
+    const cle = a.cle && /^o:/.test(a.cle) ? a.cle : (a.entree && a.entree.id ? "e:" + a.entree.id : "");
+    if (!cle) return modifierSimple(a, rerendre);
+    const imageBrute = /^\/img\//.test(a.icone || "") ? decodeURIComponent(String(a.icone).slice(5)) : /^https:\/\//.test(a.icone || "") ? a.icone : "";
+    const dlg = el("dialog", { className: "entree-dlg" }), f = el("form", { method: "dialog" });
+    const champ = (id, lib, props) => { const i = Object.assign(el("input", { id }), props); return [el("label", { htmlFor: id, textContent: lib }), i]; };
+    const nom = champ("oe-nom", "Nom affiché", { maxLength: 60, required: true, value: a.nom }), desc = champ("oe-desc", "Description", { maxLength: 200, value: a.desc || "" });
+    const adr = champ("oe-url", "Adresse de l’application (https://…)", { type: "url", maxLength: 1500, required: true, value: a.url || "", placeholder: "https://" });
+    const img = champ("oe-img", "Image (chemin du Drive « Images/… » ou adresse https://…)", { maxLength: 300, value: imageBrute, placeholder: "Images/Menu_images/…" });
+    const apercu = el("img", { alt: "", className: "oe-apercu" }); const maj = () => { const v = img[1].value.trim(); apercu.src = /^images\//i.test(v) ? "/img/" + v.split("/").map(encodeURIComponent).join("/") : /^https:\/\//i.test(v) ? v : "assets/fsggb.png"; apercu.hidden = false; }; img[1].oninput = maj; maj();
+    const pub = el("select", { id: "oe-pub" }); [["", "Ne pas changer"], ["all", "Tous les membres de la fédération"], ["chefs", "Chefs d’unité et au-dessus"], ["chefs-de-groupe", "Chefs de groupe et au-dessus"], ["equipe-nationale", "Équipe nationale et au-dessus"], ["admin", "Administrateur seulement"]].forEach(([v, t]) => pub.append(el("option", { value: v, textContent: t })));
+    const masque = el("input", { type: "checkbox", id: "oe-masque", checked: !!a.masque });
+    const statut = el("p", { className: "status", role: "status" });
+    const ok = el("button", { type: "submit", className: "primary", textContent: "Enregistrer" }), non = el("button", { type: "button", className: "ghost", textContent: "Annuler" });
+    f.append(el("h2", { textContent: "Modifier l’outil" }), ...nom, ...desc, ...adr, ...img, apercu,
+      el("label", { htmlFor: "oe-pub", textContent: "Qui le voit ?" }), pub,
+      el("label", { className: "oe-case" }, masque, " Masqué pour tout le monde (sauf l’administrateur)"), statut,
+      el("div", { className: "dlg-actions" }, non, ok));
+    dlg.append(f); document.body.append(dlg); dlg.showModal();
+    const fermer = () => { dlg.close(); dlg.remove(); }; non.onclick = fermer; dlg.addEventListener("cancel", () => dlg.remove());
+    f.onsubmit = async ev => {
+      ev.preventDefault(); ok.disabled = true; statut.textContent = "Enregistrement…";
+      try { await Hub.call("outilModifier", { cle, nom: nom[1].value, description: desc[1].value, url: adr[1].value, image: img[1].value, publique: pub.value, masque: masque.checked }); fermer(); await Portail.refresh(rerendre); rerendre(); etat("Enregistré ✓"); }
+      catch (e) { statut.textContent = e.message; statut.classList.add("error"); ok.disabled = false; }
     };
   }
   function ajouter(sectionId, rerendre) { Entrees.dialogue("outils", null, () => Portail.refresh(rerendre), sectionId); }

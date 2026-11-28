@@ -7,7 +7,7 @@
   const TOP = ["Mon espace", "Assistant", "Boutique"];
   const slug = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "x";
   const safeUrl = u => typeof u === "string" && (/^https:\/\/[^\s"'<>\\]{3,1500}$/.test(u) || /^[A-Za-z0-9][\w.\-\/]{0,120}(\?[\w=&%.\-]{0,160})?$/.test(u));
-  const safeIcon = i => typeof i === "string" && (/^assets\/icons\/[\w.\-]{1,60}$/.test(i) || /^\/img\/Images(\/[\w%.\-]{1,200}){1,4}$/.test(i) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]{20,200000}$/.test(i));
+  const safeIcon = i => typeof i === "string" && (/^https:\/\/[^\s"'<>\\]{3,300}$/.test(i) || /^assets\/icons\/[\w.\-]{1,60}$/.test(i) || /^\/img\/Images(\/[\w%.\-]{1,200}){1,4}$/.test(i) || /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]{20,200000}$/.test(i));
   // Rôle minimum pour voir l'application (en plus de « protege », qui ne demande qu'un compte @fsggb.fr quelconque) :
   // "" = personne de particulier exigé, sinon un rôle de Hub.ROLE_ORDER (vérifié par Hub.can).
   const safeRole = r => !r || (!!window.Hub && window.Hub.ROLE_ORDER.includes(r));
@@ -49,7 +49,7 @@
   function appliquerOutils(m, outils, entrees, layout) {
     if (!Array.isArray(outils) && !Array.isArray(entrees)) { appliquerLayout(m, layout); return; }
     // Image Drive (servie par l'intranet seulement) : « Images/Menu_images/xxx » → /img/…, sinon le logo de la fédération.
-    const icone = t => (t.image && /^images\//i.test(t.image) && window.SCOUTHUB_INTRANET && location.hostname === window.SCOUTHUB_INTRANET) ? "/img/" + t.image.split("/").map(encodeURIComponent).join("/") : "assets/fsggb.png";
+    const icone = t => (t.image && /^images\//i.test(t.image) && window.SCOUTHUB_INTRANET && location.hostname === window.SCOUTHUB_INTRANET) ? "/img/" + t.image.split("/").map(encodeURIComponent).join("/") : (t.image && /^https:\/\//i.test(t.image) && safeIcon(t.image)) ? t.image : "assets/fsggb.png";
     const titre = "Outils fédération", id = slug(titre), norm = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
     let s = m.sections.find(x => x.titre === titre);
     if (!s) m.sections.push(s = { id, titre, haut: false });
@@ -61,13 +61,13 @@
     (outils || []).forEach(t => {
       if (!safeUrl(t.lien) || vus.has(norm(t.lien))) return;
       vus.add(norm(t.lien));
-      m.apps.push({ id: slug(t.nom), section: sect(t), nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: icone(t), crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: t.cle, ordre: t.ordre });
+      m.apps.push({ id: slug(t.nom), section: sect(t), nom: String(t.nom).slice(0, 40), desc: String(t.desc || "").slice(0, 140), url: t.lien, icone: icone(t), crop: false, featured: false, masque: !!t.masque, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: t.cle, ordre: t.ordre });
     });
     // Applications ajoutées par l'administrateur (déjà filtrées par le serveur selon la personne ; l'administrateur reçoit aussi leur public).
     (entrees || []).forEach(e => {
       if (!safeUrl(e.url) || vus.has(norm(e.url))) return;
       vus.add(norm(e.url));
-      m.apps.push({ id: "entree-" + e.id, section: sect(e), nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: e.cle, ordre: e.ordre, entree: e.audience ? e : undefined });
+      m.apps.push({ id: "entree-" + e.id, section: sect(e), nom: String(e.nom).slice(0, 40), desc: String(e.description || "").slice(0, 140), url: e.url, icone: (e.image && /^https:\/\//i.test(e.image) && safeIcon(e.image)) ? e.image : (e.image && /^images\//i.test(e.image) && window.SCOUTHUB_INTRANET && location.hostname === window.SCOUTHUB_INTRANET) ? "/img/" + e.image.split("/").map(encodeURIComponent).join("/") : "assets/fsggb.png", crop: false, featured: false, masque: false, protege: true, role: "", local: false, admin: false, sso: "", dyn: true, cle: e.cle, ordre: e.ordre, entree: e.audience ? e : undefined });
     });
     appliquerLayout(m, layout);   // rangées, ordre et noms enregistrés par l'administrateur
   }

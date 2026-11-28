@@ -130,3 +130,6 @@ CREATE TABLE IF NOT EXISTS disposition (
 
 -- Textes de l'interface modifiés par l'administrateur (double-clic)
 CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL);
+
+-- Modifications d'outils par l'administrateur (nom, description, adresse, image, public, masquage)
+CREATE TABLE IF NOT EXISTS outil_modifs (cle TEXT PRIMARY KEY, nom TEXT, description TEXT, url TEXT, image TEXT, publique TEXT, masque INTEGER NOT NULL DEFAULT 0, maj INTEGER NOT NULL);
