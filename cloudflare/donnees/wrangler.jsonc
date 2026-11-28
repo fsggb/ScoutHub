@@ -5,7 +5,7 @@
   "main": "index.js",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
-  "triggers": { "crons": ["15 3 * * *"] },
+  "triggers": { "crons": ["0 23 * * *"] },
   "services": [{ "binding": "AUTH", "service": "auth" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "scouthub-donnees", "database_id": "b2ee1f16-e53f-4742-af9b-057d0995807e" },

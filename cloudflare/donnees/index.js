@@ -142,8 +142,30 @@ const journaliser = async (env, email, action, feuille, n, comme) => {
   catch (e) { console.warn("AUDIT " + JSON.stringify({ ts: Date.now(), email, action, feuille: feuille || "", n: n || 0, comme: comme || "", base: String(e && e.message || e).slice(0, 80) })); }
 };
 
+// ---------- vérification légère à l'arrivée d'une personne ----------
+// La date de modification du classeur (Drive, métadonnées seulement) est comparée à celle de la dernière synchronisation :
+// inchangée = rien à faire ; modifiée = synchronisation différentielle (seules les lignes changées sont réécrites).
+// Au plus une vérification par minute et par instance ; jamais bloquante pour la personne.
+let derniereVerif = 0, enCours = false;
+async function verifierMaj(env) {
+  if (enCours || Date.now() - derniereVerif < 60000) return;
+  enCours = true; derniereVerif = Date.now();
+  try {
+    const jeton = await jetonGoogle(env, "https://www.googleapis.com/auth/drive.metadata.readonly", "");
+    const res = await fetch("https://www.googleapis.com/drive/v3/files/" + env.CLASSEUR_ID + "?fields=modifiedTime&supportsAllDrives=true", { headers: { authorization: "Bearer " + jeton } });
+    if (!res.ok) return;
+    const modif = (await res.json()).modifiedTime || "";
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL DEFAULT '')").run();
+    const v = await env.DB.prepare("SELECT valeur FROM meta WHERE cle = 'classeur_modif'").first();
+    if (v && v.valeur === modif) return;
+    await toutSynchroniser(env);
+    await env.DB.prepare("INSERT INTO meta (cle, valeur) VALUES ('classeur_modif', ?1) ON CONFLICT(cle) DO UPDATE SET valeur = ?1").bind(modif).run();
+  } catch { /* la vérification est facultative : la synchronisation de 23 h rattrape */ }
+  finally { enCours = false; }
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const origine = req.headers.get("Origin") || "", entetes = cors(env, origine), url = new URL(req.url);
     const json = (status, o) => new Response(JSON.stringify(o), { status, headers: { ...entetes, "content-type": "application/json", "cache-control": "no-store" } });
     const erreur = (status, message) => json(status, { type: "error", error: { message } });
@@ -191,7 +213,7 @@ export default {
     if (!peut(p, nom)) { await journaliser(env, reel, "refus", nom, 0, comme).catch(() => {}); return erreur(403, "Ces données ne vous concernent pas."); }
     const conf = FEUILLES[nom], sc = portee_sql(p);
 
-    if (url.pathname === "/donnees/arbre") {   // effectifs par année / groupe / unité, dans la portée seulement
+    if (url.pathname === "/donnees/arbre") { ctx.waitUntil(verifierMaj(env));   // effectifs par année / groupe / unité, dans la portée seulement
       const { results } = await env.DB.prepare("SELECT an, gk, uk, json_extract(clair, '$.Groupe') AS g, json_extract(clair, '$.\"Unité\"') AS u, count(*) AS n FROM lignes WHERE feuille = ?1" + sc.sql + " GROUP BY an, gk, uk, g, u").bind(nom, ...sc.binds).all();
       const f = await env.DB.prepare("SELECT entetes FROM feuilles WHERE nom = ?1").bind(nom).first();
       let colonnes = []; try { colonnes = JSON.parse(f && f.entetes || "[]"); } catch {}
