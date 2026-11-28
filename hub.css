@@ -284,5 +284,21 @@ a.crumb:hover,button.crumb:hover{background:rgba(255,255,255,.18)}.crumb.courant
 @media (max-width:879px){#bar .rg-liste{position:fixed;left:10px;right:10px;top:60px;width:auto}}
 
 /* Administrateur : tout texte se modifie par double-clic */
-body.edition-textes :is(h1,h2,h3,h4,p,li,label,small,strong,span,em,legend,th,td,a,button):not(:has(*)):not([data-app] *):hover{outline:1px dashed #c9a227;outline-offset:2px;cursor:text}
+body.edition-textes :is(#cartes,#home,#rb-contenu,#rb-h1) :is(h1,h2,h3,h4,p,li,label,small,strong,span,em,legend,a,b):not(:has(*)):not([data-app] *):not(#hello):hover,body.edition-textes #rb-h1:hover{outline:1px dashed #c9a227;outline-offset:2px;cursor:text}
 .texte-edite{outline:2px solid #c9a227!important;outline-offset:2px;background:#fffbe6;color:#000761;border-radius:3px;cursor:text}
+
+/* Impression de plusieurs fiches */
+.rg-lot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.rg-lot button{padding:6px 14px;font-size:14px}.rg-lot-aide{font-size:13px}
+.rg-col-cb{width:34px;text-align:center}.rg-col-cb input{width:17px;height:17px;cursor:pointer}
+#rg-impression{display:none}
+@media print{body.impr-lot > *:not(#rg-impression){display:none!important}body.impr-lot #rg-impression{display:block!important}body.impr-lot #rg-impression .rg-carte{break-after:page;page-break-after:always;break-inside:avoid;box-shadow:none;border:0;margin:0 auto;max-width:none}body.impr-lot #rg-impression .rg-carte:last-child{break-after:auto;page-break-after:auto}}
+
+/* Menu du compte et grille des applications (barre du haut) */
+.tb-pop{position:fixed;z-index:70;background:#fff;color:#1b1d2a;border:1px solid #e7e4dc;border-radius:16px;box-shadow:0 14px 40px #00076144;padding:10px;max-width:calc(100vw - 16px);max-height:calc(100vh - 80px);overflow:auto}
+.pop-compte{width:290px}.pop-tete{display:flex;gap:12px;align-items:center;padding:8px 8px 12px;border-bottom:1px solid #eee}
+.pop-tete div{display:flex;flex-direction:column;min-width:0}.pop-tete strong{font-size:16px}.pop-tete small{color:#6b6e7e;overflow:hidden;text-overflow:ellipsis}.pop-role{color:#8a6d00!important;font-weight:600}
+.pop-avatar{position:relative;display:grid;place-items:center;width:52px;height:52px;flex:none;border-radius:50%;background:#c9a227;color:#000761;font-weight:700;overflow:hidden}.pop-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pop-item{display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;padding:10px;border:0;background:none;border-radius:10px;font:inherit;color:inherit;text-decoration:none;cursor:pointer;text-align:left}.pop-item:hover{background:#f3f3fb}.pop-item svg{flex:none;color:#000761}.pop-danger{color:#b42318}.pop-danger svg{color:#b42318}
+.pop-apps{width:min(340px,calc(100vw - 16px))}.pop-titre{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#8a6d00;margin:8px 6px 6px}
+.pop-grille{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.pop-tuile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:12px;color:inherit;text-decoration:none;text-align:center;font-size:13px}.pop-tuile:hover{background:#f3f3fb}.pop-tuile img{width:40px;height:40px;object-fit:cover;border-radius:10px}
+.pop-tous{display:block;margin:4px 6px 8px;font-size:13px;color:#000761}
