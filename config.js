@@ -28,6 +28,7 @@ window.SCOUTHUB_AUTH_API = window.SCOUTHUB_LEGACY ? "" : "https://auth.fsggb.wor
 window.SCOUTHUB_INTRANET = "intranet.fsggb.workers.dev";   // en mode GitHub, aucune des adresses Cloudflare ci-dessus n'est utilisée
 // Miroir chiffré des feuilles Google (cloudflare/donnees/) : administrateur seul, après confirmation Google.
 window.SCOUTHUB_DONNEES_API = window.SCOUTHUB_LEGACY ? "" : "https://donnees.fsggb.workers.dev";
+window.SCOUTHUB_CHAT_API = window.SCOUTHUB_LEGACY ? "" : "https://scouthub.fsggb.workers.dev";   // ChatGDB sans Apps Script (crédits, paramètres de conversation)
 // Applications proposées dans le portail : une seule entrée par application, sous son nom d’origine.
 (() => {
 const O = "https://fsggb.github.io/";

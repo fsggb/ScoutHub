@@ -264,7 +264,14 @@ a.crumb:hover,button.crumb:hover{background:rgba(255,255,255,.18)}.crumb.courant
 @media (max-width:879px){
   .tb-spacer{display:none}.tb-titre{display:none}
   #bar{position:relative}
-  #bar .tb-search-wrap{position:absolute;left:50%;transform:translateX(-50%);width:min(calc(100vw - 200px),320px);flex:none;margin:0}
+  #bar .tb-search-wrap{position:static;transform:none;flex:1;min-width:0;max-width:none;margin:0 8px 0 14px}
   #bar .tb-avatar{margin-left:auto}
 }
 .bottom-tabs{transition:transform .22s ease}.bottom-tabs.rangee{transform:translateY(100%)}
+
+/* Sections côte à côte : colonnes jamais plus étroites que 260 px (elles passent à la ligne), tuiles toujours dans leur colonne */
+.group-row.cote{grid-template-columns:repeat(var(--n),minmax(260px,1fr));overflow:visible}
+.group-row.cote .app-group{min-width:0}.group-row.cote .grid-apps{grid-template-columns:minmax(0,1fr)}
+.group-row.cote .app-tile{min-width:0;max-width:100%;box-sizing:border-box}
+@media (max-width:900px){.group-row.cote{grid-template-columns:minmax(0,1fr)}}
+.apps-barre .primary{width:auto}
