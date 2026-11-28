@@ -61,3 +61,11 @@ dialog h2{margin:0 0 8px;color:var(--navy);font-weight:500}.dlg-actions{display:
 .app-group .grid-apps{margin-bottom:0}
 .app-tile{min-height:80px}
 .app-tile small.equiv{color:var(--gold-dark);font-size:11px}
+
+/* Outils : pas de grille visible tant que la disposition n'est pas prête (évite le désordre au chargement) */
+#apps.en-attente{visibility:hidden}#apps{animation:apparait .18s ease-out}@keyframes apparait{from{opacity:0}to{opacity:1}}
+.app-hide{opacity:.55;width:26px;height:26px;display:grid;place-items:center;line-height:1;font-size:0}.app-tile:hover .app-hide,.app-tile:focus-within .app-hide,.app-hide:hover{opacity:1}
+.app-hide.ferme{opacity:1;color:#b42318;border-color:#b42318}.app-hide:hover{color:#000761;border-color:#000761}
+.apps-barre{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.ctx-menu{position:fixed;z-index:80;min-width:240px;background:#fff;border:1px solid #e7e4dc;border-radius:10px;box-shadow:0 10px 30px #00076133;padding:6px;display:flex;flex-direction:column}
+.ctx-menu button{border:0;background:none;text-align:left;font:inherit;padding:9px 12px;border-radius:7px;cursor:pointer;color:#1b1d2a}.ctx-menu button:hover{background:#f3f3fb}.ctx-menu button.danger{color:#b42318}

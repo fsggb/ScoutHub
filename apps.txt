@@ -23,6 +23,4 @@ release Figma            storytold/figcraft      figcraft
 release SubstancePainter storytold/texturecraft  texturecraft
 release AfterEffects     storytold/effectcraft   effectcraft
 release ProTools         storytold/soundcraft    soundcraft
-excali  Draw             excalidraw/excalidraw
-static  ScoutBibliotheque fsggb/ScoutBibliotheque
 perl    DivinumOfficium   fsggb/DivinumOfficium scripts/generer_site.py

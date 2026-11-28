@@ -48,7 +48,6 @@ window.SCOUTHUB_APPS = [
   { group: "Assistant", name: "Laboratoire", desc: "Essais de modèles, dictée, voix et recherche (administrateur)", url: O + "ChatGDB/laboratoire.html", icon: "assets/icons/Laboratoire.svg", protege: true, local: true, admin: true },
   { group: "Vie spirituelle", featured: true, name: "Divinum Officium", desc: "La messe et le bréviaire en latin, jour par jour (rubriques de 1960)", url: "DivinumOfficium/", icon: "assets/icons/DivinumOfficium.svg", local: true },
   { group: "Boutique", featured: true, name: "Boutique GDB", desc: "Uniformes, insignes et accessoires scouts", url: "https://boutique.fsggb.fr/", icon: "assets/icons/Boutique.svg" },
-  { group: "Ressources et aide", name: "Bibliothèque", desc: "Documents et ressources de la fédération", url: "ScoutBibliotheque/", icon: "assets/icons/Bibliotheque.svg", protege: true, local: true },
   { group: "Ressources et aide", name: "Aide", desc: "Un souci avec une application ? Écrire au service informatique", url: "aide.html", icon: "assets/icons/Aide.svg", protege: true, local: true },
   { group: "Bureautique", name: "Word", desc: "Traitement de texte", url: "Word/", icon: "assets/icons/Word.png", local: true },
   { group: "Bureautique", name: "Excel", desc: "Tableur", url: "Excel/", icon: "assets/icons/Excel.png", local: true },
@@ -59,7 +58,6 @@ window.SCOUTHUB_APPS = [
   { group: "Création", name: "InDesign", desc: "Mise en page de documents", url: "InDesign/", icon: "assets/icons/InDesign.png", local: true },
   { group: "Création", name: "Lightroom", desc: "Développement photo", url: "Lightroom/", icon: "assets/icons/Lightroom.png", local: true },
   { group: "Création", name: "Figma", desc: "Interfaces et prototypes", url: "Figma/", icon: "assets/icons/Figma.png", local: true },
-  { group: "Création", name: "Excalidraw", desc: "Dessin libre et tableaux blancs", url: "Draw/", icon: "assets/icons/Excalidraw.svg", local: true },
   { group: "Création", name: "Premiere Pro", desc: "Montage vidéo", url: "Premiere/", icon: "assets/icons/Premiere.png", local: true },
   { group: "Création", name: "After Effects", desc: "Effets visuels et compositing", url: "AfterEffects/", icon: "assets/icons/AfterEffects.png", local: true },
   { group: "Création", name: "Pro Tools", desc: "Studio audio et mixage", url: "ProTools/", icon: "assets/icons/ProTools.svg", local: true },
@@ -67,11 +65,9 @@ window.SCOUTHUB_APPS = [
   { group: "Conception et CAO", featured: true, crop: true, name: "CathIA", desc: "Conception 3D pour le froissartage", url: O + "CathIA/", icon: "assets/icons/CathIA.jpg", local: true },
   // SoLeadWorks, AutoCAD (CADCraft) et SolidWorks (SolidCraft) se publient désormais seuls (ScoutCraft, ScoutDraft,
   // ScoutCAD ont chacun leur propre workflow Pages) : adresses absolues, même domaine que ScoutHub (connexion partagée).
-  { group: "Conception et CAO", featured: true, crop: true, name: "SoLeadWorks", desc: "Meubles et coins de patrouille en 3D, avec plans et historique", url: O + "ScoutCraft/?lang=fr", icon: "assets/icons/SoLeadWorks.png", local: true },
   { group: "Conception et CAO", name: "AutoCAD", desc: "Dessin technique 2D et 3D", url: O + "ScoutDraft/?lang=fr", icon: "assets/icons/ScoutDraft.png", local: true },
   { group: "Conception et CAO", name: "SolidWorks", desc: "Modélisation 3D paramétrique", url: O + "ScoutCAD/?lang=fr", icon: "assets/icons/ScoutCAD.png", local: true },
   // Application de la fédération : un compte au moins (n'importe lequel, « accès membre ») est exigé, pour
   // garder une trace de qui y accède — jamais ouvert aux invités, contrairement aux suites bureautique/création.
-  { group: "Cartographie", featured: true, name: "Cartes IGN", desc: "Orientation, raids, itinéraires et GPX", url: O + "ScoutMap/", icon: "assets/icons/ScoutMap.svg", local: true, role: "adherent" },
 ];
 })();

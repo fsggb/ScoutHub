@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS lignes (
   PRIMARY KEY (feuille, rang)
 );
 -- Journal d'accès : qui a lu ou synchronisé quoi (jamais le contenu).
+CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS journal (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts INTEGER NOT NULL,
