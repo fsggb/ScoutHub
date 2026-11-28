@@ -107,5 +107,29 @@
   }
   function ajouter(sectionId, rerendre) { Entrees.dialogue("outils", null, () => Portail.refresh(rerendre), sectionId); }
 
-  window.OutilsEdition = { installer, modifier, ajouter, renommer, nouvelleSection, actif: () => false };
+
+  // ---------- renommer un outil sur place (même geste que pour un titre de section) ----------
+  function renommerApp(a, strong, rerendre) {
+    const champ = el("input", { type: "text", value: a.nom, maxLength: 40, className: "oe-titre-champ" }); champ.setAttribute("aria-label", "Nom de l’outil");
+    strong.replaceWith(champ); champ.focus(); champ.select(); let fini = false;
+    const valider = async ok => {
+      if (fini) return; fini = true; const v = champ.value.trim().slice(0, 40);
+      if (ok && v && v !== a.nom) {
+        a.nom = v;
+        if (a.entree && a.entree.id) { try { await Hub.call("entreeEcrire", { section: "outils", id: a.entree.id, nom: a.nom, description: a.desc, url: a.url, audience: a.entree.audience }); } catch (e) { etat("Non enregistré : " + e.message, true); } }
+        planifier();
+      }
+      rerendre();
+    };
+    champ.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); }; champ.onmousedown = ev => ev.stopPropagation();
+    champ.onblur = () => valider(true); champ.onkeydown = e => { e.stopPropagation(); if (e.key === "Enter") valider(true); else if (e.key === "Escape") valider(false); };
+  }
+  // supprimer une section : seulement si elle est vide (sinon on déplace d'abord ses outils)
+  function supprimerSection(s, rerendre) {
+    const mm = m(); if (mm.apps.some(a => a.section === s.id)) { etat("Déplacez d’abord les outils de cette section.", true); return; }
+    if (!confirm("Supprimer la section « " + s.titre + " » ?")) return;
+    mm.sections = mm.sections.filter(x => x.id !== s.id); supprimees.add(s.id); rerendre(); planifier();
+  }
+
+  window.OutilsEdition = { renommerApp, supprimerSection, installer, modifier, ajouter, renommer, nouvelleSection, actif: () => false };
 })();

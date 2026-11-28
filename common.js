@@ -102,7 +102,7 @@
         chemin = "";
       }
       // ChatGDB sur l'intranet : crédits et paramètres de conversation viennent de Cloudflare, plus d'Apps Script.
-      if (!chemin && window.SCOUTHUB_CHAT_API && (action === "credits" || action === "rapide")) {
+      if (!chemin && window.SCOUTHUB_CHAT_API && (action === "credits" || action === "rapide" || action === "outil")) {
         let rep; try { rep = await fetch(window.SCOUTHUB_CHAT_API + "/chatgdb/" + action, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: store.get(), ...data }) }); } catch { throw new Error("Serveur injoignable."); }
         let o; try { o = await rep.json(); } catch { throw new Error("Réponse invalide du serveur."); }
         if (!o.ok) { const m = o.error && o.error.message ? o.error.message : o.error; if (/Session expirée/.test(m || "") && Hub.here() !== "index.html") Hub.toLogin(); throw new Error(m || "Erreur."); }
@@ -214,7 +214,7 @@
         const v = champ.value.trim(); if (!v) return;
         location.href = "outils.html?q=" + encodeURIComponent(v);
       });
-      Hub._champRecherche = champ; Hub._wrapRecherche = wrap;
+      Hub._champRecherche = champ; Hub._wrapRecherche = wrap; Hub.rechercheGlobale(champ, wrap);
       // Photo de profil (cliquable, façon Google) : la vraie photo du compte Google si on l'a (connexion Google,
       // lue dans le jeton), sinon le rond avec l'initiale comme avant. Ouvre « Mon compte ».
       const avatar = Hub.avatar(user, "tb-avatar"); avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
@@ -227,6 +227,41 @@
       Hub.placerRecherche();
     },
     // Ordinateur : la recherche se place à droite du fil d'Ariane (comme l'explorateur Windows). Téléphone : centrée dans la barre du haut.
+
+    // Recherche générale (toute l'interface) : la page filtre d'abord sur son propre contenu (Hub.onSearch) ; en plus, une liste de
+    // résultats propose les pages, les outils et les documents de la documentation, d'où que l'on parte.
+    rechercheGlobale(champ, wrap) {
+      const plat = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const liste = document.createElement("div"); liste.className = "rg-liste"; liste.hidden = true; liste.setAttribute("role", "listbox"); wrap.append(liste);
+      let docs = null, chargeDocs = false;
+      const sources = () => {
+        const r = [];
+        (Hub.tabs(Hub.user || Hub.cachedUser()) || []).forEach(([id, label, href]) => r.push({ type: "Page", nom: label, desc: "", href }));
+        r.push({ type: "Page", nom: "Mon compte", desc: "", href: "compte.html" }, { type: "Page", nom: "Aide", desc: "Écrire au service informatique", href: "aide.html" });
+        let apps = []; try { apps = (window.Portail && Portail.model ? Portail.model.apps : (JSON.parse(localStorage.getItem("scouthub.portail.vue") || "null") || {}).m.apps) || []; } catch {}
+        apps.filter(a => !a.masque && a.url).forEach(a => r.push({ type: "Outil", nom: a.nom, desc: a.desc || "", href: a.url, externe: !a.local }));
+        (docs || []).forEach(d => r.push({ type: "Document", nom: d.nom, desc: d.description || "", href: d.url, externe: true }));
+        return r;
+      };
+      const rendre = () => {
+        const q = plat(champ.value.trim()); liste.textContent = "";
+        if (q.length < 2) { liste.hidden = true; return; }
+        if (!docs && !chargeDocs && Hub.user && window.SCOUTHUB_AUTH_API) { chargeDocs = true; Hub.call("entrees", { section: "documentation" }).then(o => { docs = o.entrees || []; rendre(); }).catch(() => { docs = []; }); }
+        const trouves = sources().filter(x => plat(x.nom + " " + x.desc).includes(q)).slice(0, 8);
+        if (!trouves.length) { liste.hidden = true; return; }
+        trouves.forEach(x => {
+          const a = Object.assign(document.createElement("a"), { className: "rg-item", href: x.href }); a.setAttribute("role", "option");
+          if (x.externe) { a.target = "_blank"; a.rel = "noopener"; }
+          a.append(Object.assign(document.createElement("span"), { className: "rg-type", textContent: x.type }), Object.assign(document.createElement("strong"), { textContent: x.nom }));
+          if (x.desc) a.append(Object.assign(document.createElement("small"), { textContent: x.desc }));
+          liste.append(a);
+        });
+        liste.hidden = false;
+      };
+      champ.addEventListener("input", rendre); champ.addEventListener("focus", rendre);
+      champ.addEventListener("keydown", e => { if (e.key === "Escape") liste.hidden = true; else if (e.key === "Enter" && !liste.hidden && !Hub.onSearch) { const p = liste.querySelector("a"); if (p) { e.preventDefault(); p.click(); } } });
+      document.addEventListener("click", e => { if (!wrap.contains(e.target)) liste.hidden = true; });
+    },
     placerRecherche() {
       const w = Hub._wrapRecherche, bar = $("bar"), fil = document.getElementById("fil"); if (!w || !bar || !w.isConnected && !bar.isConnected) return;
       const bureau = window.matchMedia("(min-width:880px)").matches;

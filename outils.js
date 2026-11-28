@@ -76,6 +76,7 @@
     document.querySelectorAll(".ctx-menu").forEach(n => n.remove());
     const m = document.createElement("div"); m.className = "ctx-menu"; m.setAttribute("role", "menu");
     const action = (txt, fn, danger) => { const b = Object.assign(document.createElement("button"), { type: "button", textContent: txt, className: danger ? "danger" : "" }); b.setAttribute("role", "menuitem"); b.onclick = () => { m.remove(); fn(); }; m.append(b); };
+    action("Renommer", () => { const n = document.querySelector('[data-app="' + CSS.escape(a.id) + '"] strong'); if (n) OutilsEdition.renommerApp(a, n, renderApps); });
     action("Modifier (nom, description, adresse, public)…", () => OutilsEdition.modifier(a, renderApps));
     if (a.entree && a.entree.id) {
       action("Qui le voit ?…", () => Entrees.dialogue("outils", a.entree, () => Portail.refresh(renderApps)));
@@ -89,15 +90,30 @@
     setTimeout(() => { addEventListener("click", fermer, true); addEventListener("keydown", fermer, true); }, 0);
   }
 
+
+  function menuSection(ev, s) {
+    document.querySelectorAll(".ctx-menu").forEach(n => n.remove());
+    const m = document.createElement("div"); m.className = "ctx-menu"; m.setAttribute("role", "menu");
+    const action = (txt, fn, danger) => { const b = Object.assign(document.createElement("button"), { type: "button", textContent: txt, className: danger ? "danger" : "" }); b.setAttribute("role", "menuitem"); b.onclick = () => { m.remove(); fn(); }; m.append(b); };
+    action("Renommer la section", () => { const h = document.querySelector('[data-titre="' + CSS.escape(s.id) + '"]'); if (h) OutilsEdition.renommer(s, h, renderApps); });
+    action("Ajouter une application ici…", () => OutilsEdition.ajouter(s.id, renderApps));
+    action("Supprimer la section", () => OutilsEdition.supprimerSection(s, renderApps), true);
+    document.body.append(m);
+    m.style.left = Math.min(ev.clientX, innerWidth - m.offsetWidth - 8) + "px"; m.style.top = Math.min(ev.clientY, innerHeight - m.offsetHeight - 8) + "px";
+    const fermer = e => { if (!m.contains(e.target) || e.type === "keydown") { m.remove(); removeEventListener("click", fermer, true); removeEventListener("keydown", fermer, true); } };
+    setTimeout(() => { addEventListener("click", fermer, true); addEventListener("keydown", fermer, true); }, 0);
+  }
+
   // ---- barre d'ajout (administrateur) : un bouton pour une section, un pour une application ----
   function barreAdmin() {
     let b = $("apps-barre");
     if (!adminReel()) { if (b) b.remove(); return; }
     if (b) return;
     b = document.createElement("div"); b.id = "apps-barre"; b.className = "apps-barre";
-    b.append(
-      Object.assign(document.createElement("button"), { type: "button", className: "ghost", textContent: "+ Section", onclick: () => OutilsEdition.nouvelleSection(renderApps) }),
-      Object.assign(document.createElement("button"), { type: "button", className: "primary", textContent: "+ Application", onclick: () => OutilsEdition.ajouter((Portail.current().sections[0] || {}).id, renderApps) }));
+    const plus = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+    const bouton = (txt, fn) => { const x = document.createElement("button"); x.type = "button"; x.className = "barre-btn"; x.innerHTML = plus + "<span></span>"; x.lastChild.textContent = txt; x.onclick = fn; return x; };
+    const aide = Object.assign(document.createElement("span"), { className: "barre-aide", textContent: "Glissez pour réorganiser · double-clic sur un titre pour le renommer · clic droit pour les autres actions" });
+    b.append(bouton("Section", () => OutilsEdition.nouvelleSection(renderApps)), bouton("Application", () => OutilsEdition.ajouter((Portail.current().sections[0] || {}).id, renderApps)), aide);
     $("apps").before(b);
   }
 
@@ -112,7 +128,7 @@
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group"; section.dataset.sec = s.id;
       const titre = Object.assign(document.createElement("h2"), { textContent: s.titre });
-      if (editable) { titre.dataset.titre = s.id; titre.draggable = true; titre.title = "Glisser pour déplacer la section · double-clic pour renommer"; titre.classList.add("sec-poignee"); titre.ondblclick = () => OutilsEdition.renommer(s, titre, renderApps); }
+      if (editable) { titre.dataset.titre = s.id; titre.draggable = true; titre.title = "Glisser pour déplacer la section · double-clic pour renommer"; titre.classList.add("sec-poignee"); titre.oncontextmenu = ev => { ev.preventDefault(); menuSection(ev, s); }; titre.ondblclick = () => OutilsEdition.renommer(s, titre, renderApps); }
       const grid = document.createElement("div"); grid.className = "grid-apps"; grid.dataset.grille = s.id;
       items.forEach(a => grid.append(tile(a)));
       section.append(titre, grid);
