@@ -87,7 +87,7 @@
     // (cloudflare/src/auth.js), qui remplace ces actions de l'ancien backend Apps Script (voir MIGRATION.md). Tout le
     // reste (portail, ChatGDB, boutique…) continue d'appeler Apps Script via SCOUTHUB_API, inchangé ci-dessous.
     IDENTITE: { google: "/auth/google", codeDemander: "/auth/code/demander", codeVerifier: "/auth/code/verifier",
-      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", rubrique: "/auth/rubrique", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
+      me: "/auth/me", logout: "/auth/logout", echange: "/auth/echange/emettre", profil: "/auth/profil", rubrique: "/auth/rubrique", outilsDisposer: "/auth/outils/disposer", outils: "/auth/outils", groupes: "/auth/admin/groupes", entrees: "/auth/entrees", entreeEcrire: "/auth/entree/ecrire", entreeSupprimer: "/auth/entree/supprimer", textes: "/auth/textes", texteEcrire: "/auth/textes/ecrire", menu: "/auth/menu", adminList: "/auth/admin/list", adminSetRole: "/auth/admin/role", adminDelete: "/auth/admin/delete" },
 
     async call(action, data = {}) {
       if (simule()) {
@@ -411,4 +411,69 @@
     }
   };
   try { window.matchMedia("(min-width:880px)").addEventListener("change", () => Hub.placerRecherche()); } catch {}
+
+  // ===== Textes modifiables (administrateur) : double-clic sur n'importe quel texte de l'interface =====
+  // Les textes modifiés sont rangés sur le serveur (« texte d'origine » → « texte affiché ») et appliqués à tout le monde.
+  (function textesModifiables() {
+    if (!window.SCOUTHUB_AUTH_API) return;      // version GitHub seule : pas de serveur pour les ranger
+    const CLE = "scouthub.textes", IGNORE = "script,style,input,textarea,select,svg,code,pre,[data-app],[data-titre],.tb-search,.rg-liste";
+    let map = {}; try { map = JSON.parse(localStorage.getItem(CLE) || "{}") || {}; } catch {}
+    const feuille = el => !el.children.length && !el.closest(IGNORE);
+    const clean = t => String(t || "").replace(/\s+/g, " ").trim();
+    let occupe = false, minuteur = 0;
+    function appliquer(racine) {
+      if (occupe || !Object.keys(map).length) return;
+      occupe = true;
+      try {
+        (racine || document.body).querySelectorAll("*").forEach(el => {
+          if (!feuille(el)) return;
+          const orig = el.dataset.orig || clean(el.textContent);
+          if (!orig || orig.length > 400) return;
+          const v = map[orig];
+          if (v !== undefined && clean(el.textContent) !== v) { el.dataset.orig = orig; el.textContent = v; }
+          else if (v === undefined && el.dataset.orig) { el.textContent = el.dataset.orig; delete el.dataset.orig; }
+        });
+      } finally { occupe = false; }
+    }
+    const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(() => appliquer(), 120); };
+    function charger() {
+      Hub.call("textes").then(o => { const m = {}; (o.textes || []).forEach(t => { m[t.orig] = t.valeur; }); map = m; try { localStorage.setItem(CLE, JSON.stringify(m)); } catch {} appliquer(); }).catch(() => {});
+    }
+    const estAdmin = () => !!Hub.user && Hub.normRole(Hub.user.role) === "admin" && !Hub.simule();
+    function editer(el) {
+      if (el.isContentEditable) return;
+      const orig = el.dataset.orig || clean(el.textContent); if (!orig || orig.length > 400) return;
+      el.contentEditable = "plaintext-only"; el.classList.add("texte-edite"); el.focus();
+      const sel = getSelection(); sel.selectAllChildren(el);
+      let fini = false;
+      const fin = async ok => {
+        if (fini) return; fini = true; el.contentEditable = "false"; el.removeAttribute("contenteditable"); el.classList.remove("texte-edite");
+        const v = clean(el.textContent);
+        if (!ok || v === clean(map[orig] !== undefined ? map[orig] : orig)) { el.textContent = map[orig] !== undefined ? map[orig] : orig; return; }
+        try { await Hub.call("texteEcrire", { orig, valeur: v }); if (!v || v === orig) { delete map[orig]; el.removeAttribute("data-orig"); el.textContent = orig; } else { map[orig] = v; el.dataset.orig = orig; } try { localStorage.setItem(CLE, JSON.stringify(map)); } catch {} appliquer(); }
+        catch (e) { el.textContent = map[orig] !== undefined ? map[orig] : orig; alert("Texte non enregistré : " + e.message); }
+      };
+      el.addEventListener("blur", () => fin(true), { once: true });
+      el.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); el.blur(); } else if (e.key === "Escape") { e.preventDefault(); fini = true; el.contentEditable = "false"; el.removeAttribute("contenteditable"); el.classList.remove("texte-edite"); el.textContent = map[orig] !== undefined ? map[orig] : orig; } });
+    }
+    let attente = null;
+    function activer() {
+      if (document.body.classList.contains("edition-textes")) return;
+      document.body.classList.add("edition-textes");
+      // Un lien suivi d'un double-clic : le premier clic est retenu un instant (annulé si c'est un double-clic d'édition).
+      document.addEventListener("click", ev => {
+        const a = ev.target.closest && ev.target.closest("a[href]"); if (!a || !estAdmin() || a.closest("[data-app]") || a.isContentEditable || ev.detail > 1) return;
+        const leaf = ev.target.closest("*"); if (!leaf || !feuille(leaf)) return;
+        ev.preventDefault(); clearTimeout(attente);
+        attente = setTimeout(() => { if (a.target === "_blank") window.open(a.href, "_blank", "noopener"); else location.href = a.href; }, 280);
+      }, true);
+      document.addEventListener("dblclick", ev => {
+        if (!estAdmin()) return; clearTimeout(attente);
+        const el = ev.target.closest && ev.target.closest("*"); if (!el || !feuille(el)) return;
+        ev.preventDefault(); ev.stopPropagation(); editer(el);
+      }, true);
+    }
+    const attacher = () => { appliquer(); charger(); new MutationObserver(planifier).observe(document.body, { childList: true, subtree: true, characterData: true }); setInterval(() => { if (estAdmin()) activer(); }, 1500); };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attacher); else attacher();
+  })();
 })();
