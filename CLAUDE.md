@@ -40,8 +40,8 @@ Les sessions cloud repartent d'un conteneur neuf : ces outils disparaissent et s
   le Drive (bibliothèque, CathIA) et la boutique.
 
 ## Cloudflare : déploiement automatique et un Worker par outil
-- Fusionner sur `main` déclenche `.github/workflows/cloudflare.yml` : bases (schémas), Workers `auth`, `donnees`, `scouthub`, puis `intranet`
-  (portail = exactement le code du dépôt). Secrets GitHub requis : `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+- Fusionner sur `main` déclenche le déploiement par **Cloudflare lui-même** (Workers Builds : chaque Worker est connecté au dépôt, sans jeton).
+  Réglages par Worker : voir `docs/architecture-cible.md` (dossier racine, commande de build). `.github/workflows/cloudflare.yml` n'est qu'un secours manuel (secrets requis).
 - Un Worker par outil : l'intranet sert `/ChatGDB/*` via la liaison de service `CHATGDB` (Worker `chatgdb`, déployé par le workflow
   `cloudflare.yml` du dépôt ChatGDB). Ajouter un outil = table `OUTILS` dans `cloudflare/intranet/src/index.js` + liaison dans
   `cloudflare/intranet/wrangler.jsonc` (le Worker de l'outil doit exister avant le déploiement de l'intranet).

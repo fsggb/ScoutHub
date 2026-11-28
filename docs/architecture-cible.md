@@ -28,3 +28,18 @@ Principe : **GitHub = le code, Cloudflare = l'hébergement et les services, Goog
 2. Dans le tableau de bord Cloudflare : Workers & Pages → Create → connecter GitHub → choisir le dépôt ; répéter par dépôt (autorisation GitHub à donner une seule fois par le propriétaire). Les workflows `cloudflare.yml` deviennent alors inutiles.
 3. Passer les dépôts en privé **après** l'étape 2 (sinon GitHub Pages cesse de publier).
 4. Rediriger les liens de la feuille « Outils » vers les nouvelles adresses.
+
+## Réglages Cloudflare (Workers & Pages > le Worker > Settings > Builds > Connect), un par Worker existant
+Dépôt fsggb/ScoutHub, branche `main`, commande de déploiement `npx wrangler deploy` :
+| Worker | Dossier racine | Commande de build |
+|---|---|---|
+| auth | `cloudflare/auth` | (aucune) |
+| donnees | `cloudflare/donnees` | (aucune) |
+| scouthub | `cloudflare` | (aucune) |
+| intranet | `cloudflare/intranet` | `node construire.mjs` |
+Dépôt fsggb/ChatGDB : Worker `chatgdb`, dossier racine `/`, commande de build `sh scripts/construire-worker.sh`.
+Les schémas SQL (bases D1) ne changent que rarement : les appliquer à la main (`wrangler d1 execute … --file`) ou via le workflow manuel.
+
+## Domaine personnalisé (étape suivante)
+Domaine géré par Cloudflare (DNS) → Worker intranet : Settings > Domains & Routes > Add > Custom domain (ex. intranet.fsggb.fr). Puis mettre à jour
+`SELF_ORIGIN` et `ORIGINES` (wrangler.jsonc de auth, donnees, scouthub, intranet) et `config.js` (adresses des Workers), et déclarer l'origine dans la console Google (client OAuth).

@@ -5,9 +5,7 @@ name: Déployer sur Cloudflare
 # Prérequis (une fois) : secrets GitHub CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID (voir cloudflare/MIGRATION.md).
 # Les secrets des Workers (CLE_DONNEES_1, MINIATURE_CLE…) restent ceux déjà enregistrés sur Cloudflare : un déploiement n'y touche pas.
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:   # secours manuel : le déploiement normal est fait par Cloudflare (Workers Builds, connexion au dépôt)
 
 permissions:
   contents: read
