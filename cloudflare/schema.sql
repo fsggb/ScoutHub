@@ -127,3 +127,6 @@ CREATE TABLE IF NOT EXISTS disposition (
   section TEXT NOT NULL DEFAULT '',       -- identifiant de la section ('' = section par défaut)
   ordre INTEGER NOT NULL DEFAULT 0        -- position dans la section
 );
+
+-- Textes de l'interface modifiés par l'administrateur (double-clic)
+CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL);

@@ -282,3 +282,7 @@ a.crumb:hover,button.crumb:hover{background:rgba(255,255,255,.18)}.crumb.courant
 .rg-item:hover,.rg-item:focus{background:#f3f3fb}.rg-type{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8a6d00;font-weight:700}
 .rg-item small{grid-column:2;color:#6b6e7e;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:879px){#bar .rg-liste{position:fixed;left:10px;right:10px;top:60px;width:auto}}
+
+/* Administrateur : tout texte se modifie par double-clic */
+body.edition-textes :is(h1,h2,h3,h4,p,li,label,small,strong,span,em,legend,th,td,a,button):not(:has(*)):not([data-app] *):hover{outline:1px dashed #c9a227;outline-offset:2px;cursor:text}
+.texte-edite{outline:2px solid #c9a227!important;outline-offset:2px;background:#fffbe6;color:#000761;border-radius:3px;cursor:text}

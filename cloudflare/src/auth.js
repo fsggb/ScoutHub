@@ -558,6 +558,23 @@ export async function authRoute(req, env, url, json, erreur) {
       }
       return json(200, { ok: true, rubrique: r.rubrique, colonnes: sortie, lignes, portee: portee ? portee.acces : "tout" });
     }
+    // Textes de l'interface modifiables par l'administrateur (double-clic) : « texte d'origine » → « texte affiché ».
+    // Lecture ouverte (ce sont des libellés, rien de sensible) ; écriture réservée à l'administrateur.
+    if (url.pathname === "/auth/textes") {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL)").run();
+      const { results } = await env.DB.prepare("SELECT orig, valeur FROM textes LIMIT 3000").all();
+      return json(200, { ok: true, textes: results });
+    }
+    if (url.pathname === "/auth/textes/ecrire") {
+      const r = await req.json().catch(() => ({}));
+      await requireAdmin(env, r.token);
+      const orig = String(r.orig || "").trim().slice(0, 400), valeur = String(r.valeur || "").trim().slice(0, 800);
+      if (!orig) throw new Erreur("Texte d'origine manquant.");
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS textes (orig TEXT PRIMARY KEY, valeur TEXT NOT NULL, maj INTEGER NOT NULL)").run();
+      if (!valeur || valeur === orig) await env.DB.prepare("DELETE FROM textes WHERE orig = ?1").bind(orig).run();
+      else await env.DB.prepare("INSERT INTO textes (orig, valeur, maj) VALUES (?1, ?2, ?3) ON CONFLICT(orig) DO UPDATE SET valeur = excluded.valeur, maj = excluded.maj").bind(orig, valeur, Date.now()).run();
+      return json(200, { ok: true });
+    }
     if (url.pathname === "/auth/entree/supprimer") {
       const r = await req.json().catch(() => ({}));
       await requireAdmin(env, r.token);
