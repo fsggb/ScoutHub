@@ -161,13 +161,14 @@
       compte: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
       reglages: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
       administration: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.77 17 5 19 5a1 1 0 0 1 1 1z"/></svg>',
+      chatgdb: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
       deconnexion: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>'
     },
 
     // Liste unique des entrées de navigation (barre du bas + tiroir + barre latérale ordinateur) : les 4 onglets
     // puis Mon compte/Réglages/Administration/Déconnexion — reprend la structure « ACCES CHEFS » de l'ancien intranet.
     navItems(user) {
-      const items = Hub.TABS.map(([id, label, href]) => ({ id, label, href, icon: Hub.ICONS[id] }));
+      const items = Hub.tabs(user).map(([id, label, href]) => ({ id, label, href, icon: Hub.ICONS[id] }));
       items.push({ id: "compte", label: "Mon compte", href: "compte.html", icon: Hub.ICONS.compte });
       items.push({ id: "reglages", label: "Réglages (mes applications)", href: "compte.html#mes-applications", icon: Hub.ICONS.reglages });
       if (user.role === "admin") items.push({ id: "administration", label: "Administration", href: "admin.html", icon: Hub.ICONS.administration });
@@ -206,7 +207,7 @@
         const v = champ.value.trim(); if (!v) return;
         location.href = "outils.html?q=" + encodeURIComponent(v);
       });
-      Hub._champRecherche = champ;
+      Hub._champRecherche = champ; Hub._wrapRecherche = wrap;
       // Photo de profil (cliquable, façon Google) : la vraie photo du compte Google si on l'a (connexion Google,
       // lue dans le jeton), sinon le rond avec l'initiale comme avant. Ouvre « Mon compte ».
       const avatar = Hub.avatar(user, "tb-avatar"); avatar.href = "compte.html"; avatar.setAttribute("aria-label", "Mon compte");
@@ -216,6 +217,14 @@
         Object.assign(document.createElement("span"), { className: "tb-spacer" }), wrap, avatar);
       Hub.bandeauSimulation(user);
       if (Hub._fil) Hub.renderFil(Hub._fil.items, Hub._fil.opts);   // la barre vient d'être reconstruite : on remet le fil
+      Hub.placerRecherche();
+    },
+    // Ordinateur : la recherche se place à droite du fil d'Ariane (comme l'explorateur Windows). Téléphone : centrée dans la barre du haut.
+    placerRecherche() {
+      const w = Hub._wrapRecherche, bar = $("bar"), fil = document.getElementById("fil"); if (!w || !bar || !w.isConnected && !bar.isConnected) return;
+      const bureau = window.matchMedia("(min-width:880px)").matches;
+      if (bureau && fil) { if (w.parentNode !== fil) fil.append(w); w.classList.add("dans-fil"); }
+      else { w.classList.remove("dans-fil"); const av = bar.querySelector(".tb-avatar"); if (w.parentNode !== bar) { if (av) bar.insertBefore(w, av); else bar.append(w); } }
     },
 
     // Bandeau permanent pendant une simulation : on sait toujours qui on est « censé » être, et on peut en sortir d'un clic.
@@ -253,6 +262,7 @@
       });
       nav.append(bouton(I.retour, "Page précédente", () => history.back()), bouton(I.avant, "Page suivante", () => history.forward(), "optionnel"), haut, bouton(I.actualiser, "Actualiser", opts.rafraichir || (() => location.reload()), "optionnel"), chemin);
       bar.after(nav);   // seconde ligne de l'en-tête (masquée sur téléphone)
+      Hub.placerRecherche();
     },
     filParDefaut(actif) {
       const NOMS = { accueil: "Accueil", documentation: "Documentation", inscriptions: "Inscriptions", outils: "Outils", compte: "Mon compte", administration: "Administration", aide: "Aide" };
@@ -320,21 +330,43 @@
     // Barre du bas à 4 onglets (reprend la structure de l'ancien intranet : Accueil, Documentation, Inscriptions, Outils).
     // « actif » est l'un de ces 4 noms, ou un des autres identifiants de Hub.navItems (compte/reglages/administration),
     // ou rien. « user » : nécessaire pour construire la barre latérale ordinateur (absente si personne n'est connecté).
+    // Onglets du bas et du panneau latéral. ChatGDB y est pour l'administrateur (au lieu de la rubrique Outils).
+    tabs(user) {
+      const t = Hub.TABS.slice();
+      if (user && Hub.normRole(user.role) === "admin" && !Hub.simule()) t.push(["chatgdb", "ChatGDB", window.SCOUTHUB_LEGACY ? "https://fsggb.github.io/ChatGDB/" : "/ChatGDB/"]);
+      return t;
+    },
     TABS: [["accueil", "Accueil", "index.html"], ["documentation", "Documentation", "documentation.html"], ["inscriptions", "Inscriptions", "inscriptions.html"], ["outils", "Outils", "outils.html"]],
+    // Barre du bas intelligente (toutes les pages) : elle se range en descendant dans la page, revient dès qu'on remonte ou en bas de page.
+    masquageBarreBas(nav) {
+      if (Hub._scrollBas) removeEventListener("scroll", Hub._scrollBas);
+      let y = scrollY, cache = false;
+      Hub._scrollBas = () => {
+        const n = document.querySelector(".bottom-tabs"); if (!n) return;
+        const d = scrollY - y, fin = innerHeight + scrollY >= document.documentElement.scrollHeight - 8;
+        if (Math.abs(d) < 6) return;
+        const veut = d > 0 && scrollY > 80 && !fin; if (veut !== cache) { cache = veut; n.classList.toggle("rangee", cache); }
+        y = scrollY;
+      };
+      addEventListener("scroll", Hub._scrollBas, { passive: true });
+    },
     renderTabs(actif, user) {
       Hub._actif = actif;
       Hub.renderFil(Hub.filParDefaut(actif));   // fil d'Ariane de la page (les pages à niveaux multiples le remplacent ensuite)
       document.querySelectorAll(".bottom-tabs").forEach(n => n.remove());
       const nav = document.createElement("nav");
       nav.className = "bottom-tabs"; nav.setAttribute("aria-label", "Sections de ScoutHub");
-      Hub.TABS.forEach(([id, label, href]) => {
+      const onglets = Hub.tabs(user); nav.style.gridTemplateColumns = "repeat(" + onglets.length + ",1fr)";
+      onglets.forEach(([id, label, href]) => {
         const a = document.createElement("a"); a.className = "bottom-tab" + (id === actif ? " actif" : ""); a.href = href;
         a.innerHTML = Hub.ICONS[id] + "<span>" + label + "</span>";
         if (id === actif) a.setAttribute("aria-current", "page");
         nav.append(a);
       });
       document.body.append(nav);
+      Hub.masquageBarreBas(nav);
       Hub.renderRail(user, actif);
     }
   };
+  try { window.matchMedia("(min-width:880px)").addEventListener("change", () => Hub.placerRecherche()); } catch {}
 })();

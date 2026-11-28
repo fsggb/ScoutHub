@@ -255,3 +255,16 @@ a.crumb:hover,button.crumb:hover{background:rgba(255,255,255,.18)}.crumb.courant
 .app-group.drop-gauche{box-shadow:inset 6px 0 0 #000761}.app-group.drop-droite{box-shadow:inset -6px 0 0 #000761}.app-group.drop-haut{box-shadow:inset 0 6px 0 #000761}.app-group.drop-bas{box-shadow:inset 0 -6px 0 #000761}
 .oe-titre-champ{font:inherit;font-size:20px;font-weight:600;color:#000761;border:2px solid #000761;border-radius:6px;padding:2px 8px;width:100%;max-width:420px;background:#fff}
 .ajout-section{margin:18px 0 0}#oe-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;background:#000761;color:#fff;border-radius:8px;padding:9px 16px;font-size:14px;box-shadow:0 6px 20px #0004}#oe-toast.erreur{background:#b3261e}
+
+/* Recherche : à droite du fil d'Ariane sur ordinateur (toute la largeur), centrée dans la barre sur téléphone */
+.fil .fil-chemin{max-width:none}
+.fil .tb-search-wrap.dans-fil{flex:0 0 clamp(220px,32%,420px);margin:0 0 0 10px}
+.fil .tb-search-wrap.dans-fil .tb-search{padding-top:6px;padding-bottom:6px;font-size:14px}
+.fil .tb-search-wrap.dans-fil svg{left:12px}
+@media (max-width:879px){
+  .tb-spacer{display:none}.tb-titre{display:none}
+  #bar{position:relative}
+  #bar .tb-search-wrap{position:absolute;left:50%;transform:translateX(-50%);width:min(calc(100vw - 200px),320px);flex:none;margin:0}
+  #bar .tb-avatar{margin-left:auto}
+}
+.bottom-tabs{transition:transform .22s ease}.bottom-tabs.rangee{transform:translateY(100%)}

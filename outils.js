@@ -107,7 +107,7 @@
     const q = plat(recherche.trim()), box = $("apps"); box.textContent = "";
     const m = Portail.current(), shown = [], editable = adminReel(), rangees = [];
     m.sections.forEach(s => {
-      const items = m.apps.filter(a => a.section === s.id && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Hub.estFederation(Hub.user)) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin || voirMasquees) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
+      const items = m.apps.filter(a => a.section === s.id && !(a.nom === "ChatGDB" && Hub.user && Hub.normRole(Hub.user.role) === "admin" && !Hub.simule()) && (!a.admin || Portail.isAdmin) && (!a.masque || Portail.isAdmin) && (!a.protege || Portail.isAdmin || Hub.estFederation(Hub.user)) && (!a.role || Portail.isAdmin || Hub.can(Hub.user, a.role)) && (!masquePerso(a.id) || Portail.isAdmin || voirMasquees) && (!q || plat(a.nom + " " + a.desc + " " + s.titre).includes(q)));
       if (!items.length) return;   // une section vide disparaît (l'administrateur la recrée avec « + Section »)
       shown.push(...items);
       const section = document.createElement("section"); section.className = "app-group"; section.dataset.sec = s.id;
