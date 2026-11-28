@@ -16,6 +16,7 @@
   const cachedUser = () => { try { if (simule()) return JSON.parse(sessionStorage.getItem(SIM_USER) || "null"); return store.get() ? JSON.parse(localStorage.getItem(USER_KEY) || "null") : null; } catch { return null; } };
   const cacheUser = u => { try { if (simule()) { u ? sessionStorage.setItem(SIM_USER, JSON.stringify(u)) : sessionStorage.removeItem(SIM_USER); return; } u ? localStorage.setItem(USER_KEY, JSON.stringify(u)) : localStorage.removeItem(USER_KEY); } catch {} };
   // Lectures qui acceptent « comme » (le serveur le refuse à tout autre que l'administrateur, et ne l'accepte jamais sur une écriture).
+  const LEGACY_APPS_SCRIPT = new Set(["google", "codeDemander", "codeVerifier", "me", "logout", "adminList", "adminSetRole", "adminDelete"]);   // actions d'identité que l'ancien serveur sait faire
   const LECTURES_COMME = new Set(["outils", "entrees", "menu", "rubrique"]);
   // « adherent » remplace l'ancien « membre » (même rôle de base, nouveau nom) ; les comptes encore enregistrés sous
   // l'ancien nom sont traités comme « adherent » ci-dessous (normRole), indépendamment de la mise à jour du serveur.
@@ -93,7 +94,13 @@
         if (action === "me") return { ok: true, user: (await Hub.call("profil", { comme: simule() })).user };
         if (LECTURES_COMME.has(action) && !data.comme) data = { ...data, comme: simule() };
       }
-      const chemin = Hub.IDENTITE[action];
+      let chemin = Hub.IDENTITE[action];
+      // Version GitHub (pas de serveur Cloudflare) : l'identité d'origine reste sur Apps Script ; les fonctions propres à
+      // l'intranet (outils dynamiques, inscriptions, simulation…) n'existent pas ici et le disent clairement.
+      if (chemin && !window.SCOUTHUB_AUTH_API) {
+        if (!LEGACY_APPS_SCRIPT.has(action)) throw new Error("Disponible sur l’intranet seulement.");
+        chemin = "";
+      }
       const API = chemin ? window.SCOUTHUB_AUTH_API : window.SCOUTHUB_API;
       if (!API) throw new Error(chemin ? "La nouvelle connexion n’est pas encore configurée." : "Le serveur ScoutHub n’est pas encore configuré.");
       let res;

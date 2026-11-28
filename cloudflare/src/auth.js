@@ -399,6 +399,15 @@ export async function authRoute(req, env, url, json, erreur) {
       if (r.session) rep.token = await nouvelleSession(env, e.email);   // applications web hors domaine : leur propre session
       return json(200, rep);
     }
+    // Serveur à serveur (Apps Script, ancienne version du portail) : « ce jeton de session est-il valide, et pour qui ? ».
+    // Ne renvoie que l'identité et le rôle effectif, jamais de données de la feuille.
+    if (url.pathname === "/auth/session/valider") {
+      const r = await req.json().catch(() => ({}));
+      const email = await sessionEmail(env, r.token);
+      const u = await effectif(env, email);
+      if (!u) throw new Erreur("Compte introuvable.", 403);
+      return json(200, { ok: true, user: publicUser(u) });
+    }
     if (url.pathname === "/auth/logout") {
       const r = await req.json().catch(() => ({}));
       if (r.token) await env.DB.prepare("DELETE FROM sessions WHERE hash = ?1").bind(await sha256(String(r.token))).run();

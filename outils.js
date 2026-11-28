@@ -5,7 +5,7 @@
   const { $, store, masquePerso, toggleMasquePerso: toggleMasqueBase } = Hub;
   const toggleMasquePerso = id => { toggleMasqueBase(id); renderApps(); };
 
-  const adminReel = () => !!Hub.user && Hub.user.role === "admin" && !Hub.simule();
+  const adminReel = () => !!Hub.user && Hub.user.role === "admin" && !Hub.simule() && !!window.SCOUTHUB_AUTH_API;   // l'organisation directe des outils n'existe que sur l'intranet
   function tile(a) {
     const link = document.createElement("a"); link.dataset.app = a.id;
     if (adminReel()) { link.draggable = true; link.setAttribute("aria-roledescription", "outil déplaçable"); }

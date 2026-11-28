@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
-  "services": [{ "binding": "AUTH", "service": "auth" }],
+  // Un Worker par outil : AUTH = identité ; CHATGDB = outil ChatGDB (dépôt ChatGDB, workflow cloudflare.yml)
+  "services": [{ "binding": "AUTH", "service": "auth" }, { "binding": "CHATGDB", "service": "chatgdb" }],
   // Compte de service Google (lecture seule du dossier d'images Drive)
   "secrets_store_secrets": [{ "binding": "GMAIL_SA_KEY", "store_id": "0d38faa59339406ca83b45947aab0995", "secret_name": "GMAIL_SA_KEY" }],
   "vars": {

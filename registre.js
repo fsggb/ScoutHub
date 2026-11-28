@@ -7,6 +7,7 @@
   "use strict";
   const { $ } = Hub, API = window.SCOUTHUB_DONNEES_API, PAGE = 100, LARGEUR = "scouthub.registre.largeur";
   const feuille = new URLSearchParams(location.search).get("f") || "";
+  if (!API) { const u = await Hub.requireUser(); if (!u) return; Hub.renderBar(u, "Inscriptions"); Hub.renderTabs("inscriptions", u); $("rg-refus").hidden = false; $("rg-refus").textContent = "Les inscriptions se consultent sur l’intranet de la fédération (intranet.fsggb.workers.dev)."; return; }
   // Les trois appels de données partent TOUT DE SUITE, pendant que la session est vérifiée (gain d'un aller-retour complet).
   let prechargement = Hub.token ? Promise.all([api("/donnees/moi"), api("/donnees/arbre").catch(e => ({ erreur: e })), api("/donnees/lire", { debut: 0, limite: PAGE }).catch(e => ({ erreur: e }))]) : null;
   if (prechargement) prechargement.catch(() => {});

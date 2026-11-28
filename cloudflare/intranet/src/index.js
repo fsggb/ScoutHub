@@ -12,12 +12,14 @@
 import FICHIERS from "./files.json";
 import { jetonGoogle } from "../../src/auth.js";
 
+// Outils servis par un Worker dédié : préfixe d'adresse → nom de la liaison de service (wrangler.jsonc).
+const OUTILS = { ChatGDB: "CHATGDB" };
 const VERSION = "1.0.0", COOKIE = "sh_session", PROD = "https://fsggb.github.io/ScoutHub/";
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 const SECURITE = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin", "x-frame-options": "SAMEORIGIN", "strict-transport-security": "max-age=31536000", "content-security-policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" };
 // Fichiers servis sans session : uniquement ce qu'il faut pour afficher la page de connexion du portail (aucune adresse d'application).
 const PUBLICS = new Set(["index.html", "styles.css", "hub.css", "common.js", "app.js", "scouthub-client.js", "assets/fsggb.png"]);
-const CONFIG_PUBLIQUE = /^window\.SCOUTHUB_(GOOGLE_CLIENT_ID|API|AUTH_API|INTRANET)\s*=/;
+const CONFIG_PUBLIQUE = /^window\.SCOUTHUB_(LEGACY|GOOGLE_CLIENT_ID|API|AUTH_API|INTRANET)\s*=/;
 const enc = new TextEncoder();
 const b64ToBytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
 const extOf = p => { const i = p.lastIndexOf("."); return i < 0 ? "" : p.slice(i); };
@@ -187,9 +189,24 @@ export default {
       return pdfDrive(env, p.slice(9));
     }
 
+    // ----- outils servis par leur propre Worker (un par outil) : /ChatGDB/… → Worker « chatgdb » -----
+    // Réservé aux membres de la fédération. Le Worker de l'outil ne reçoit ni cookie ni en-tête de session.
+    const outil = (p.match(/^\/([^\/]+)(\/.*)?$/) || [])[1];
+    if (outil && OUTILS[outil] && env[OUTILS[outil]]) {
+      if (s.user.fsggb === false) return erreur(403, "Réservé aux membres de la fédération.");
+      if (!lecture) return erreur(405, "Méthode refusée.");
+      if (p === "/" + outil) return new Response(null, { status: 301, headers: { location: "/" + outil + "/" + url.search } });
+      const reste = p.slice(outil.length + 1) || "/";
+      const propre = new Headers(); for (const h of ["accept", "accept-language", "user-agent", "range", "if-none-match"]) { const v = req.headers.get(h); if (v) propre.set(h, v); }
+      const r = await env[OUTILS[outil]].fetch(new Request(new URL(reste + url.search, "https://outil.interne"), { method: req.method, headers: propre }));
+      const h = new Headers(r.headers); h.delete("set-cookie"); h.set("cache-control", "private, no-cache"); for (const [k, v] of Object.entries(SECURITE)) h.set(k, v);
+      return new Response(r.body, { status: r.status, headers: h });
+    }
+
     // ----- pages et fichiers -----
     if (!lecture) return erreur(405, "Méthode refusée.");
     if (p === "/" || p.endsWith("/")) p += "index.html";
+    if (p.startsWith("/ScoutHub/")) p = p.slice(9);   // les outils publiés sur GitHub Pages appellent /ScoutHub/config.js, /ScoutHub/common.js…
     const cle = p.replace(/^\//, "");
     if (FICHIERS[cle]) return fichier(cle, true, req);
     // Pas une page de ScoutHub (Word/, Excel/, …) : relayé depuis la production, SANS le cookie ni aucun en-tête de session.

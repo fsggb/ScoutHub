@@ -5,6 +5,11 @@
   // Ordre et libellés de l'ancien intranet (menu « Inscriptions »)
   const CARTES = [["Mineurs", "Mineurs"], ["Majeurs", "Majeurs"], ["Camps", "Camp"], ["Formulaires", "Formulaires d’inscription"], ["Cotisations", "Cotisations Mineurs"], ["Cotisations_Chefs", "Cotisations Majeurs"]];
   const zone0 = $("cartes"); if (zone0) zone0.append(Hub.chargement("Chargement de vos inscriptions…"));
+  if (!API) {   // version GitHub : jamais de données de personnes ici, elles se consultent sur l'intranet
+    const z = $("cartes"); if (z) z.textContent = "";
+    $("ins-note").hidden = false; $("ins-note").textContent = ""; $("ins-note").append("Les inscriptions se consultent sur l’intranet de la fédération : ", Object.assign(document.createElement("a"), { href: "https://intranet.fsggb.workers.dev/inscriptions.html", textContent: "ouvrir l’intranet" }), ".");
+    $("ins-portee").textContent = ""; return;
+  }
   const user = await Hub.requireUser(); if (!user) return;
   const simule = () => (typeof Hub.simule === "function" ? Hub.simule() : "");
   let moi = null, images = {}, cause = "";

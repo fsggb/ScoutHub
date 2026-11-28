@@ -16,7 +16,7 @@
   "vars": {
     "CLASSEUR_ID": "1a5kRDIxKSzTQe41KtVgSlgzVB6oj9aPEYYxvy7Z7Qxs",
     "CLE_ACTIVE": "1",
-    "SELF_ORIGIN": "https://fsggb.github.io",
-    "ORIGINES": "https://fsggb.github.io,https://intranet.fsggb.workers.dev"
+    "SELF_ORIGIN": "https://intranet.fsggb.workers.dev",
+    "ORIGINES": "https://intranet.fsggb.workers.dev"
   }
 }

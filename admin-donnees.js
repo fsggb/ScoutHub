@@ -4,6 +4,7 @@
   "use strict";
   if (!window.Hub || !document.getElementById("tab-donnees")) return;
   const { $, say } = Hub, API = window.SCOUTHUB_DONNEES_API;
+  if (!API) { for (const id of ["tb-donnees", "tb-simulation"]) { const b = document.getElementById(id); if (b) b.remove(); } return; }   // version GitHub : pas de données sensibles ni de simulation
   const date = t => t ? new Date(t).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "jamais";
   async function api(chemin, corps) {
     let r; try { r = await fetch(API + chemin, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: Hub.token, ...corps }), cache: "no-store" }); } catch { throw new Error("Serveur injoignable."); }

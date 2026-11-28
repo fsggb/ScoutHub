@@ -3,6 +3,7 @@
 (async () => {
   "use strict";
   const { $ } = Hub, norm = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  if (!window.SCOUTHUB_AUTH_API) { const u0 = await Hub.requireUser(); if (!u0) return; $("cartes").textContent = ""; $("doc-note").hidden = false; $("doc-note").textContent = "La documentation de la fédération se consulte sur l’intranet : intranet.fsggb.workers.dev/documentation.html"; return; }
   if ($("cartes")) $("cartes").append(Hub.chargement("Chargement…"));
   const user = await Hub.requireUser(); if (!user) return;
   const admin = user.role === "admin", zone = $("cartes"), note = $("doc-note");
